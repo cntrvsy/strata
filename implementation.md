@@ -1,29 +1,30 @@
-# 🚩 Milestone 1: The Skeleton Sync
+# 🚩 Milestone 2: The Git Grid
 
-**Goal:** A functional 2-pane UI that reads a either a user selected or the provided default `schema.ts` file, renders tables as nodes, and saves moved positions back to the file via JSDoc.
+**Goal:** Establish code-as-truth by inverting the UI, integrating Git for versioned edits, and enhancing the parser to support table relationships and key identification.
 
-## 2. The 2-Pane Layout (`src/routes/+page.svelte`)
+## 1. UI Inversion & Layout Sync
+- [ ] **Flip Panels:** Swap the 2-pane layout in `src/routes/+page.svelte`. Code Editor (Truth) on the Left, Svelte Flow (Diagram) on the Right.
+- [ ] **Coordinate Info:** Add a small floating box in the bottom-left of the Diagram pane showing the `x` and `y` coordinates of the currently active/dragged table.
+- [ ] **Infinite Canvas:** Ensure Svelte Flow is configured for an optimal "infinite" feel (viewport settings).
 
-- [ ] Implement a DaisyUI `drawer` or `flex` container.
-- [ ] Left Pane: Svelte Flow canvas for diagrams.
-- [ ] Right Pane: Code editor (Monaco or a simple textarea for M1).
-- [ ] Add a "File Picker" button in the toolbar using `tauri-plugin-dialog`.
+## 2. Git-First Workflow
+- [ ] **Tauri Bridge:** Implement Rust commands in `lib.rs` for:
+    - `git_status`: Check if the current file has changes.
+    - `git_create_branch`: Create a new branch for the current edit session.
+    - `git_commit`: Commit changes to the schema.
+- [ ] **UI Integration:** Add a "Branch" selector and "Commit" button to the toolbar.
 
-## 3. The Metadata Parser (`$lib/parser.ts`)
+## 3. Rich Editor Integration (`tipex`)
+- [ ] **Install Tipex:** Add `tipex` and dependencies.
+- [ ] **Editor Implementation:** Replace the simple textarea with a `tipex` powered editor (or use it for metadata enrichment). *Note: Investigating if Tipex fits the code-editing goal or if it's for documentation.*
 
-Implement the `ts-morph` logic to:
+## 4. Enhanced Parser & Relationships
+- [ ] **Rust Update (`src-tauri/src/lib.rs`):** Update the `ts-morph` logic to identify:
+    - **Primary Keys:** Mark columns as PK.
+    - **Foreign Keys:** Identify relations between tables.
+- [ ] **Connector Logic:** Update `$lib/parser.ts` to generate Svelte Flow `edges` based on foreign key relationships.
+- [ ] **Visual Keys:** Update `TableNode.svelte` to change background colors for Primary Key and Foreign Key markers.
 
-- [ ] Create a mock file in `src/lib/mock/schema.ts`. This file will be used to test the parser. this should mimic better auth schema specifically SQLite.
-- [ ] **Read:** Extract `sqliteTable` names and the `@strata` JSON metadata.
-- [ ] **Write:** Update only the JSDoc comment for a specific table without touching the Drizzle column definitions.
-
-## 4. The Sync Loop
-
-- [ ] **Rust Side:** Create a Tauri command `save_node_pos(path, table_name, x, y)` that performs the string replacement.
-- [ ] **Frontend Side:** Bind `onNodeDragStop` to call the Rust command.
-- [ ] **Git Integration:** Add a "Revert" button that runs `git checkout -- schema.ts` via Rust's `std::process::Command`.
-
-## 5. Visual Nodes
-
-- [ ] Create `TableNode.svelte` using DaisyUI `card` classes.
-- [ ] Display table name in the header and columns as a list.
+## 5. Performance & GPU Rendering
+- [ ] **Global Styling:** Move performance-critical styles (hardware acceleration) to `layout.css` to ensure consistent GPU usage across all nodes without repeating `<style>` tags.
+- [ ] **Sync Optimization:** Ensure "Ctrl + S" triggers a re-parse and re-renders the diagram efficiently.

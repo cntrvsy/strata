@@ -50,3 +50,17 @@
   --depth: 1;
   --noise: 0;
 }
+
+@layer base {
+  /* Global Performance Hints for Svelte Flow Nodes */
+  .svelte-flow__node {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .svelte-flow__handle {
+    border-color: var(--color-base-100) !important;
+  }
+}

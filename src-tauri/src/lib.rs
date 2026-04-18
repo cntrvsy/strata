@@ -1,17 +1,52 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use std::process::Command;
+
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+async fn git_status(path: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["status", "--short", &path])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+#[tauri::command]
+async fn git_create_branch(name: String) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["checkout", "-b", &name])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn git_commit(path: String, message: String) -> Result<(), String> {
+    // Stage the file
+    Command::new("git")
+        .args(["add", &path])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    // Commit
+    let output = Command::new("git")
+        .args(["commit", "-m", &message])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
 async fn save_node_pos(path: String, table_name: String, x: f64, y: f64) -> Result<(), String> {
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
-    
-    // Naive replacement: find the table declaration and its preceding JSDoc
-    // In a real app, we'd use a better parser, but for Milestone 1, regex replacement is okay.
-    // We look for /** ... @strata { ... } */ export const <table_name>
     
     let re_str = format!(
         r#"(?s)(/\*\*.*?)@strata\s+{{.*?}}(.*?\*/\s*export\s+const\s+{}\s*=)"#,
@@ -20,13 +55,13 @@ async fn save_node_pos(path: String, table_name: String, x: f64, y: f64) -> Resu
     let re = regex::Regex::new(&re_str).map_err(|e| e.to_string())?;
     
     let new_metadata = format!("@strata {{ \"x\": {:.0}, \"y\": {:.0} }}", x, y);
+    let mut replaced = false;
     let new_content = re.replace(&content, |caps: &regex::Captures| {
+        replaced = true;
         format!("{}{}{}", &caps[1], new_metadata, &caps[2])
     });
 
-    // If no match was found, maybe the @strata tag is missing?
-    let final_content = if new_content == content {
-        // Try adding it if it doesn't exist
+    let final_content = if !replaced {
         let re_no_tag = format!(
             r#"(?s)(/\*\*.*?)(\*/\s*export\s+const\s+{}\s*=)"#,
             table_name
@@ -45,13 +80,26 @@ async fn save_node_pos(path: String, table_name: String, x: f64, y: f64) -> Resu
     Ok(())
 }
 
+#[tauri::command]
+async fn save_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, save_node_pos])
+        .invoke_handler(tauri::generate_handler![
+            save_node_pos,
+            save_file,
+            git_status,
+            git_commit,
+            git_create_branch
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
