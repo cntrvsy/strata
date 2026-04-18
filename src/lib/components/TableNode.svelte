@@ -10,60 +10,65 @@
   }>();
 </script>
 
-<div class="bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden min-w-[220px] transition-all hover:border-primary/50 group/node">
-  <!-- Header -->
-  <div class="bg-base-200/90 px-4 py-3 border-b border-base-300 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-      <div class="p-1.5 bg-primary/10 rounded-lg group-hover/node:bg-primary/20 transition-colors">
-        <Database class="w-4 h-4 text-primary" />
+<div class="relative group/node min-w-[220px]">
+  <div class="bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden transition-all hover:border-primary/50">
+    <!-- Header -->
+    <div class="bg-base-200/90 px-4 py-3 border-b border-base-300 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="p-1.5 bg-primary/10 rounded-lg group-hover/node:bg-primary/20 transition-colors">
+          <Database class="w-4 h-4 text-primary" />
+        </div>
+        <span class="font-bold text-xs tracking-wide uppercase">{data.label}</span>
       </div>
-      <span class="font-bold text-xs tracking-wide uppercase">{data.label}</span>
+      <div class="badge badge-outline badge-xs opacity-30 font-mono text-[10px]">SQLITE</div>
     </div>
-    <div class="badge badge-outline badge-xs opacity-30 font-mono">SQLITE</div>
-  </div>
 
-  <!-- Columns -->
-  <div class="p-1.5 flex flex-col gap-0.5 bg-base-100">
-    {#each data.columns as col (col.name)}
-      {@const isPk = col.definition.includes('primaryKey') || col.name === 'id'}
-      {@const isFk = !isPk && col.name.endsWith('Id')}
-      <div 
-        class="px-3 py-2 rounded-lg flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk ? 'bg-amber-500/5' : ''} {isFk ? 'bg-secondary/5' : ''}"
-      >
-        <div class="flex items-center gap-3">
-          <div class="w-4 flex justify-center">
-            {#if isPk}
-              <Key class="w-3 h-3 text-amber-500 shadow-sm" />
-            {:else if isFk}
-              <div class="w-2 h-2 rounded-full border-2 border-secondary/50 group-hover/row:bg-secondary transition-colors"></div>
-            {:else}
-              <div class="w-1.5 h-1.5 rounded-full bg-base-300 group-hover/row:bg-primary/30 transition-colors"></div>
-            {/if}
+    <!-- Columns -->
+    <div class="p-1.5 flex flex-col gap-0.5 bg-base-100">
+      {#each data.columns as col (col.name)}
+        {@const isPk = col.definition.includes('primaryKey') || col.name === 'id'}
+        {@const isFk = !isPk && col.name.endsWith('Id')}
+        <div 
+          class="px-3 py-2 rounded-lg flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk ? 'bg-amber-500/5' : ''} {isFk ? 'bg-secondary/5' : ''}"
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-4 flex justify-center">
+              {#if isPk}
+                <Key class="w-3 h-3 text-amber-500 shadow-sm" />
+              {:else if isFk}
+                <div class="w-2 h-2 rounded-full border-2 border-secondary/50 group-hover/row:bg-secondary transition-colors"></div>
+              {:else}
+                <div class="w-1.5 h-1.5 rounded-full bg-base-300 group-hover/row:bg-primary/30 transition-colors"></div>
+              {/if}
+            </div>
+            <span 
+              class="text-[13px] font-medium tracking-tight transition-colors {isPk ? 'text-amber-700' : ''} {isFk ? 'text-secondary' : ''} {!isPk && !isFk ? 'text-base-content/80' : ''}"
+            >
+              {col.name}
+            </span>
           </div>
-          <span 
-            class="text-[13px] font-medium tracking-tight transition-colors {isPk ? 'text-amber-700' : ''} {isFk ? 'text-secondary' : ''} {!isPk && !isFk ? 'text-base-content/80' : ''}"
-          >
-            {col.name}
-          </span>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] opacity-40 font-mono group-hover/row:opacity-100 transition-opacity bg-base-200 px-1.5 py-0.5 rounded uppercase leading-none">
+              {col.definition.split('(')[0].replace('text', 'txt').replace('integer', 'int')}
+            </span>
+          </div>
         </div>
-        
-        <div class="flex items-center gap-2">
-           <span class="text-[10px] opacity-40 font-mono group-hover/row:opacity-100 transition-opacity bg-base-200 px-1.5 py-0.5 rounded uppercase">
-             {col.definition.split('(')[0].replace('text', 'txt').replace('integer', 'int')}
-           </span>
-        </div>
-      </div>
-    {/each}
+      {/each}
+    </div>
   </div>
 
+  <!-- Handles -->
   <Handle 
     type="target" 
-    position={Position.Left} 
-    class="w-3! h-3! bg-primary border-4 border-(--color-base-100) shadow-sm transition-transform hover:scale-125" 
+    position={Position.Left}
+    isConnectable={true} 
+    style="width: 12px; height: 12px; background: var(--color-primary); border: 2px solid var(--color-base-100);"
   />
   <Handle 
     type="source" 
-    position={Position.Right} 
-    class="w-3! h-3! bg-primary border-4 border-(--color-base-100) shadow-sm transition-transform hover:scale-125" 
+    position={Position.Right}
+    isConnectable={true} 
+    style="width: 12px; height: 12px; background: var(--color-primary); border: 2px solid var(--color-base-100);"
   />
 </div>

@@ -1,5 +1,17 @@
 <script lang="ts">
-  import { SvelteFlow, Controls, Background, MiniMap } from "@xyflow/svelte";
+  import {
+    SvelteFlow,
+    Controls,
+    Background,
+    MiniMap,
+    ConnectionMode,
+    addEdge,
+    type Connection,
+    type Edge,
+    type Node as FlowNode,
+  } from "@xyflow/svelte";
+  import type { NodeChange, EdgeChange } from "@xyflow/system";
+  import { onMount } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { schemaState } from "$lib/state.svelte";
   import { parseSchema } from "$lib/parser";
@@ -11,15 +23,10 @@
   import {
     FileCode,
     Share2,
-    Save,
-    Undo2,
     FolderOpen,
-    Search,
-    Grid3X3,
-    MousePointer2,
     GitBranch,
     History,
-    Check
+    Check,
   } from "lucide-svelte";
 
   const nodeTypes = {
@@ -33,16 +40,55 @@
   let commitModalOpen = $state(false);
   let commitMessage = $state("");
 
+  // Svelte Flow Event Handlers
+  function onnodeschange(changes: NodeChange[]) {
+    const nextNodes = [...schemaState.nodes];
+    changes.forEach((change) => {
+      if (change.type === "position" && change.position) {
+        const node = nextNodes.find((n) => n.id === change.id);
+        if (node) node.position = change.position;
+      }
+      if (change.type === "select") {
+        const node = nextNodes.find((n) => n.id === change.id);
+        if (node) node.selected = change.selected;
+      }
+    });
+    schemaState.nodes = nextNodes;
+  }
+
+  function onedgeschange(changes: EdgeChange[]) {
+    const nextEdges = [...schemaState.edges];
+    changes.forEach((change) => {
+      if (change.type === "select") {
+        const edge = nextEdges.find((e) => e.id === change.id);
+        if (edge) edge.selected = change.selected;
+      }
+    });
+    schemaState.edges = nextEdges;
+  }
+
+  function onconnect(connection: Connection) {
+    schemaState.edges = addEdge(
+      {
+        ...connection,
+        animated: true,
+        style: "stroke: var(--color-primary); stroke-width: 2; opacity: 0.6;",
+        type: "smoothstep",
+      },
+      schemaState.edges
+    );
+  }
+
   // Sync diagram when code changes
   $effect(() => {
     if (schemaState.rawCode) {
-        updateDiagram();
+      updateDiagram();
     }
   });
 
   function getRawText(html: string) {
-    if (typeof document === 'undefined') return html;
-    const div = document.createElement('div');
+    if (typeof document === "undefined") return html;
+    const div = document.createElement("div");
     div.innerHTML = html;
     return div.textContent || div.innerText || "";
   }
@@ -83,8 +129,14 @@
     if (commitMessage && schemaState.filePath) {
       try {
         const cleanCode = getRawText(schemaState.rawCode);
-        await invoke("save_file", { path: schemaState.filePath, content: cleanCode });
-        await invoke("git_commit", { path: schemaState.filePath, message: commitMessage });
+        await invoke("save_file", {
+          path: schemaState.filePath,
+          content: cleanCode,
+        });
+        await invoke("git_commit", {
+          path: schemaState.filePath,
+          message: commitMessage,
+        });
         commitModalOpen = false;
         commitMessage = "";
         await checkGit();
@@ -114,14 +166,22 @@
 
   async function handleSave() {
     if (schemaState.filePath) {
-        const cleanCode = getRawText(schemaState.rawCode);
-        
-        try {
-            await invoke("save_file", { path: schemaState.filePath, content: cleanCode });
-            updateDiagram();
-        } catch (e) {
-            console.error("Failed to save file:", e);
-        }
+      schemaState.isSaving = true;
+      const cleanCode = getRawText(schemaState.rawCode);
+
+      try {
+        await invoke("save_file", {
+          path: schemaState.filePath,
+          content: cleanCode,
+        });
+        updateDiagram();
+      } catch (e) {
+        console.error("Failed to save file:", e);
+      } finally {
+        setTimeout(() => {
+          schemaState.isSaving = false;
+        }, 600);
+      }
     }
   }
 
@@ -135,6 +195,18 @@
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
+  });
+
+  onMount(async () => {
+    if (schemaState.filePath) {
+      try {
+        const raw = await readTextFile(schemaState.filePath);
+        schemaState.rawCode = `<pre><code>${raw}</code></pre>`;
+      } catch (e) {
+        console.error("Failed to restore last session:", e);
+        schemaState.filePath = null;
+      }
+    }
   });
 
   async function openFile() {
@@ -172,11 +244,13 @@
           <div
             class="w-2 h-2 rounded-full {schemaState.filePath
               ? 'bg-success'
-              : 'bg-base-300'} animate-pulse"
+              : 'bg-base-300'} {schemaState.isSaving
+              ? 'animate-ping'
+              : 'animate-pulse'}"
           ></div>
           <span
             class="font-extrabold text-[10px] uppercase tracking-[0.2em] opacity-80"
-            >Source Truth</span
+            >{schemaState.isSaving ? "Saving..." : "Source Truth"}</span
           >
         </div>
         <div class="flex items-center gap-2">
@@ -225,10 +299,36 @@
         </div>
 
         <div class="grow overflow-auto p-4 flex flex-col">
-          <SchemaEditor
-            bind:value={schemaState.rawCode}
-            onUpdate={updateDiagram}
-          />
+          {#if schemaState.filePath}
+            <SchemaEditor
+              bind:value={schemaState.rawCode}
+              onUpdate={updateDiagram}
+            />
+          {:else}
+            <div
+              class="grow flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-500"
+            >
+              <div
+                class="p-6 bg-primary/5 rounded-3xl mb-6 ring-1 ring-primary/10"
+              >
+                <FileCode class="w-12 h-12 text-primary/40" />
+              </div>
+              <h2 class="text-xl font-bold mb-2">No Schema Loaded</h2>
+              <p
+                class="text-sm text-base-content/60 max-w-[240px] mb-8 leading-relaxed"
+              >
+                Connect a Drizzle schema file to start syncing your database
+                design.
+              </p>
+              <button
+                class="btn btn-primary rounded-xl px-8 shadow-xl shadow-primary/20"
+                onclick={openFile}
+              >
+                <FolderOpen class="w-4 h-4 mr-2" />
+                Select schema.ts
+              </button>
+            </div>
+          {/if}
         </div>
       </div>
 
@@ -286,24 +386,7 @@
             >
               <FolderOpen class="w-4 h-4" />
             </button>
-            <button
-              class="btn btn-ghost btn-sm btn-square"
-              title="Search nodes"
-            >
-              <Search class="w-4 h-4" />
-            </button>
           </div>
-        </div>
-
-        <div
-          class="bg-base-100/90 backdrop-blur-xl border border-base-300 shadow-xl p-1.5 rounded-2xl flex flex-col gap-1 w-fit"
-        >
-          <button class="btn btn-primary btn-sm btn-square">
-            <MousePointer2 class="w-4 h-4" />
-          </button>
-          <button class="btn btn-ghost btn-sm btn-square">
-            <Grid3X3 class="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -315,6 +398,8 @@
           {nodeTypes}
           onreconnect={() => {}}
           onnodedragstop={handleNodeDragStop}
+          {onconnect}
+          connectionMode={ConnectionMode.Loose}
           fitView
           fitViewOptions={{ padding: 0.5 }}
           initialViewport={{ x: 0, y: 0, zoom: 0.5 }}
@@ -365,31 +450,44 @@
   <!-- Branch Modal -->
   {#if branchModalOpen}
     <div class="modal modal-open backdrop-blur-sm">
-      <div class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-sm">
+      <div
+        class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-sm"
+      >
         <div class="flex items-center gap-4 mb-6">
           <div class="p-3 bg-secondary/10 rounded-2xl">
             <History class="w-6 h-6 text-secondary" />
           </div>
           <div>
-            <h3 class="font-black text-lg uppercase tracking-wider">New Branch</h3>
-            <p class="text-[10px] font-mono opacity-50 uppercase">Snapshot current state</p>
+            <h3 class="font-black text-lg uppercase tracking-wider">
+              New Branch
+            </h3>
+            <p class="text-[10px] font-mono opacity-50 uppercase">
+              Snapshot current state
+            </p>
           </div>
         </div>
 
         <div class="form-control mb-8">
-            <label class="label mb-1">
-              <span class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest">Branch Name</span>
-            </label>
-            <input 
-              bind:value={branchName}
-              class="input input-bordered bg-base-200 focus:input-secondary font-mono text-sm rounded-2xl"
-              placeholder="feature/new-schema"
-            />
+          <label class="label mb-1" for="branch-name-input">
+            <span
+              class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest"
+              >Branch Name</span
+            >
+          </label>
+          <input
+            id="branch-name-input"
+            bind:value={branchName}
+            class="input input-bordered bg-base-200 focus:input-secondary font-mono text-sm rounded-2xl"
+            placeholder="feature/new-schema"
+          />
         </div>
 
         <div class="modal-action flex items-center justify-between">
-          <button class="btn btn-ghost rounded-xl px-6" onclick={() => branchModalOpen = false}>Cancel</button>
-          <button 
+          <button
+            class="btn btn-ghost rounded-xl px-6"
+            onclick={() => (branchModalOpen = false)}>Cancel</button
+          >
+          <button
             class="btn btn-secondary rounded-xl px-8 shadow-lg shadow-secondary/20"
             onclick={handleCreateBranch}
             disabled={!branchName}
@@ -404,13 +502,17 @@
   <!-- Commit Modal -->
   {#if commitModalOpen}
     <div class="modal modal-open backdrop-blur-sm">
-      <div class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-md">
+      <div
+        class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-md"
+      >
         <div class="flex items-center gap-4 mb-6">
           <div class="p-3 bg-primary/10 rounded-2xl">
             <GitBranch class="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h3 class="font-black text-lg uppercase tracking-wider">Commit Changes</h3>
+            <h3 class="font-black text-lg uppercase tracking-wider">
+              Commit Changes
+            </h3>
             <p class="text-[10px] font-mono opacity-50 uppercase">
               Target: {schemaState.filePath?.split("/").pop()}
             </p>
@@ -418,10 +520,14 @@
         </div>
 
         <div class="form-control mb-8">
-          <label class="label mb-1">
-            <span class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest">Message</span>
+          <label class="label mb-1" for="commit-message-input">
+            <span
+              class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest"
+              >Message</span
+            >
           </label>
           <textarea
+            id="commit-message-input"
             bind:value={commitMessage}
             class="textarea textarea-bordered bg-base-200 focus:textarea-primary h-24 font-mono text-sm rounded-2xl"
             placeholder="What did you change?"
@@ -429,7 +535,10 @@
         </div>
 
         <div class="modal-action flex items-center justify-between">
-          <button class="btn btn-ghost rounded-xl px-6" onclick={() => (commitModalOpen = false)}>Cancel</button>
+          <button
+            class="btn btn-ghost rounded-xl px-6"
+            onclick={() => (commitModalOpen = false)}>Cancel</button
+          >
           <button
             class="btn btn-primary rounded-xl px-8 shadow-lg shadow-primary/20"
             onclick={performCommit}
