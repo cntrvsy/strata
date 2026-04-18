@@ -5,11 +5,12 @@
   import Paragraph from "@tiptap/extension-paragraph";
   import Text from "@tiptap/extension-text";
   import CodeBlockShiki from "tiptap-extension-code-block-shiki";
+  import History from "@tiptap/extension-history";
 
   let { value = $bindable(""), onUpdate } = $props();
-
   let element: HTMLDivElement;
   let editor: Editor | undefined = $state();
+  let isInternalChange = false;
 
   onMount(async () => {
     editor = new Editor({
@@ -18,78 +19,66 @@
         Document,
         Paragraph,
         Text,
+        History,
         CodeBlockShiki.configure({
           defaultTheme: "tokyo-night",
           defaultLanguage: "typescript",
         }),
       ],
-      content: value,
+      content: value || '<pre><code></code></pre>',
       editorProps: {
         attributes: {
-          class: "prose prose-sm focus:outline-none max-w-none h-full p-4",
+          class: "prose prose-sm focus:outline-none max-w-none h-full p-4 font-mono leading-relaxed",
         },
       },
       onUpdate: ({ editor }) => {
+        isInternalChange = true;
         const html = editor.getHTML();
         value = html;
         if (onUpdate) onUpdate(html);
+        // Sync flag after microtask
+        setTimeout(() => { isInternalChange = false; }, 0);
       },
     });
   });
 
   $effect(() => {
-    if (editor && value !== editor.getHTML()) {
+    if (editor && value !== editor.getHTML() && !isInternalChange) {
       editor.commands.setContent(value, { emitUpdate: false });
     }
   });
 
   onDestroy(() => {
-    if (editor) {
-      editor.destroy();
-    }
+    editor?.destroy();
   });
 </script>
 
 <div
-  class="tiptap-editor-wrapper bg-base-100 rounded-2xl overflow-hidden border border-base-300 shadow-inner"
+  class="tiptap-editor-wrapper bg-base-100 rounded-2xl overflow-hidden border border-base-300 shadow-inner h-full"
 >
-  <div bind:this={element}></div>
+  <div bind:this={element} class="h-full overflow-auto"></div>
 </div>
 
 <style>
   :global(.tiptap pre) {
-    background: #0d1117;
-    border-radius: 0.75rem;
-    padding: 1rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-      "Liberation Mono", "Courier New", monospace;
-    font-size: 0.875rem;
-    line-height: 1.7;
-    border: 1px solid oklch(var(--bc) / 0.1);
-  }
-
-  :global(.tiptap code) {
-    color: inherit;
+    background: transparent !important;
+    border-radius: 0;
     padding: 0;
-    background: none;
-    font-size: 0.8rem;
+    margin: 0;
+    font-family: inherit;
+    border: none;
   }
 
+  :global(.tiptap) {
+    height: 100%;
+  }
+
+  /* Remove default prose margins for code focus */
   :global(.tiptap p) {
-    margin: 0.5rem 0;
-  }
-
-  /* Shiki token colors (ensure these match the theme or highligher) */
-  :global(.shiki span) {
-    color: var(--shiki-light);
-  }
-
-  :global(.dark .shiki span) {
-    color: var(--shiki-dark);
+    margin: 0;
   }
 
   .tiptap-editor-wrapper {
-    height: 100%;
     display: flex;
     flex-direction: column;
   }

@@ -11,7 +11,7 @@ export const users = sqliteTable("users", {
 });
 
 /** 
- * @strata { "x": 500, "y": 100 } 
+ * @strata { "x": 380, "y": 100 } 
  */
 export const posts = sqliteTable("posts", {
   id: integer("id").primaryKey(),
@@ -21,7 +21,7 @@ export const posts = sqliteTable("posts", {
 });
 
 /** 
- * @strata { "x": 300, "y": 400 } 
+ * @strata { "x": 60, "y": 350 } 
  */
 export const comments = sqliteTable("comments", {
   id: integer("id").primaryKey(),

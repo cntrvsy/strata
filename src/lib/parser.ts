@@ -23,16 +23,18 @@ export function parseSchema(code: string) {
 				
 				// Get JSDoc metadata
 				const jsDocs = statement.getJsDocs();
-				let strataData = { x: Math.random() * 400, y: Math.random() * 400 };
+				let strataData = { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
 				
 				for (const doc of jsDocs) {
-					const comment = doc.getCommentText() || '';
-					const match = comment.match(/@strata\s+({.*})/);
+					const fullText = doc.getText();
+					const match = fullText.match(/@strata\s+({[\s\S]*?})/);
 					if (match) {
 						try {
-							strataData = JSON.parse(match[1]);
+							// Clean up asterisks and extra whitespace if it's a multiline JSDoc
+							const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
+							strataData = JSON.parse(jsonStr);
 						} catch (e) {
-							console.warn('Failed to parse @strata JSON for', tableName, e);
+							console.warn('Failed to parse @strata JSON:', match[1], e);
 						}
 					}
 				}
@@ -78,25 +80,45 @@ function extractColumns(decl: VariableDeclaration) {
 }
 
 function extractRelations(tableName: string, decl: VariableDeclaration, edges: Edge[], sourceFile: any) {
-	// 1. Inline references: .references(() => users.id)
-	const text = decl.getText();
-	const refs = text.matchAll(/\.references\(\(\) => (.*?)\.(.*?)\)/g);
-	for (const match of refs) {
-		const targetTable = match[1];
-		addEdgeIfUnique(edges, tableName, targetTable);
+	// Method 1: Column-level .references()
+	const initializer = decl.getInitializer();
+	if (initializer) {
+		const args = initializer.asKind(SyntaxKind.CallExpression)?.getArguments();
+		if (args && args.length > 1) {
+			const config = args[1].asKind(SyntaxKind.ObjectLiteralExpression);
+			if (config) {
+				for (const prop of config.getProperties()) {
+					if (prop.isKind(SyntaxKind.PropertyAssignment)) {
+						const def = prop.getInitializer()?.getText() || '';
+						// Match: .references(() => users.id)
+						const refMatch = def.match(/\.references\(\(\)\s*=>\s*(.*?)\./);
+						if (refMatch) {
+							addEdgeIfUnique(edges, tableName, refMatch[1].trim());
+						}
+					}
+				}
+			}
+		}
 	}
 
-	// 2. Relations block: export const usersRelations = relations(users, ...
-	const relationStatements = sourceFile.getVariableStatements();
-	for (const statement of relationStatements) {
+	// Method 2: relations() block
+	const variableStatements = sourceFile.getVariableStatements();
+	for (const statement of variableStatements) {
 		for (const d of statement.getDeclarations()) {
 			const initText = d.getInitializer()?.getText() || '';
-			if (initText.startsWith('relations(') && initText.includes(tableName)) {
-				// Naive match for target tables in the relations block
-				const targetMatches = initText.matchAll(/(many|one)\((.*?)\)/g);
-				for (const m of targetMatches) {
-					const targetTable = m[2].trim();
-					addEdgeIfUnique(edges, tableName, targetTable);
+			if (initText.startsWith('relations(')) {
+				// Check if this relations block is for OUR table
+				const args = d.getInitializer()?.asKind(SyntaxKind.CallExpression)?.getArguments();
+				if (args && args.length > 0 && args[0].getText() === tableName) {
+					// We are in the relations block for tableName
+					// Look for one() and many() calls
+					const targetMatches = initText.matchAll(/(one|many)\((.*?)[,)]/g);
+					for (const m of targetMatches) {
+						const targetTable = m[2].trim();
+						if (targetTable !== tableName) {
+							addEdgeIfUnique(edges, tableName, targetTable);
+						}
+					}
 				}
 			}
 		}
@@ -104,14 +126,16 @@ function extractRelations(tableName: string, decl: VariableDeclaration, edges: E
 }
 
 function addEdgeIfUnique(edges: Edge[], source: string, target: string) {
-	const id = `${source}-${target}`;
+	const id = `e-${source}-${target}`;
+	// Avoid duplicates and self-references
+	if (source === target) return;
 	if (!edges.find(e => e.id === id)) {
 		edges.push({
 			id,
 			source,
 			target,
 			animated: true,
-			style: 'stroke: oklch(var(--p)); stroke-width: 2;',
+			style: 'stroke: oklch(var(--p)); stroke-width: 2; opacity: 0.6;',
 			type: 'smoothstep'
 		});
 	}

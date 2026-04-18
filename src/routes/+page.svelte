@@ -28,6 +28,8 @@
 
   let gitStatus = $state("");
   let currentBranch = $state("main");
+  let branchModalOpen = $state(false);
+  let branchName = $state("");
   let commitModalOpen = $state(false);
   let commitMessage = $state("");
 
@@ -38,15 +40,15 @@
     }
   });
 
-  function updateDiagram() {
-    // Clean HTML tags before parsing TS
-    const cleanCode = schemaState.rawCode
-      .replace(/<[^>]*>/g, "\n")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&");
+  function getRawText(html: string) {
+    if (typeof document === 'undefined') return html;
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || "";
+  }
 
+  function updateDiagram() {
+    const cleanCode = getRawText(schemaState.rawCode);
     const { nodes, edges } = parseSchema(cleanCode);
     schemaState.nodes = nodes;
     schemaState.edges = edges;
@@ -63,12 +65,13 @@
     }
   }
 
-  async function createBranch() {
-    const name = window.prompt("New branch name:");
-    if (name) {
+  async function handleCreateBranch() {
+    if (branchName) {
       try {
-        await invoke("git_create_branch", { name });
-        currentBranch = name;
+        await invoke("git_create_branch", { name: branchName });
+        currentBranch = branchName;
+        branchModalOpen = false;
+        branchName = "";
         await checkGit();
       } catch (e) {
         alert("Failed to create branch: " + e);
@@ -79,15 +82,8 @@
   async function performCommit() {
     if (commitMessage && schemaState.filePath) {
       try {
-        // Strip HTML before committing
-        const cleanCode = schemaState.rawCode
-            .replace(/<\/div>|<br\s*\/?>|<\/div>/gi, '\n')
-            .replace(/<[^>]*>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&');
-            
+        const cleanCode = getRawText(schemaState.rawCode);
+        await invoke("save_file", { path: schemaState.filePath, content: cleanCode });
         await invoke("git_commit", { path: schemaState.filePath, message: commitMessage });
         commitModalOpen = false;
         commitMessage = "";
@@ -117,15 +113,8 @@
   }
 
   async function handleSave() {
-    // Standard File Save (Not Commit)
     if (schemaState.filePath) {
-        const cleanCode = schemaState.rawCode
-            .replace(/<\/div>|<br\s*\/?>|<\/div>/gi, '\n')
-            .replace(/<[^>]*>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&');
+        const cleanCode = getRawText(schemaState.rawCode);
         
         try {
             await invoke("save_file", { path: schemaState.filePath, content: cleanCode });
@@ -199,7 +188,7 @@
           </div>
           <button
             class="btn btn-ghost btn-xs btn-square"
-            onclick={createBranch}
+            onclick={() => (branchModalOpen = true)}
             title="Create New Branch"
           >
             <History class="w-3.5 h-3.5" />
@@ -327,6 +316,8 @@
           onreconnect={() => {}}
           onnodedragstop={handleNodeDragStop}
           fitView
+          fitViewOptions={{ padding: 0.5 }}
+          initialViewport={{ x: 0, y: 0, zoom: 0.5 }}
           snapGrid={[15, 15]}
           colorMode="light"
           minZoom={0.1}
@@ -371,20 +362,55 @@
     </Pane>
   </PaneGroup>
 
+  <!-- Branch Modal -->
+  {#if branchModalOpen}
+    <div class="modal modal-open backdrop-blur-sm">
+      <div class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-sm">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="p-3 bg-secondary/10 rounded-2xl">
+            <History class="w-6 h-6 text-secondary" />
+          </div>
+          <div>
+            <h3 class="font-black text-lg uppercase tracking-wider">New Branch</h3>
+            <p class="text-[10px] font-mono opacity-50 uppercase">Snapshot current state</p>
+          </div>
+        </div>
+
+        <div class="form-control mb-8">
+            <label class="label mb-1">
+              <span class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest">Branch Name</span>
+            </label>
+            <input 
+              bind:value={branchName}
+              class="input input-bordered bg-base-200 focus:input-secondary font-mono text-sm rounded-2xl"
+              placeholder="feature/new-schema"
+            />
+        </div>
+
+        <div class="modal-action flex items-center justify-between">
+          <button class="btn btn-ghost rounded-xl px-6" onclick={() => branchModalOpen = false}>Cancel</button>
+          <button 
+            class="btn btn-secondary rounded-xl px-8 shadow-lg shadow-secondary/20"
+            onclick={handleCreateBranch}
+            disabled={!branchName}
+          >
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Commit Modal -->
   {#if commitModalOpen}
-    <div class="modal modal-open">
-      <div
-        class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-md"
-      >
+    <div class="modal modal-open backdrop-blur-sm">
+      <div class="modal-box bg-base-100 border border-base-300 shadow-2xl rounded-3xl p-8 max-w-md">
         <div class="flex items-center gap-4 mb-6">
           <div class="p-3 bg-primary/10 rounded-2xl">
             <GitBranch class="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h3 class="font-black text-lg uppercase tracking-wider">
-              Commit Changes
-            </h3>
+            <h3 class="font-black text-lg uppercase tracking-wider">Commit Changes</h3>
             <p class="text-[10px] font-mono opacity-50 uppercase">
               Target: {schemaState.filePath?.split("/").pop()}
             </p>
@@ -393,10 +419,7 @@
 
         <div class="form-control mb-8">
           <label class="label mb-1">
-            <span
-              class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest"
-              >Message</span
-            >
+            <span class="label-text font-bold text-[10px] uppercase opacity-40 tracking-widest">Message</span>
           </label>
           <textarea
             bind:value={commitMessage}
@@ -406,10 +429,7 @@
         </div>
 
         <div class="modal-action flex items-center justify-between">
-          <button
-            class="btn btn-ghost rounded-xl px-6"
-            onclick={() => (commitModalOpen = false)}>Cancel</button
-          >
+          <button class="btn btn-ghost rounded-xl px-6" onclick={() => (commitModalOpen = false)}>Cancel</button>
           <button
             class="btn btn-primary rounded-xl px-8 shadow-lg shadow-primary/20"
             onclick={performCommit}
