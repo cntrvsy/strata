@@ -14,7 +14,7 @@
   import { onMount } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { schemaState } from "$lib/state.svelte";
-  import { parseSchema } from "$lib/parser";
+  import { parseSchema, addEdgeToSchema } from "$lib/parser";
   import TableNode from "$lib/components/TableNode.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { readTextFile } from "@tauri-apps/plugin-fs";
@@ -67,7 +67,9 @@
     schemaState.edges = nextEdges;
   }
 
-  function onconnect(connection: Connection) {
+  async function onconnect(connection: Connection) {
+    if (!connection.source || !connection.target) return;
+
     schemaState.edges = addEdge(
       {
         ...connection,
@@ -77,6 +79,29 @@
       },
       schemaState.edges
     );
+
+    if (schemaState.filePath) {
+      schemaState.isSaving = true;
+      try {
+        const cleanCode = getRawText(schemaState.rawCode);
+        const newCode = addEdgeToSchema(cleanCode, connection.source, connection.target);
+        
+        await invoke("save_file", {
+          path: schemaState.filePath,
+          content: newCode,
+        });
+
+        // Pull the clean formatted code back into the editor
+        const raw = await readTextFile(schemaState.filePath);
+        schemaState.rawCode = `<pre><code>${raw}</code></pre>`;
+      } catch (err) {
+        console.error("Failed to save connection to code", err);
+      } finally {
+        setTimeout(() => {
+          schemaState.isSaving = false;
+        }, 600);
+      }
+    }
   }
 
   // Sync diagram when code changes

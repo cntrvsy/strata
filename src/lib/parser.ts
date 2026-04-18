@@ -134,9 +134,63 @@ function addEdgeIfUnique(edges: Edge[], source: string, target: string) {
 			id,
 			source,
 			target,
+			sourceHandle: 'source',
+			targetHandle: 'target',
 			animated: true,
-			style: 'stroke: oklch(var(--p)); stroke-width: 2; opacity: 0.6;',
+			style: 'stroke: var(--color-primary); stroke-width: 2; opacity: 0.6;',
 			type: 'smoothstep'
 		});
 	}
+}
+
+export function addEdgeToSchema(code: string, source: string, target: string): string {
+	const sourceFile = project.createSourceFile('temp-schema-edit.ts', code, { overwrite: true });
+
+	// Check if relations is imported
+	const imports = sourceFile.getImportDeclarations();
+	let hasRelationsImport = false;
+	for (const imp of imports) {
+		const moduleSpecifier = imp.getModuleSpecifierValue();
+		if (moduleSpecifier.includes('drizzle-orm') || moduleSpecifier.includes('drizzle-orm/relations')) {
+			const namedImports = imp.getNamedImports().map(n => n.getName());
+			if (namedImports.includes('relations')) {
+				hasRelationsImport = true;
+				break;
+			}
+		}
+	}
+
+	if (!hasRelationsImport) {
+		sourceFile.addImportDeclaration({
+			moduleSpecifier: 'drizzle-orm/relations',
+			namedImports: ['relations']
+		});
+	}
+
+	const relationName = `${source}Relations`;
+	
+	// Check if relation already exists to avoid duplicates
+	let existingRelation = false;
+	const variableStatements = sourceFile.getVariableStatements();
+	for (const statement of variableStatements) {
+		for (const d of statement.getDeclarations()) {
+			if (d.getName() === relationName) {
+				existingRelation = true;
+			}
+		}
+	}
+
+	if (!existingRelation) {
+		sourceFile.addVariableStatement({
+			isExported: true,
+			declarations: [{
+				name: relationName,
+				initializer: `relations(${source}, ({ many }) => ({
+  ${target}s: many(${target})
+}))`
+			}]
+		});
+	}
+
+	return sourceFile.getFullText();
 }

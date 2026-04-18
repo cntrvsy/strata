@@ -60,12 +60,14 @@
 
   <!-- Handles -->
   <Handle 
+    id="target"
     type="target" 
     position={Position.Left}
     isConnectable={true} 
     style="width: 12px; height: 12px; background: var(--color-primary); border: 2px solid var(--color-base-100);"
   />
   <Handle 
+    id="source"
     type="source" 
     position={Position.Right}
     isConnectable={true} 
