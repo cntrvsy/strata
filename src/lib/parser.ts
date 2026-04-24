@@ -3,58 +3,79 @@ import { type Node, type Edge } from '@xyflow/svelte';
 
 const project = new Project({ useInMemoryFileSystem: true });
 
-export function parseSchema(code: string) {
-	const sourceFile = project.createSourceFile('temp-schema.ts', code, { overwrite: true });
-	
-	const nodes: Node[] = [];
-	const edges: Edge[] = [];
-	
-	// Find all exported declarations
-	const variableStatements = sourceFile.getVariableStatements();
-	const tableDeclarations = new Map<string, VariableDeclaration>();
-	
-	for (const statement of variableStatements) {
-		const declarations = statement.getDeclarations();
-		for (const decl of declarations) {
-			const initializer = decl.getInitializer()?.getText() || '';
-			if (initializer.includes('sqliteTable')) {
-				const tableName = decl.getName();
-				tableDeclarations.set(tableName, decl);
-				
-				// Get JSDoc metadata
-				const jsDocs = statement.getJsDocs();
-				let strataData = { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
-				
-				for (const doc of jsDocs) {
-					const fullText = doc.getText();
-					const match = fullText.match(/@strata\s+({[\s\S]*?})/);
-					if (match) {
-						try {
-							// Clean up asterisks and extra whitespace if it's a multiline JSDoc
-							const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-							strataData = JSON.parse(jsonStr);
-						} catch (e) {
-							console.warn('Failed to parse @strata JSON:', match[1], e);
+interface ParseResult {
+	success: boolean;
+	nodes: Node[];
+	edges: Edge[];
+	error?: string;
+}
+
+export function parseSchema(code: string): ParseResult {
+	try {
+		const sourceFile = project.createSourceFile('temp-schema.ts', code, { overwrite: true });
+		
+		const nodes: Node[] = [];
+		const edges: Edge[] = [];
+		
+		// Check for syntax errors (basic check)
+		const diagnostics = sourceFile.getPreEmitDiagnostics();
+		if (diagnostics.length > 10) { // A few errors might be okay (missing imports etc), but 10+ usually means invalid structure
+			// console.warn('Many diagnostics found, schema might be invalid');
+		}
+
+		// Find all exported declarations
+		const variableStatements = sourceFile.getVariableStatements();
+		const tableDeclarations = new Map<string, VariableDeclaration>();
+		
+		for (const statement of variableStatements) {
+			const declarations = statement.getDeclarations();
+			for (const decl of declarations) {
+				const initializer = decl.getInitializer()?.getText() || '';
+				if (initializer.includes('sqliteTable')) {
+					const tableName = decl.getName();
+					tableDeclarations.set(tableName, decl);
+					
+					// Get JSDoc metadata
+					const jsDocs = statement.getJsDocs();
+					let strataData = { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
+					
+					for (const doc of jsDocs) {
+						const fullText = doc.getText();
+						const match = fullText.match(/@strata\s+({[\s\S]*?})/);
+						if (match) {
+							try {
+								// Clean up asterisks and extra whitespace if it's a multiline JSDoc
+								const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
+								strataData = JSON.parse(jsonStr);
+							} catch (e) {
+								console.warn('Failed to parse @strata JSON:', match[1], e);
+							}
 						}
 					}
+					
+					nodes.push({
+						id: tableName,
+						type: 'table',
+						data: { label: tableName, columns: extractColumns(decl) },
+						position: { x: strataData.x, y: strataData.y }
+					});
 				}
-				
-				nodes.push({
-					id: tableName,
-					type: 'table',
-					data: { label: tableName, columns: extractColumns(decl) },
-					position: { x: strataData.x, y: strataData.y }
-				});
 			}
 		}
+		
+		// Now extract relations after all tables are found
+		for (const [tableName, decl] of tableDeclarations) {
+			extractRelations(tableName, decl, edges, sourceFile);
+		}
+		
+		if (nodes.length === 0 && code.trim().length > 0) {
+			return { success: false, error: 'No tables found in schema', nodes: [], edges: [] };
+		}
+
+		return { success: true, nodes, edges };
+	} catch (e: any) {
+		return { success: false, error: e.message, nodes: [], edges: [] };
 	}
-	
-	// Now extract relations after all tables are found
-	for (const [tableName, decl] of tableDeclarations) {
-		extractRelations(tableName, decl, edges, sourceFile);
-	}
-	
-	return { nodes, edges };
 }
 
 function extractColumns(decl: VariableDeclaration) {

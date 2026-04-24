@@ -6,8 +6,30 @@
   import Text from "@tiptap/extension-text";
   import CodeBlockShiki from "tiptap-extension-code-block-shiki";
   import History from "@tiptap/extension-history";
+  import { Extension } from "@tiptap/core";
 
-  let { value = $bindable(""), onUpdate } = $props();
+  const TabHandler = Extension.create({
+    name: 'tabHandler',
+    addKeyboardShortcuts() {
+      return {
+        Tab: () => {
+          if (this.editor.isActive('codeBlock')) {
+            return this.editor.commands.insertContent('  ');
+          }
+          return false;
+        },
+        'Shift-Tab': () => {
+          if (this.editor.isActive('codeBlock')) {
+            // For now just prevent focus loss, real dedent would require more logic
+            return true;
+          }
+          return false;
+        },
+      };
+    },
+  });
+
+  let { value = $bindable(""), onUpdate = (html: string) => {} } = $props();
   let element: HTMLDivElement;
   let editor: Editor | undefined = $state();
   let isInternalChange = false;
@@ -20,6 +42,7 @@
         Paragraph,
         Text,
         History,
+        TabHandler,
         CodeBlockShiki.configure({
           defaultTheme: "tokyo-night",
           defaultLanguage: "typescript",
@@ -54,7 +77,11 @@
 </script>
 
 <div
-  class="tiptap-editor-wrapper bg-base-100 rounded-2xl overflow-hidden border border-base-300 shadow-inner h-full"
+  class="tiptap-editor-wrapper bg-base-100 rounded-2xl overflow-hidden border border-base-300 shadow-inner h-full cursor-text"
+  onclick={() => editor?.commands.focus()}
+  onkeydown={() => {}}
+  role="textbox"
+  tabindex="-1"
 >
   <div bind:this={element} class="h-full overflow-auto"></div>
 </div>

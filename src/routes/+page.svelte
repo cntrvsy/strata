@@ -27,6 +27,7 @@
     GitBranch,
     History,
     Check,
+    AlertCircle,
   } from "lucide-svelte";
 
   const nodeTypes = {
@@ -104,13 +105,6 @@
     }
   }
 
-  // Sync diagram when code changes
-  $effect(() => {
-    if (schemaState.rawCode) {
-      updateDiagram();
-    }
-  });
-
   function getRawText(html: string) {
     if (typeof document === "undefined") return html;
     const div = document.createElement("div");
@@ -118,12 +112,48 @@
     return div.textContent || div.innerText || "";
   }
 
+  // Sync diagram when code changes
+  $effect(() => {
+    if (schemaState.rawCode) {
+      updateDiagram();
+    }
+  });
+
+  let parseTimeout: any;
+  let lastProcessedCode = "";
+  let isSyncingFromDiagram = false;
+
   function updateDiagram() {
     const cleanCode = getRawText(schemaState.rawCode);
-    const { nodes, edges } = parseSchema(cleanCode);
-    schemaState.nodes = nodes;
-    schemaState.edges = edges;
-    checkGit();
+    if (cleanCode === lastProcessedCode) return;
+    
+    // Clear previous timeout to debounce
+    clearTimeout(parseTimeout);
+    
+    parseTimeout = setTimeout(() => {
+      // If we are syncing from diagram (drag/connect), the local state is already correct
+      if (isSyncingFromDiagram) {
+        isSyncingFromDiagram = false;
+        lastProcessedCode = cleanCode;
+        return;
+      }
+
+      const result = parseSchema(cleanCode);
+      
+      if (result.success) {
+        if (result.nodes.length > 0) {
+          schemaState.nodes = result.nodes;
+          schemaState.edges = result.edges;
+        }
+        schemaState.isValid = true;
+        schemaState.error = null;
+        lastProcessedCode = cleanCode;
+      } else {
+        schemaState.isValid = false;
+        schemaState.error = result.error || "Schema Error";
+      }
+      checkGit();
+    }, 150);
   }
 
   async function checkGit() {
@@ -175,6 +205,7 @@
     const { node } = event;
     if (schemaState.filePath) {
       try {
+        isSyncingFromDiagram = true;
         await invoke("save_node_pos", {
           path: schemaState.filePath,
           tableName: node.id,
@@ -184,6 +215,7 @@
         const raw = await readTextFile(schemaState.filePath);
         schemaState.rawCode = `<pre><code>${raw}</code></pre>`;
       } catch (err) {
+        isSyncingFromDiagram = false;
         console.error("Failed to save position:", err);
       }
     }
@@ -267,8 +299,10 @@
       >
         <div class="flex items-center gap-3">
           <div
-            class="w-2 h-2 rounded-full {schemaState.filePath
-              ? 'bg-success'
+            class="w-2 h-2 rounded-full {!schemaState.isValid 
+              ? 'bg-error shadow-[0_0_8px_oklch(var(--er))]' 
+              : schemaState.filePath
+              ? 'bg-success shadow-[0_0_8px_oklch(var(--su))]'
               : 'bg-base-300'} {schemaState.isSaving
               ? 'animate-ping'
               : 'animate-pulse'}"
@@ -327,7 +361,6 @@
           {#if schemaState.filePath}
             <SchemaEditor
               bind:value={schemaState.rawCode}
-              onUpdate={updateDiagram}
             />
           {:else}
             <div
@@ -444,6 +477,21 @@
           />
         </SvelteFlow>
       </div>
+
+      <!-- Validation Error Overlay -->
+      {#if !schemaState.isValid}
+        <div class="absolute bottom-20 left-6 right-6 z-50 animate-in slide-in-from-bottom-4">
+          <div class="alert alert-error shadow-2xl rounded-2xl border-none bg-error/90 backdrop-blur-md text-error-content flex items-start gap-4">
+            <div class="p-2 bg-white/20 rounded-xl">
+              <AlertCircle class="w-5 h-5" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <h3 class="font-bold text-sm uppercase tracking-tight">Schema Sync Paused</h3>
+              <p class="text-[10px] opacity-90 font-mono leading-tight">{schemaState.error}</p>
+            </div>
+          </div>
+        </div>
+      {/if}
 
       <!-- Coordinate Overlay (Bottom Left of Diagram) -->
       <div class="absolute bottom-6 left-28 z-10 pointer-events-none">

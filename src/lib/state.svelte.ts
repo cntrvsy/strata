@@ -10,6 +10,8 @@ class SchemaState {
 	);
 	rawCode = $state('');
 	isSaving = $state(false);
+	isValid = $state(true);
+	error = $state<string | null>(null);
 
 	constructor() {
 		$effect.root(() => {

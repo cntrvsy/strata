@@ -7,6 +7,8 @@ import { relations } from "drizzle-orm";
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
   name: text("name").notNull(),
+  student: text("student").notNull(),
+  teacher: integer("teacher").notNull(),
   email: text("email").notNull().unique(),
 });
 
@@ -29,6 +31,10 @@ export const comments = sqliteTable("comments", {
   userId: integer("user_id").references(() => users.id),
   postId: integer("post_id").references(() => posts.id),
 });
+/** 
+ * @strata { "x": 380, "y": 350 } 
+ */
+export const health = sqliteTable();
 
 // Advanced Relation Parsing Test
 export const usersRelations = relations(users, ({ many }) => ({
