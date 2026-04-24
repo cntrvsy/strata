@@ -1,30 +1,35 @@
-# 🚩 Milestone 2: The Git Grid
+# Strata Forge: D1/SQLite Mastery Plan
 
-**Goal:** Establish code-as-truth by inverting the UI, integrating Git for versioned edits, and enhancing the parser to support table relationships and key identification.
+## 🎯 Goal
+Transform Strata Forge into the ultimate visual companion for Cloudflare D1 + Drizzle developers by focusing on storage transparency and relationship DX.
 
-## 1. UI Inversion & Layout Sync
-- [ ] **Flip Panels:** Swap the 2-pane layout in `src/routes/+page.svelte`. Code Editor (Truth) on the Left, Svelte Flow (Diagram) on the Right.
-- [ ] **Coordinate Info:** Add a small floating box in the bottom-left of the Diagram pane showing the `x` and `y` coordinates of the currently active/dragged table.
-- [ ] **Infinite Canvas:** Ensure Svelte Flow is configured for an optimal "infinite" feel (viewport settings).
+---
 
-## 2. Git-First Workflow
-- [ ] **Tauri Bridge:** Implement Rust commands in `lib.rs` for:
-    - `git_status`: Check if the current file has changes.
-    - `git_create_branch`: Create a new branch for the current edit session.
-    - `git_commit`: Commit changes to the schema.
-- [ ] **UI Integration:** Add a "Branch" selector and "Commit" button to the toolbar.
+## Phase 1: Structural Refactoring
+*Break down the massive `+page.svelte` into focused, flat components.*
 
-## 3. Rich Editor Integration (`tipex`)
-- [ ] **Install Tipex:** Add `tipex` and dependencies.
-- [ ] **Editor Implementation:** Replace the simple textarea with a `tipex` powered editor (or use it for metadata enrichment). *Note: Investigating if Tipex fits the code-editing goal or if it's for documentation.*
+- [ ] Create `Navbar.svelte`: Handles file opening and status indicators.
+- [ ] Create `Canvas.svelte`: Encapsulates Svelte Flow logic and event handlers.
+- [ ] Create `Inspector.svelte`: The Table Inspector drawer.
+- [ ] Create `Overlays.svelte`: Empty state, Errors, and Stats.
 
-## 4. Enhanced Parser & Relationships
-- [ ] **Rust Update (`src-tauri/src/lib.rs`):** Update the `ts-morph` logic to identify:
-    - **Primary Keys:** Mark columns as PK.
-    - **Foreign Keys:** Identify relations between tables.
-- [ ] **Connector Logic:** Update `$lib/parser.ts` to generate Svelte Flow `edges` based on foreign key relationships.
-- [ ] **Visual Keys:** Update `TableNode.svelte` to change background colors for Primary Key and Foreign Key markers.
+## Phase 2: Drizzle Relations Mastery
+*Visualizing the app-level logic, not just the database foreign keys.*
 
-## 5. Performance & GPU Rendering
-- [ ] **Global Styling:** Move performance-critical styles (hardware acceleration) to `layout.css` to ensure consistent GPU usage across all nodes without repeating `<style>` tags.
-- [ ] **Sync Optimization:** Ensure "Ctrl + S" triggers a re-parse and re-renders the diagram efficiently.
+- [ ] **Enhance Parser**: Detect and parse the Drizzle `relations()` API.
+- [ ] **Virtual Edges**: Draw dashed/dotted lines for relationships that exist in the Drizzle `relations` object but don't have a direct database `references()` constraint.
+- [ ] **Bi-directional Sync**: Ensure `addEdgeToSchema` can optionally generate `relations()` boilerplate.
+
+## Phase 3: D1 Inspector Enhancements
+*Storage transparency and SQLite-specific metadata.*
+
+- [ ] **Storage Mapping**: Show the D1 physical type (e.g., `INTEGER`) next to the Drizzle type (e.g., `boolean`).
+- [ ] **SQLite Linting**: Highlight D1-specific constraints (e.g., `AUTOINCREMENT` warnings, multi-column PKs).
+- [ ] **Column Icons**: Add specific icons for `PK`, `FK`, and `Index`.
+
+## Phase 4: DX Acceleration
+*Reducing friction for the Edge developer.*
+
+- [ ] **Snippet Export**: "Copy Table as Drizzle" button in the Inspector.
+- [ ] **Migration Trigger**: (Optional) Button to run `npx drizzle-kit generate` via Tauri command.
+- [ ] **Schema Stats**: Show D1-specific stats (Estimated row size, total column count).

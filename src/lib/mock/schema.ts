@@ -31,10 +31,7 @@ export const comments = sqliteTable("comments", {
   userId: integer("user_id").references(() => users.id),
   postId: integer("post_id").references(() => posts.id),
 });
-/** 
- * @strata { "x": 380, "y": 350 } 
- */
-export const health = sqliteTable();
+
 
 // Advanced Relation Parsing Test
 export const usersRelations = relations(users, ({ many }) => ({
