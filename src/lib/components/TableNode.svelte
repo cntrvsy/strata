@@ -1,33 +1,71 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
-  import { Database, Key } from "lucide-svelte";
+  import { Database, Key, Zap, Cpu } from "lucide-svelte";
 
   const { data } = $props<{
     data: {
       label: string;
-      columns: Array<{ name: string; definition: string }>;
+      columns: Array<{ name: string; definition: string; isPk?: boolean; isReferences?: boolean }>;
+      target?: 'd1' | 'do' | 'kv';
     };
   }>();
+  const targetConfig = {
+    d1: { 
+      icon: Database, 
+      label: 'D1', 
+      color: 'primary',
+      bg: 'bg-primary/10',
+      bgHover: 'group-hover/node:bg-primary/20',
+      text: 'text-primary',
+      border: 'hover:border-primary/50',
+      borderTop: 'border-t-primary',
+      badge: 'badge-primary'
+    },
+    do: { 
+      icon: Cpu, 
+      label: 'DO', 
+      color: 'secondary',
+      bg: 'bg-secondary/10',
+      bgHover: 'group-hover/node:bg-secondary/20',
+      text: 'text-secondary',
+      border: 'hover:border-secondary/50',
+      borderTop: 'border-t-secondary',
+      badge: 'badge-secondary'
+    },
+    kv: { 
+      icon: Zap, 
+      label: 'KV', 
+      color: 'accent',
+      bg: 'bg-accent/10',
+      bgHover: 'group-hover/node:bg-accent/20',
+      text: 'text-accent',
+      border: 'hover:border-accent/50',
+      borderTop: 'border-t-accent',
+      badge: 'badge-accent'
+    }
+  };
+
+  const config = $derived(targetConfig[(data.target as keyof typeof targetConfig) || 'd1']);
 </script>
 
 <div class="relative group/node min-w-[220px]">
-  <div class="bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden transition-all hover:border-primary/50">
+  <div class="bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden transition-all {config.border} border-t-4 {config.borderTop}">
     <!-- Header -->
     <div class="bg-base-200/90 px-4 py-3 border-b border-base-300 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <div class="p-1.5 bg-primary/10 rounded-lg group-hover/node:bg-primary/20 transition-colors">
-          <Database class="w-4 h-4 text-primary" />
+        <div class="p-1.5 {config.bg} rounded-lg {config.bgHover} transition-colors">
+          <config.icon class="w-4 h-4 {config.text}" />
         </div>
         <span class="font-bold text-xs tracking-wide uppercase">{data.label}</span>
       </div>
-      <div class="badge badge-outline badge-xs opacity-30 font-mono text-[10px]">SQLITE</div>
+      <div class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]">{config.label}</div>
     </div>
 
     <!-- Columns -->
     <div class="p-1.5 flex flex-col gap-0.5 bg-base-100">
       {#each data.columns as col (col.name)}
-        {@const isPk = col.definition.includes('primaryKey') || col.name === 'id'}
-        {@const isFk = !isPk && col.name.endsWith('Id')}
+        {@const isPk = col.isPk}
+        {@const isFk = col.isReferences}
         <div 
           class="px-3 py-2 rounded-lg flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk ? 'bg-amber-500/5' : ''} {isFk ? 'bg-secondary/5' : ''}"
         >

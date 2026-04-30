@@ -11,6 +11,8 @@ class SchemaState {
 	rawCode = $state('');
 	isSaving = $state(false);
 	isValid = $state(true);
+	hasUnsavedChanges = $state(false);
+	isRecentlySaved = $state(false);
 	error = $state<string | null>(null);
 
 	constructor() {

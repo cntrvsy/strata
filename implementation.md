@@ -5,31 +5,44 @@ Transform Strata Forge into the ultimate visual companion for Cloudflare D1 + Dr
 
 ---
 
-## Phase 1: Structural Refactoring
-*Break down the massive `+page.svelte` into focused, flat components.*
+## Phase 1: Drizzle Relations Mastery ✅
+*Visualizing app-level logic alongside database foreign keys.*
 
-- [ ] Create `Navbar.svelte`: Handles file opening and status indicators.
-- [ ] Create `Canvas.svelte`: Encapsulates Svelte Flow logic and event handlers.
-- [ ] Create `Inspector.svelte`: The Table Inspector drawer.
-- [ ] Create `Overlays.svelte`: Empty state, Errors, and Stats.
+- [x] **Defensive Parsing**: AST-based extraction of `relations()` and `sqliteTable`.
+- [x] **Virtual Edges**: Dashed Svelte Flow edges for app-level relations.
+- [x] **Type Guarding**: Robust fallback for missing or broken reciprocal definitions.
 
-## Phase 2: Drizzle Relations Mastery
-*Visualizing the app-level logic, not just the database foreign keys.*
+## Phase 2: Cloudflare Storage Architecture (D1, DO, KV) ✅
+*Categorizing and visualizing Cloudflare's core storage capabilities.*
 
-- [ ] **Enhance Parser**: Detect and parse the Drizzle `relations()` API.
-- [ ] **Virtual Edges**: Draw dashed/dotted lines for relationships that exist in the Drizzle `relations` object but don't have a direct database `references()` constraint.
-- [ ] **Bi-directional Sync**: Ensure `addEdgeToSchema` can optionally generate `relations()` boilerplate.
+- [x] **Target Categorization**: Support for `d1`, `do`, and `kv` targets via JSDoc metadata.
+- [x] **Visual Distinction**: Themed nodes with icons (Database, Cpu, Zap) for each storage type.
 
-## Phase 3: D1 Inspector Enhancements
-*Storage transparency and SQLite-specific metadata.*
+## Phase 3: Developer Ergonomics & Stats ✅
+*A visual-first workflow that enhances, rather than disrupts, your existing IDE setup.*
 
-- [ ] **Storage Mapping**: Show the D1 physical type (e.g., `INTEGER`) next to the Drizzle type (e.g., `boolean`).
-- [ ] **SQLite Linting**: Highlight D1-specific constraints (e.g., `AUTOINCREMENT` warnings, multi-column PKs).
-- [ ] **Column Icons**: Add specific icons for `PK`, `FK`, and `Index`.
+- [x] **Intentional Sync**: Bi-directional position updates triggered by `Ctrl + S`.
+- [x] **Schema Stats Overlay**: Lightweight analytics for entity breakdowns and structural insights.
 
-## Phase 4: DX Acceleration
-*Reducing friction for the Edge developer.*
+## Phase 4: Optimization & Robustness (Next)
+*Solidifying the core engine for production-grade schema management.*
 
-- [ ] **Snippet Export**: "Copy Table as Drizzle" button in the Inspector.
-- [ ] **Migration Trigger**: (Optional) Button to run `npx drizzle-kit generate` via Tauri command.
-- [ ] **Schema Stats**: Show D1-specific stats (Estimated row size, total column count).
+- [ ] **Parser Performance (AST Reuse)**:
+  - Migrate `ts-morph` project initialization to a persistent state.
+  - Use `sourceFile.replaceWithText()` for reactive updates to avoid the overhead of full file re-parses.
+- [ ] **UX Success States**:
+  - Implement a "Positions Synced" visual feedback loop in the Save Toast.
+  - Transform the toast state with a checkmark animation upon successful write.
+- [ ] **Visual Clarity (Dynamic Edge Routing)**:
+  - Implement `Bezier` curves for virtual relationships to distinguish them from standard `Smoothstep` foreign keys.
+  - Optimize routing to prevent edge-node overlapping in dense clusters.
+- [ ] **Validation-Agnostic Discovery**:
+  - Update KV/DO parsing to detect "Schema-like" objects wrapped in call expressions (e.g. `z.object()`, `v.object()`).
+  - Focus on extracting property structures from the first argument of the outermost call, making the tool library-agnostic.
+
+---
+
+## Final Goal: Reliability & Testing
+- [ ] **Unit Tests**: Parser validation for edge-case Drizzle schemas.
+- [ ] **E2E Tests**: Tauri-driven tests for file system interactions and keyboard shortcuts.
+- [ ] **Build Validation**: Final pass on Tailwind 4 / Svelte 5 build stability.

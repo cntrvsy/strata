@@ -1,11 +1,18 @@
 @import "tailwindcss";
 @import "@xyflow/svelte/dist/style.css";
+
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/cormorant";
+
+body {
+  font-family: var(--font-sans);
+}
+
 @plugin "daisyui";
-@plugin 'daisyui/theme' {
-  name: "frstudios";
-  default: true;
-  prefersdark: false;
-  color-scheme: "light";
+
+@theme {
+  --font-sans: "Space Grotesk Variable", sans-serif;
+  --font-serif: "Cormorant Variable", serif;
 
   /* Base — cool blue-tinted whites, like the PS4's soft ambient glow */
   --color-base-100: oklch(97% 0.008 240);
@@ -49,6 +56,10 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
+}
+
+body {
+  font-family: var(--font-sans);
 }
 
 @layer base {

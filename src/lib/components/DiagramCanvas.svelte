@@ -25,7 +25,7 @@
     bind:edges={schemaState.edges}
     {nodeTypes}
     onreconnect={() => {}}
-    onnodedragstop={onnodedragstop}
+    {onnodedragstop}
     {onconnect}
     connectionMode={ConnectionMode.Loose}
     fitView
