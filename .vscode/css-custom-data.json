@@ -1,0 +1,31 @@
+{
+  "version": 1.1,
+  "atRules": [
+    {
+      "name": "@reference",
+      "description": "Imports a CSS file for reference only in Tailwind CSS v4. No CSS is emitted from the imported file.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 Docs",
+          "url": "https://tailwindcss.com/docs/v4-beta#using-reference"
+        }
+      ]
+    },
+    {
+      "name": "@theme",
+      "description": "Defines the Tailwind CSS v4 theme block."
+    },
+    {
+      "name": "@plugin",
+      "description": "Registers a Tailwind CSS v4 plugin."
+    },
+    {
+      "name": "@utility",
+      "description": "Defines a custom utility class in Tailwind CSS v4."
+    },
+    {
+      "name": "@variant",
+      "description": "Defines a custom variant in Tailwind CSS v4."
+    }
+  ]
+}

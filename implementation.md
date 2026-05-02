@@ -24,25 +24,32 @@ Transform Strata Forge into the ultimate visual companion for Cloudflare D1 + Dr
 - [x] **Intentional Sync**: Bi-directional position updates triggered by `Ctrl + S`.
 - [x] **Schema Stats Overlay**: Lightweight analytics for entity breakdowns and structural insights.
 
-## Phase 4: Optimization & Robustness (Next)
-*Solidifying the core engine for production-grade schema management.*
+## Phase 4: Performance & Documentation
+*Solidifying the core engine and enabling documentation workflows.*
 
-- [ ] **Parser Performance (AST Reuse)**:
-  - Migrate `ts-morph` project initialization to a persistent state.
-  - Use `sourceFile.replaceWithText()` for reactive updates to avoid the overhead of full file re-parses.
-- [ ] **UX Success States**:
-  - Implement a "Positions Synced" visual feedback loop in the Save Toast.
-  - Transform the toast state with a checkmark animation upon successful write.
-- [ ] **Visual Clarity (Dynamic Edge Routing)**:
-  - Implement `Bezier` curves for virtual relationships to distinguish them from standard `Smoothstep` foreign keys.
-  - Optimize routing to prevent edge-node overlapping in dense clusters.
-- [ ] **Validation-Agnostic Discovery**:
-  - Update KV/DO parsing to detect "Schema-like" objects wrapped in call expressions (e.g. `z.object()`, `v.object()`).
-  - Focus on extracting property structures from the first argument of the outermost call, making the tool library-agnostic.
+- [ ] **Parser Performance (Persistent AST)**:
+  - Migrate `ts-morph` project initialization to a persistent app state.
+  - Optimize `updateNodePositionInSchema` to use the cached source file for zero-latency saves.
+- [ ] **Export to Image**:
+  - Implement canvas capture for high-resolution PNG exports.
+  - Add a "Snap & Copy" feature for quick documentation sharing.
+
+## Phase 5: Bidirectional Composition (Next)
+*Transforming from a "Live Mirror" to a "Live Forge" via visual editing.*
+
+- [ ] **Formsnap Inspector**:
+  - Implement a sidebar/drawer for entity creation and column management.
+  - Use `formsnap` + `superforms` for accessible, type-safe schema editing.
+- [ ] **AST Injection Logic**:
+  - Extend `parser.ts` with `addTableToSchema` and `addColumnToSchema`.
+  - Ensure new code is injected with proper Drizzle imports and JSDoc metadata.
+- [ ] **Relationship Drag-and-Drop**:
+  - Enable creating new relationships by dragging between node handles.
+  - Automatically inject `relations()` blocks into `schema.ts`.
 
 ---
 
 ## Final Goal: Reliability & Testing
-- [ ] **Unit Tests**: Parser validation for edge-case Drizzle schemas.
-- [ ] **E2E Tests**: Tauri-driven tests for file system interactions and keyboard shortcuts.
-- [ ] **Build Validation**: Final pass on Tailwind 4 / Svelte 5 build stability.
+- [ ] **Parser Test Suite**: Validation for complex Drizzle edge-cases.
+- [ ] **E2E Validation**: Tauri-driven tests for the JSDoc/AST write-back loop.
+- [ ] **Build Optimization**: Final pass on Tailwind 4 / Svelte 5 bundle stability.

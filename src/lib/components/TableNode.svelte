@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
+  import { schemaState } from "$lib/state.svelte";
   import { Database, Key, Zap, Cpu } from "lucide-svelte";
 
   const { data } = $props<{
@@ -9,6 +10,13 @@
       target?: 'd1' | 'do' | 'kv';
     };
   }>();
+
+  const isD1 = $derived(data.target === 'd1' || !data.target);
+  const isMatch = $derived(!schemaState.activeFilter || 
+    (schemaState.activeFilter === 'd1' && isD1) ||
+    (schemaState.activeFilter === data.target)
+  );
+
   const targetConfig = {
     d1: { 
       icon: Database, 
@@ -48,7 +56,7 @@
   const config = $derived(targetConfig[(data.target as keyof typeof targetConfig) || 'd1']);
 </script>
 
-<div class="relative group/node min-w-[220px]">
+<div class="relative group/node min-w-[220px] transition-all duration-500 {isMatch ? 'opacity-100 scale-100' : 'opacity-20 grayscale scale-95 pointer-events-none'}">
   <div class="bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden transition-all {config.border} border-t-4 {config.borderTop}">
     <!-- Header -->
     <div class="bg-base-200/90 px-4 py-3 border-b border-base-300 flex items-center justify-between">

@@ -8,6 +8,7 @@
   } from "@xyflow/svelte";
   import { schemaState } from "$lib/state.svelte";
   import TableNode from "$lib/components/TableNode.svelte";
+  import RelationEdge from "$lib/components/RelationEdge.svelte";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;
@@ -17,6 +18,10 @@
   const nodeTypes = {
     table: TableNode,
   };
+
+  const edgeTypes = {
+    relation: RelationEdge,
+  };
 </script>
 
 <div class="w-full h-full bg-base-200/30">
@@ -24,6 +29,7 @@
     bind:nodes={schemaState.nodes}
     bind:edges={schemaState.edges}
     {nodeTypes}
+    {edgeTypes}
     onreconnect={() => {}}
     {onnodedragstop}
     {onconnect}

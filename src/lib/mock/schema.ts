@@ -6,7 +6,7 @@ import { relations } from "drizzle-orm";
 // export const db = drizzle(env.DB);
 
 /** 
- * @strata {"x":-75,"y":105} 
+ * @strata {"x":-60,"y":90} 
  */
 export const students = sqliteTable("students", {
   id: integer("id").primaryKey(),
@@ -36,7 +36,7 @@ export const purchases = sqliteTable("purchases", {
 });
 
 /** 
- * @strata {"x":585,"y":525,"target":"do"} 
+ * @strata {"x":510,"y":525,"target":"do"} 
  */
 export const inventory = sqliteTable("inventory", {
   id: integer("id").primaryKey(),
@@ -55,7 +55,7 @@ export const clubs = sqliteTable("clubs", {
 });
 
 /** 
- * @strata {"x":-315,"y":480} 
+ * @strata {"x":-390,"y":540} 
  */
 export const studentsToClubs = sqliteTable("students_to_clubs", {
   studentId: integer("student_id").notNull().references(() => students.id),
@@ -63,7 +63,7 @@ export const studentsToClubs = sqliteTable("students_to_clubs", {
 });
 
 /** 
- * @strata {"x":-810,"y":165,"target":"kv"} 
+ * @strata {"x":-795,"y":180,"target":"kv"} 
  */
 export const activeSessions = {
   token: "string",
@@ -72,7 +72,7 @@ export const activeSessions = {
 };
 
 /** 
- * @strata {"x":-540,"y":165,"target":"kv"} 
+ * @strata {"x":-465,"y":180,"target":"kv"} 
  */
 export const menuCache = {
   day: "string",
@@ -125,3 +125,22 @@ export const inventoryRelations = relations(inventory, ({ one }) => ({
 
 }));
 
+/** 
+ * @strata {"x":-495,"y":-30} 
+ */
+export const test = sqliteTable("test", {
+  id: integer("id").primaryKey(),
+    counter: integer("counter"),
+    game_id: text("game_id").references(() => test2.id)
+});
+
+/** 
+ * @strata {"x":-120,"y":-90} 
+ */
+export const test2 = sqliteTable("test2", {
+  id: integer("id").primaryKey(),
+    game: text("game")
+});
+export let testRelations = relations(test, ({ many }) => ({
+      test2s: many(test2)
+    }));
