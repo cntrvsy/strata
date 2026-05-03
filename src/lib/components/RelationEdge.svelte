@@ -1,4 +1,12 @@
 <script lang="ts">
+  /**
+   * RelationEdge.svelte
+   * 
+   * A custom edge component for Svelte Flow that renders relationships between tables.
+   * Supports two styles:
+   * - Solid: Physical Foreign Key relationships.
+   * - Dashed (Animated): Logical Drizzle relations() or synthetic relationships.
+   */
   import { 
     BaseEdge, 
     EdgeLabel, 

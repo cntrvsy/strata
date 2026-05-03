@@ -1,8 +1,20 @@
+/**
+ * parser.ts
+ * 
+ * The core engine of Strata Forge. This module handles the bidirectional mapping
+ * between TypeScript source code (Drizzle ORM) and the visual ERD representation.
+ * 
+ * It uses `ts-morph` for Abstract Syntax Tree (AST) manipulation, allowing us to
+ * surgically inject, rename, and remove code while preserving user formatting and comments.
+ */
+
 import { Project, VariableDeclaration, SyntaxKind, SourceFile } from 'ts-morph';
 import { type Node, type Edge } from '@xyflow/svelte';
 
 /**
  * Persisted ts-morph project and source file to maintain AST state across parses.
+ * Using a singleton project and source file object ensures that we can perform 
+ * incremental updates and maintain references to AST nodes.
  */
 const project = new Project({ useInMemoryFileSystem: true });
 let sourceFile = project.createSourceFile('schema.ts', '');
@@ -16,7 +28,10 @@ interface ParseResult {
 
 /**
  * Ensures the source file is in sync with the provided code.
- * Reuses the existing source file object to maintain AST references if possible.
+ * Reuses the existing source file object to maintain AST references.
+ * 
+ * @param code The raw TypeScript code to load into the AST.
+ * @returns The synchronized SourceFile object.
  */
 function syncSourceFile(code: string) {
 	const cleanCode = stripHtml(code);
@@ -74,7 +89,7 @@ export function parseSchema(code: string): ParseResult {
 				
 				for (const doc of jsDocs) {
 					const fullText = doc.getText();
-					const match = fullText.match(/@strata\s+({[\s\S]*?})/);
+					const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 					if (match) {
 						try {
 							const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
@@ -274,7 +289,7 @@ function addEdgeIfUnique(edges: Edge[], source: string, target: string, isVirtua
 		targetHandle: 'target',
 		animated: isVirtual,
 		label: name || (relType !== 'fk' ? relType : undefined),
-		labelStyle: 'font-size: 10px; fill: oklch(var(--bc)); font-weight: bold;',
+		labelStyle: 'font-size: 10px; fill: #475569; font-weight: bold;',
 		style: isVirtual 
 			? 'stroke: var(--color-primary); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.5;'
 			: 'stroke: var(--color-primary); stroke-width: 2; opacity: 0.8;',
@@ -298,11 +313,11 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 
 			for (const doc of jsDocs) {
 				const text = doc.getText();
-				const strataMatch = text.match(/@strata\s+({[^}]*})/);
+				const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 				
 				if (strataMatch) {
 					try {
-						const metadata = JSON.parse(strataMatch[1]);
+						const metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
 						metadata.x = Math.round(x);
 						metadata.y = Math.round(y);
 						doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
@@ -414,10 +429,10 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
-			const match = fullText.match(/@strata\s*(\{[\s\S]*?\})/);
+			const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
 				try {
-					const strata = JSON.parse(match[1]);
+					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
 					if (!strata.relations) strata.relations = [];
 					if (!strata.relations.some((r: any) => r.to === target)) {
 						strata.relations.push({ to: target });
@@ -454,5 +469,130 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 			}
 		}
 	}
+	return sf.getFullText();
+}
+
+/**
+ * Removes a table or object entity from the schema.
+ */
+export function removeTableFromSchema(code: string, tableName: string): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(tableName);
+	
+	if (decl) {
+		const statement = decl.getVariableStatement();
+		// Remove the associated JSDoc and the statement
+		statement?.remove();
+		
+		// Also cleanup associated relations() block if it exists
+		const relName = `${tableName}Relations`;
+		sf.getVariableStatement(s => s.getDeclarations().some(d => d.getName() === relName))?.remove();
+	}
+	
+	return sf.getFullText();
+}
+
+/**
+ * Removes a specific column or field from an entity.
+ */
+export function removeColumnFromSchema(code: string, tableName: string, columnName: string): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(tableName);
+	const initializer = decl?.getInitializer();
+	
+	if (!initializer) return code;
+	
+	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
+		? initializer
+		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	if (tableCall) {
+		const args = tableCall.getArguments();
+		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+			args[1].getProperty(columnName)?.remove();
+		}
+	} else if (initializer.isKind(SyntaxKind.ObjectLiteralExpression)) {
+		initializer.getProperty(columnName)?.remove();
+	}
+	
+	return sf.getFullText();
+}
+
+/**
+ * Renames an existing table or object entity.
+ * Also updates associated relations() blocks.
+ */
+export function renameTableInSchema(code: string, oldName: string, newName: string): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(oldName);
+	
+	if (decl) {
+		// 1. Rename the variable declaration
+		decl.rename(newName);
+		
+		// 2. Update the sqliteTable name if applicable
+		const initializer = decl.getInitializer();
+		if (initializer?.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
+			const args = initializer.getArguments();
+			if (args.length > 0 && args[0].isKind(SyntaxKind.StringLiteral)) {
+				args[0].setLiteralValue(newName);
+			}
+		}
+
+		// 3. Rename associated relations() block
+		const oldRelName = `${oldName}Relations`;
+		const newRelName = `${newName}Relations`;
+		const relDecl = sf.getVariableDeclaration(oldRelName);
+		if (relDecl) {
+			relDecl.rename(newRelName);
+			// Update relations(table, ...) argument
+			const relInit = relDecl.getInitializer();
+			if (relInit?.isKind(SyntaxKind.CallExpression)) {
+				const args = relInit.getArguments();
+				if (args.length > 0) args[0].replaceWithText(newName);
+			}
+		}
+	}
+	
+	return sf.getFullText();
+}
+
+/**
+ * Renames a specific column or field within an entity.
+ */
+export function renameColumnInSchema(code: string, tableName: string, oldColName: string, newColName: string): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(tableName);
+	const initializer = decl?.getInitializer();
+	
+	if (!initializer) return code;
+	
+	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
+		? initializer
+		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	if (tableCall) {
+		const args = tableCall.getArguments();
+		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+			const prop = args[1].getProperty(oldColName);
+			if (prop?.isKind(SyntaxKind.PropertyAssignment)) {
+				prop.getNameNode().replaceWithText(newColName);
+				// Also update the column name in the function call, e.g. text("old_name") -> text("new_name")
+				const colInit = prop.getInitializer();
+				if (colInit?.isKind(SyntaxKind.CallExpression)) {
+					const colArgs = colInit.getArguments();
+					if (colArgs.length > 0 && colArgs[0].isKind(SyntaxKind.StringLiteral)) {
+						colArgs[0].setLiteralValue(newColName);
+					}
+				}
+			}
+		}
+	} else if (initializer.isKind(SyntaxKind.ObjectLiteralExpression)) {
+		const prop = initializer.getProperty(oldColName);
+		if (prop?.isKind(SyntaxKind.PropertyAssignment)) {
+			prop.getNameNode().replaceWithText(newColName);
+		}
+	}
+	
 	return sf.getFullText();
 }

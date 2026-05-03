@@ -1,55 +1,92 @@
-# Strata Forge: D1/SQLite Mastery Plan
+# Strata Forge: Comprehensive Testing & Reliability Plan
 
-## 🎯 Goal
-Transform Strata Forge into the ultimate visual companion for Cloudflare D1 + Drizzle developers by focusing on storage transparency and relationship DX.
+This document outlines the strategy for bringing Strata Forge to a production-grade level of reliability through a multi-layered testing approach.
 
----
-
-## Phase 1: Drizzle Relations Mastery ✅
-*Visualizing app-level logic alongside database foreign keys.*
-
-- [x] **Defensive Parsing**: AST-based extraction of `relations()` and `sqliteTable`.
-- [x] **Virtual Edges**: Dashed Svelte Flow edges for app-level relations.
-- [x] **Type Guarding**: Robust fallback for missing or broken reciprocal definitions.
-
-## Phase 2: Cloudflare Storage Architecture (D1, DO, KV) ✅
-*Categorizing and visualizing Cloudflare's core storage capabilities.*
-
-- [x] **Target Categorization**: Support for `d1`, `do`, and `kv` targets via JSDoc metadata.
-- [x] **Visual Distinction**: Themed nodes with icons (Database, Cpu, Zap) for each storage type.
-
-## Phase 3: Developer Ergonomics & Stats ✅
-*A visual-first workflow that enhances, rather than disrupts, your existing IDE setup.*
-
-- [x] **Intentional Sync**: Bi-directional position updates triggered by `Ctrl + S`.
-- [x] **Schema Stats Overlay**: Lightweight analytics for entity breakdowns and structural insights.
-
-## Phase 4: Performance & Documentation
-*Solidifying the core engine and enabling documentation workflows.*
-
-- [ ] **Parser Performance (Persistent AST)**:
-  - Migrate `ts-morph` project initialization to a persistent app state.
-  - Optimize `updateNodePositionInSchema` to use the cached source file for zero-latency saves.
-- [ ] **Export to Image**:
-  - Implement canvas capture for high-resolution PNG exports.
-  - Add a "Snap & Copy" feature for quick documentation sharing.
-
-## Phase 5: Bidirectional Composition (Next)
-*Transforming from a "Live Mirror" to a "Live Forge" via visual editing.*
-
-- [ ] **Formsnap Inspector**:
-  - Implement a sidebar/drawer for entity creation and column management.
-  - Use `formsnap` + `superforms` for accessible, type-safe schema editing.
-- [ ] **AST Injection Logic**:
-  - Extend `parser.ts` with `addTableToSchema` and `addColumnToSchema`.
-  - Ensure new code is injected with proper Drizzle imports and JSDoc metadata.
-- [ ] **Relationship Drag-and-Drop**:
-  - Enable creating new relationships by dragging between node handles.
-  - Automatically inject `relations()` blocks into `schema.ts`.
+## 🎯 Testing Vision
+Every mutation in the diagram must be reflected in the source code with 100% accuracy, and every valid Drizzle schema must render correctly without data loss or corruption of existing JSDoc metadata.
 
 ---
 
-## Final Goal: Reliability & Testing
-- [ ] **Parser Test Suite**: Validation for complex Drizzle edge-cases.
-- [ ] **E2E Validation**: Tauri-driven tests for the JSDoc/AST write-back loop.
-- [ ] **Build Optimization**: Final pass on Tailwind 4 / Svelte 5 bundle stability.
+## 0. Architectural Robustness (Runed FSM)
+*Eliminating "Impossible States" via Finite State Machines.*
+
+- [ ] **FSM Integration**: Replace manual boolean flags in `schemaState` with a formalized Finite State Machine using `runed`.
+  - **States**: `EMPTY`, `LOADING`, `IDLE`, `DIRTY` (unsaved changes), `SAVING`, `ERROR`.
+  - **Transitions**: Ensure `Save` can only be triggered from `DIRTY`, and `Sync` cancels or blocks other operations.
+- [ ] **Error Boundaries**: Use FSM error states to drive UI-level error overlays and recovery flows.
+
+---
+
+## 1. Unit Testing (Vitest)
+*Logic-first validation of the core engine.*
+
+### **Parser & AST Logic**
+- [ ] **Complex Edge Cases**: Test parsing of schemas with multiple `relations()` blocks, circular dependencies, and custom naming conventions.
+- [ ] **JSDoc Preservation**: Ensure that non-Strata JSDoc (e.g., standard documentation) is never stripped during a write-back operation.
+- [ ] **Mutation Surgery**: Validate that `addColumn` or `renameTable` operations are surgically precise, only touching the relevant AST nodes.
+- [ ] **Storage Type Detection**: Verify `kv`, `do`, and `d1` detection logic via JSDoc `@strata { "target": "..." }`.
+
+### **State Management (Svelte Runes)**
+- [ ] **Schema State Sync**: Test that updates to `schemaState` correctly propagate to the AST logic.
+- [ ] **Node/Edge Deduplication**: Ensure that re-parsing a file doesn't result in duplicate IDs or visual jitter.
+
+---
+
+## 2. Backend Testing (Cargo)
+*Ensuring the Rust layer is robust and performant.*
+
+### **File Watcher & I/O**
+- [ ] **Watcher Resilience**: Test that the `notify` watcher handles rapid-fire saves and directory renames without crashing.
+- [ ] **Race Condition Prevention**: Implement tests for simultaneous front-end writes and back-end file change detections.
+- [ ] **Error Handling**: Gracefully handle missing files, permission errors, and invalid UTF-8 in `schema.ts`.
+
+### **Command Interface**
+- [ ] **Tauri Command Schema**: Type-check the arguments passed between TypeScript and Rust for all file operations.
+
+---
+
+## 3. End-to-End Testing (Playwright + Tauri)
+*User-centric validation of the full application flow.*
+
+### **The "Live Forge" Loop**
+- [ ] **Node Manipulation**: 
+  - Drag a node -> Verify JSDoc `x, y` updates in the source file.
+  - Delete a node -> Verify the table and its relations are removed from `schema.ts`.
+- [ ] **Form Interactions**:
+  - Open "Add Field" -> Submit -> Verify `sqliteTable` is updated with the new column.
+  - Connect two nodes -> Verify a new `relations()` block is injected.
+- [ ] **Inspector Validation**:
+  - Update a column type -> Verify the Drizzle column definition changes (e.g., `.text()` to `.integer()`).
+  - Toggle `NOT NULL` -> Verify `.notNull()` presence in the AST.
+
+### **UI Component Integrity**
+- [ ] **Overlay States**: Test the transition from "Empty State" to "Schema Loaded".
+- [ ] **Responsive Design**: Ensure the `DiagramCanvas` and `Inspector` maintain usability across various window sizes.
+- [ ] **Modal Flows**: Validate that `HelpModal` and "New Table" forms close correctly and don't leak state.
+
+---
+
+## 4. Production Environment Simulation
+*How we test for "The Real World".*
+
+- **Mock Tauri API**: Use a custom Playwright setup that mocks the `@tauri-apps/api` for standard browser runs, but provides a "fake file system" that mimics the `schema.ts` file.
+- **Tauri Action Testing**: Use `tauri-action` or similar to run E2E tests inside a real Tauri environment (WebView + Rust backend) during CI/CD.
+- **Stress Testing**: Load a massive schema (100+ tables, 500+ relations) to ensure `ts-morph` and `Svelte Flow` maintain 60fps performance.
+
+---
+
+## 5. Coverage Goals & Metrics
+
+| Layer | Target Coverage | Key Metric |
+| :--- | :--- | :--- |
+| **Parser (`parser.ts`)** | 100% | No regression on AST mutations. |
+| **State (`state.svelte.ts`)** | 90% | Rune reactivity integrity. |
+| **Rust Backend** | 80% | Reliability of file system notifications. |
+| **UI Components** | 70% | Interaction coverage for all forms and modals. |
+
+---
+
+## 🎯 Final Acceptance Criteria
+1. **Zero Data Loss**: Re-parsing and saving a file 100 times results in the same AST structure (idempotency).
+2. **Deterministic UI**: The diagram layout is identical across reloads if no metadata changes.
+3. **Clean Build**: `svelte-check` and `cargo clippy` report zero errors.

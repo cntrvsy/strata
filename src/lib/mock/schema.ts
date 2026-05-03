@@ -1,146 +1,119 @@
 import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
-//import { drizzle } from "drizzle-orm/d1";
 
-// Example D1 Client Initialization:
-// export const db = drizzle(env.DB);
+/**
+ * STRATA FORGE - EXAMPLE SCHEMA
+ * 
+ * This file demonstrates how Strata Forge visualizes a hybrid Cloudflare architecture:
+ * 1. D1 Databases: Standard relational tables (sqliteTable)
+ * 2. KV Storage: High-performance key-value pairs (plain objects)
+ * 3. Durable Objects: State-persistent objects (plain objects with target: "do")
+ */
+
+// --- D1 TABLES (Relational Core) ---
 
 /** 
- * @strata {"x":-60,"y":90} 
+ * @strata {"x":30,"y":-15} 
  */
-export const students = sqliteTable("students", {
+export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
-  name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  balance: integer("balance").notNull().default(0),
-});
-
-/** 
- * @strata {"x":585,"y":-105} 
- */
-export const meals = sqliteTable("meals", {
-  id: integer("id").primaryKey(),
-  name: text("name").notNull(),
-  price: integer("price").notNull(),
-  calories: integer("calories"),
-});
-
-/** 
- * @strata {"x":195,"y":390} 
- */
-export const purchases = sqliteTable("purchases", {
-  id: integer("id").primaryKey(),
-  studentId: integer("student_id").notNull().references(() => students.id),
-  mealId: integer("meal_id").notNull().references(() => meals.id),
+  name: text("name"),
   createdAt: integer("created_at").notNull(),
 });
 
 /** 
- * @strata {"x":510,"y":525,"target":"do"} 
+ * @strata {"x":435,"y":-75} 
  */
-export const inventory = sqliteTable("inventory", {
-  id: integer("id").primaryKey(),
-  mealId: integer("meal_id").notNull().references(() => meals.id),
-  stock: integer("stock").notNull(),
-  cafeteriaZone: text("cafeteria_zone").notNull(),
-});
-
-/** 
- * @strata {"x":50,"y":650} 
- */
-export const clubs = sqliteTable("clubs", {
+export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey(),
   name: text("name").notNull(),
-  description: text("description"),
+  slug: text("slug").notNull().unique(),
+  plan: text("plan").default("free"),
 });
 
 /** 
- * @strata {"x":-390,"y":540} 
+ * Join table for many-to-many relationship between users and organizations
+ * @strata {"x":45,"y":420} 
  */
-export const studentsToClubs = sqliteTable("students_to_clubs", {
-  studentId: integer("student_id").notNull().references(() => students.id),
-  clubId: integer("club_id").notNull().references(() => clubs.id),
+export const memberships = sqliteTable("memberships", {
+  userId: integer("user_id").notNull().references(() => users.id),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  role: text("role").default("member"),
 });
 
 /** 
- * @strata {"x":-795,"y":180,"target":"kv"} 
+ * @strata {"x":700,"y":350} 
  */
-export const activeSessions = {
-  token: "string",
-  studentId: "number",
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  status: text("status").default("active"),
+});
+
+// --- KV STORAGE (Key-Value Pairs) ---
+
+/** 
+ * User sessions stored in Cloudflare KV for global performance.
+ * We use @strata relations to link this logical entity to our D1 users.
+ * @strata {"x":-315,"y":180,"target":"kv","relations":[{"to":"users"}]} 
+ */
+export const userSessions = {
+  sessionId: "string",
+  userId: "number",
+  userAgent: "string",
   expiresAt: "number",
 };
 
 /** 
- * @strata {"x":-465,"y":180,"target":"kv"} 
+ * Cached billing data to avoid frequent D1 lookups.
+ * @strata {"x":375,"y":510,"target":"kv","relations":[{"to":"organizations"}]} 
  */
-export const menuCache = {
-  day: "string",
-  items: "array",
-  isPublished: "boolean",
+export const billingCache = {
+  orgId: "number",
+  stripeStatus: "string",
+  lastCheck: "number",
 };
 
-// Relations logic
-export const studentsRelations = relations(students, ({ many }) => ({
-  purchases: many(purchases),
-  studentToClubs: many(studentsToClubs),
-}));
-
-export const clubsRelations = relations(clubs, ({ many }) => ({
-  studentToClubs: many(studentsToClubs),
-}));
-
-export const studentsToClubsRelations = relations(studentsToClubs, ({ one }) => ({
-  student: one(students, {
-    fields: [studentsToClubs.studentId],
-    references: [students.id],
-  }),
-  club: one(clubs, {
-    fields: [studentsToClubs.clubId],
-    references: [clubs.id],
-  }),
-}));
-
-export const mealsRelations = relations(meals, ({ many }) => ({
-  purchases: many(purchases),
-  inventoryRecords: many(inventory),
-}));
-
-export const purchasesRelations = relations(purchases, ({ one }) => ({
-  student: one(students, {
-    fields: [purchases.studentId],
-    references: [students.id],
-  }),
-  meal: one(meals, {
-    fields: [purchases.mealId],
-    references: [meals.id],
-  }),
-}));
-
-export const inventoryRelations = relations(inventory, ({ one }) => ({
-  meal: one(meals, {
-    fields: [inventory.mealId],
-    references: [meals.id],
-  }),
-
-}));
+// --- DURABLE OBJECTS (Stateful Entities) ---
 
 /** 
- * @strata {"x":-495,"y":-30} 
+ * Real-time collaboration state managed by a Durable Object.
+ * DOs are perfect for synchronized state like editor presence.
+ * @strata {"x":750,"y":45,"target":"do","relations":[{"to":"projects"}]} 
  */
-export const test = sqliteTable("test", {
-  id: integer("id").primaryKey(),
-    counter: integer("counter"),
-    game_id: text("game_id").references(() => test2.id)
-});
+export const collaborativeEditor = {
+  projectId: "string",
+  activeUsers: "array",
+  lastEdit: "number",
+};
 
-/** 
- * @strata {"x":-120,"y":-90} 
- */
-export const test2 = sqliteTable("test2", {
-  id: integer("id").primaryKey(),
-    game: text("game")
-});
-export let testRelations = relations(test, ({ many }) => ({
-      test2s: many(test2)
-    }));
+// --- RELATIONS (Drizzle Logical Layer) ---
+
+export const usersRelations = relations(users, ({ many }) => ({
+  memberships: many(memberships),
+}));
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  memberships: many(memberships),
+  projects: many(projects),
+}));
+
+export const membershipsRelations = relations(memberships, ({ one }) => ({
+  user: one(users, {
+    fields: [memberships.userId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [memberships.orgId],
+    references: [organizations.id],
+  }),
+}));
+
+export const projectsRelations = relations(projects, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [projects.orgId],
+    references: [organizations.id],
+  }),
+}));

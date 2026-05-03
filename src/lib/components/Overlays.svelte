@@ -1,9 +1,16 @@
 <script lang="ts">
+  /**
+   * Overlays.svelte
+   * 
+   * Manages global UI layers including:
+   * - Empty state (Select File prompt)
+   * - Validation errors (Parse failures)
+   * - Unsaved changes toast (Ctrl+S reminder)
+   * - Live coordinate stats
+   */
   import { FileCode, FolderOpen, AlertCircle, Check } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
   import { fade, fly } from "svelte/transition";
-
-  const { onOpenFile } = $props<{ onOpenFile: () => void }>();
 </script>
 
 <!-- Empty State Overlay -->
@@ -27,7 +34,7 @@
       </p>
       <button
         class="btn btn-primary btn-lg rounded-2xl px-12 shadow-xl shadow-primary/30"
-        onclick={onOpenFile}
+        onclick={() => schemaState.openNewFile()}
       >
         <FolderOpen class="w-5 h-5 mr-3" />
         Select File

@@ -1,48 +1,99 @@
-# Strata Forge: D1/SQLite Mastery
+# Strata Forge: The Drizzle Design Companion
 
-Strata Forge is a high-performance, local-first ERD tool designed for Cloudflare D1 and Drizzle ORM developers. It uses your `schema.ts` as the single source of truth, leveraging JSDoc for UI metadata and Git for history.
+Strata Forge is a high-performance, local-first ERD (Entity Relationship Diagram) tool designed specifically for the **Cloudflare D1 + Drizzle ORM** stack. 
 
-## 🏗️ Storage Architecture
+It solves the "stale diagram" problem by using your TypeScript schema as the single source of truth. No sidecar JSON files, no proprietary formats—just your code, visualized and editable.
 
-Strata Forge categorizes your schema into distinct Cloudflare storage targets based on your code and JSDoc hints:
+---
 
-- **D1 (Relational)**: The default for any `sqliteTable` definition. Visualized with a Primary Blue theme.
-- **Durable Objects (DO SQLite)**: Relational schemas tied to DO storage. Use the JSDoc hint `/** @strata { "target": "do" } */`. Visualized with a Secondary Purple theme.
-- **Key-Value (KV)**: Pure visual blocks for KV namespaces. Parsed from annotated objects or Zod schemas using `/** @strata { "target": "kv" } */`. Visualized with an Accent Yellow theme.
+## 🏗️ The "Forge" Philosophy
 
-## 🔗 Relationship Parsing
+Traditional ERD tools live outside your codebase. Strata Forge lives *inside* the development loop. It acts as a visual front-end for your AST (Abstract Syntax Tree).
 
-The tool intelligently distinguishes between database-level and application-level logic:
+```text
+       ┌──────────────────────────┐
+       │   Visual Canvas (UI)     │
+       └─────┬──────────────▲─────┘
+             │              │
+     AST Manipulation   File Watcher
+     (via ts-morph)     (via Tauri)
+             │              │
+       ┌─────▼──────────────┴─────┐
+       │      schema.ts           │
+       │ (JSDoc + Drizzle Code)   │
+       └──────────────────────────┘
+```
 
-- **Physical Edges (Solid Lines)**: Represent hard foreign key constraints defined via `.references()`.
-- **Virtual Edges (Dashed Lines)**: Represent application-level relationships defined in Drizzle's `relations()` API that do not map directly to a foreign key (e.g., reciprocal `many` relations).
+- **Visual Design**: Drag-and-drop to create relationships, add columns, and rename tables.
+- **AST Injection**: Changes are surgically injected back into your TypeScript file without losing your formatting or comments.
+- **Disk-First**: Every visual action is a file system mutation. Your IDE and your Diagram are always in sync.
 
-## 📍 Visual Metadata
+---
 
-UI state (such as node positions) is stored directly in your source code using JSDoc to avoid sidecar files:
+## 🔗 Adoption & Zero Lock-in
+
+Strata Forge is designed to be a "zero-dependency" addition to your workflow. It uses a non-intrusive JSDoc standard to store metadata (like coordinates) that your database doesn't care about.
+
+### The `@strata` Standard
+To pin a table's position or define its storage target (D1, KV, or Durable Object), simply add a JSDoc block. This is understood by both humans and AI assistants:
 
 ```typescript
 /** 
- * @strata { "x": 100, "y": 100, "target": "do" } 
+ * @strata { "target": "d1", "x": 100, "y": 200 } 
  */
-export const myTable = sqliteTable("my_table", { ... });
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey(),
+});
 ```
+
+**Why this matters**:
+- **Humans**: Write code as you normally do; the diagram updates in real-time.
+- **AI**: Tell your AI to "Move the users table to the center," and it will simply update the JSDoc coordinates in the file.
+- **Freedom**: If you stop using Strata Forge, your code remains valid, standard Drizzle. Just delete the comments if you want them gone.
+
+---
 
 ## 🚀 Getting Started
 
-1. **Install dependencies**:
+1. **Install**:
    ```bash
    npm install
    ```
-2. **Run in development**:
+2. **Run**:
    ```bash
    npm run tauri dev
    ```
 
-## 🛠️ Tech Stack
+---
 
-- **Framework**: SvelteKit (Svelte 5 Runes)
-- **Runtime**: Tauri 2.0 (Rust)
-- **Diagrams**: @xyflow/svelte (Svelte Flow)
-- **Styling**: TailwindCSS + DaisyUI
-- **Parsing**: `ts-morph` for robust AST traversal.
+## 🧪 Testing & Reliability
+
+We take schema integrity seriously. Every mutation is validated against a suite of AST regression tests.
+
+- **Unit Tests (Parser)**: Validates the TypeScript parser and mutation logic.
+  ```bash
+  npm test
+  ```
+- **Unit Tests (Core)**: Validates the Rust-based file watcher and OS integration.
+  ```bash
+  cd src-tauri && cargo test
+  ```
+- **E2E Tests (UI)**: Validates rendering and component states via Playwright.
+  ```bash
+  npm run test:e2e
+  ```
+
+---
+
+## 🛠️ Project Structure
+
+- `src/lib/parser.ts`: The core engine. Handles AST traversal and code injection.
+- `src/lib/state.svelte.ts`: Global application state using Svelte 5 Runes.
+- `src/lib/components/Inspector.svelte`: The visual design sidebar for schema management.
+- `src/lib/mock/schema.ts`: An example schema to play with.
+
+## ⚠️ Current Limitations
+
+- **Drizzle-Only**: Optimized for Drizzle + Cloudflare D1/SQLite patterns.
+- **Local-First**: Requires a Tauri-supported environment for native file system access.
+- **Manual Relations**: Complex logical relations are best created via the UI to ensure proper `relations()` block generation.

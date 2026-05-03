@@ -1,4 +1,11 @@
 <script lang="ts">
+  /**
+   * Strata Forge: The Drizzle Design Companion
+   * 
+   * This is the root page component that assembles the visual editor.
+   * It handles global keyboard shortcuts, drag-and-drop relationship forging,
+   * and coordinates the synchronization between UI events and AST persistence.
+   */
   import { addEdge } from "@xyflow/svelte";
   import type { Connection } from "@xyflow/svelte";
   import { onMount } from "svelte";
@@ -8,9 +15,7 @@
     updateNodePositionInSchema,
     stripHtml,
   } from "$lib/parser";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
-  import { invoke } from "@tauri-apps/api/core";
+  import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { listen } from "@tauri-apps/api/event";
 
   // --- Components ---
@@ -21,14 +26,14 @@
   import SchemaStats from "$lib/components/SchemaStats.svelte";
   import NewTableForm from "$lib/components/NewTableForm.svelte";
 
-
   /**
    * Handles Svelte Flow connection events (dragging a line between nodes).
+   * Persists the new relationship as either a Drizzle relation() or a synthetic JSDoc relation.
    */
   async function onconnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
     
-    // Optimistic UI update
+    // Optimistic UI update for immediate feedback
     schemaState.edges = addEdge(
       {
         ...connection,
@@ -39,7 +44,6 @@
       schemaState.edges,
     );
 
-    // Persistence logic
     if (schemaState.filePath) {
       schemaState.isSaving = true;
       try {
@@ -58,14 +62,15 @@
   }
 
   /**
-   * Marks diagram as dirty when a node is moved.
+   * Marks the diagram as having unsaved layout changes (node positions).
    */
   async function onnodedragstop() {
     schemaState.hasUnsavedChanges = true;
   }
 
   /**
-   * Persists node layout (positions) to @strata JSDoc metadata.
+   * Persists all node layout changes back to the schema file's JSDoc metadata.
+   * Triggered by Ctrl+S or manual save actions.
    */
   async function saveDiagramChanges() {
     if (!schemaState.filePath || !schemaState.hasUnsavedChanges) return;
@@ -74,7 +79,7 @@
       schemaState.isSyncing = true;
       let currentCode = stripHtml(schemaState.rawCode);
 
-      // Batch update all node positions in AST
+      // Batch update all node positions in the AST
       for (const node of schemaState.nodes) {
         currentCode = updateNodePositionInSchema(currentCode, node.id, node.position.x, node.position.y);
       }
@@ -83,7 +88,6 @@
       await schemaState.syncWithFile();
       schemaState.hasUnsavedChanges = false;
       
-      // Success feedback
       schemaState.isRecentlySaved = true;
       setTimeout(() => (schemaState.isRecentlySaved = false), 1500);
     } catch (err) {
@@ -94,7 +98,7 @@
   }
 
   /**
-   * Global Shortcut Handler (Ctrl+S)
+   * Global Keyboard Shortcut Handler.
    */
   function handleKeyDown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
@@ -103,31 +107,12 @@
     }
   }
 
-  /**
-   * File Picker Dialog
-   */
-  async function openFile() {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "TypeScript", extensions: ["ts"] }],
-      });
-      if (selected && typeof selected === "string") {
-        schemaState.filePath = selected;
-        await schemaState.syncWithFile();
-        await invoke("watch_file", { path: selected });
-      }
-    } catch (err) {
-      console.error("[Strata] File open failed:", err);
-    }
-  }
-
   onMount(() => {
     window.addEventListener("keydown", handleKeyDown);
     
     let unlistenFn: () => void;
     const init = async () => {
-      // Listen for external file changes (e.g. IDE edits)
+      // Listen for external file changes (e.g. edits made in VS Code)
       unlistenFn = await listen("file-changed", async () => {
         if (schemaState.filePath && !schemaState.isSyncing) {
           console.log("[Strata] External file change detected, syncing...");
@@ -135,11 +120,10 @@
         }
       });
 
-      // Restore last session
+      // Restore session if a file was previously open
       if (schemaState.filePath) {
         try {
           await schemaState.syncWithFile();
-          await invoke("watch_file", { path: schemaState.filePath });
         } catch (e) {
           schemaState.filePath = null;
         }
@@ -156,11 +140,11 @@
 </script>
 
 <div class="h-screen w-screen bg-base-100 text-base-content font-sans overflow-hidden">
-  <Navbar onOpenFile={openFile} />
+  <Navbar />
 
   <main class="h-full w-full relative pt-16">
     <DiagramCanvas {onconnect} {onnodedragstop} />
-    <Overlays onOpenFile={openFile} />
+    <Overlays />
     <SchemaStats />
     <Inspector />
     

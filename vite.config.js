@@ -2,7 +2,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
@@ -23,5 +22,10 @@ export default defineConfig(async () => ({
       // 3. tell Vite to ignore watching `src-tauri` and mock schemas to prevent reloads on save
       ignored: ["**/src-tauri/**", "**/src/lib/mock/**"]
     }
+  },
+  test: {
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    globals: true,
+    environment: 'jsdom',
   }
 }));

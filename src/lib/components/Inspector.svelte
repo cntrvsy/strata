@@ -1,19 +1,132 @@
 <script lang="ts">
   /**
    * Inspector Component
-   * Displays details for the selected node (Table, KV, DO) and 
+   * Displays details for the selected node (Table, KV, DO) and
    * provides forms for structural modifications (Adding fields/relations).
    */
-  import { Database, Cpu, Zap, X, Key } from "lucide-svelte";
+  import {
+    Database,
+    Cpu,
+    Zap,
+    X,
+    Key,
+    Trash2,
+    Edit2,
+    Check,
+  } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
+  import {
+    removeTableFromSchema,
+    removeColumnFromSchema,
+    renameTableInSchema,
+    renameColumnInSchema,
+    stripHtml,
+  } from "$lib/parser";
+  import { writeTextFile } from "@tauri-apps/plugin-fs";
 
   // --- Local UI State ---
   /** Whether the user is currently filling out the 'Add Field' form */
   let isAddingField = $state(false);
   /** Whether the user is currently filling out the 'Forge Relation' form */
   let isForgingRelation = $state(false);
+  /** Whether the user is confirming a destructive deletion */
+  let isConfirmingDelete = $state(false);
+
+  let editingTableName = $state<string | null>(null);
+  let newTableName = $state("");
+
+  let editingColumnName = $state<string | null>(null);
+  let newColumnName = $state("");
+
+  /**
+   * Renames a table/entity and syncs.
+   */
+  async function submitRenameTable() {
+    if (!editingTableName || !newTableName || !schemaState.filePath) return;
+    schemaState.isSaving = true;
+    schemaState.isSyncing = true;
+    try {
+      const cleanCode = stripHtml(schemaState.rawCode);
+      const newCode = renameTableInSchema(
+        cleanCode,
+        editingTableName,
+        newTableName,
+      );
+      await writeTextFile(schemaState.filePath, newCode);
+      await schemaState.syncWithFile();
+      editingTableName = null;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      schemaState.isSaving = false;
+    }
+  }
+
+  /**
+   * Renames a column and syncs.
+   */
+  async function submitRenameColumn(tableName: string) {
+    if (!editingColumnName || !newColumnName || !schemaState.filePath) return;
+    schemaState.isSaving = true;
+    schemaState.isSyncing = true;
+    try {
+      const cleanCode = stripHtml(schemaState.rawCode);
+      const newCode = renameColumnInSchema(
+        cleanCode,
+        tableName,
+        editingColumnName,
+        newColumnName,
+      );
+      await writeTextFile(schemaState.filePath, newCode);
+      await schemaState.syncWithFile();
+      editingColumnName = null;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      schemaState.isSaving = false;
+    }
+  }
+
+  /**
+   * Deletes a column from the schema and syncs.
+   */
+  async function deleteColumn(tableName: string, colName: string) {
+    if (!schemaState.filePath) return;
+    schemaState.isSaving = true;
+    schemaState.isSyncing = true;
+    try {
+      const cleanCode = stripHtml(schemaState.rawCode);
+      const newCode = removeColumnFromSchema(cleanCode, tableName, colName);
+      await writeTextFile(schemaState.filePath, newCode);
+      await schemaState.syncWithFile();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      schemaState.isSaving = false;
+    }
+  }
+
+  /**
+   * Deletes the entire table/entity and syncs.
+   */
+  async function deleteTable(tableName: string) {
+    if (!schemaState.filePath) return;
+    schemaState.isSaving = true;
+    schemaState.isSyncing = true;
+    try {
+      const cleanCode = stripHtml(schemaState.rawCode);
+      const newCode = removeTableFromSchema(cleanCode, tableName);
+      await writeTextFile(schemaState.filePath, newCode);
+      await schemaState.syncWithFile();
+      isConfirmingDelete = false;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      schemaState.isSaving = false;
+    }
+  }
 
   /** Configuration for different storage targets */
   const targetConfig = {
@@ -43,6 +156,9 @@
   function dismiss() {
     isAddingField = false;
     isForgingRelation = false;
+    isConfirmingDelete = false;
+    editingTableName = null;
+    editingColumnName = null;
     schemaState.nodes = schemaState.nodes.map((n) => ({
       ...n,
       selected: false,
@@ -53,9 +169,12 @@
    * Auto-reset forms when a different node is selected.
    */
   $effect(() => {
-    if (schemaState.nodes.some(n => n.selected)) {
+    if (schemaState.nodes.some((n) => n.selected)) {
       isAddingField = false;
       isForgingRelation = false;
+      isConfirmingDelete = false;
+      editingTableName = null;
+      editingColumnName = null;
     }
   });
 </script>
@@ -77,35 +196,85 @@
         <div class="p-2 {config.bg} rounded-xl">
           <config.icon class="w-4 h-4 {config.text}" />
         </div>
-        <div class="flex flex-col">
-          <h3 class="font-bold text-sm tracking-tight leading-none mb-1">
-            {selectedNode.id}
-          </h3>
+        <div class="flex flex-col grow">
+          {#if editingTableName === selectedNode.id}
+            <div class="flex items-center gap-1">
+              <input
+                bind:value={newTableName}
+                class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:border-primary transition-all"
+                onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
+              />
+              <button
+                class="btn btn-primary btn-xs btn-circle"
+                onclick={submitRenameTable}><Check class="w-3 h-3" /></button
+              >
+            </div>
+          {:else}
+            <div class="flex items-center gap-2 group/header">
+              <h3 class="font-bold text-sm tracking-tight leading-none">
+                {selectedNode.id}
+              </h3>
+              <button
+                class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5"
+                onclick={() => {
+                  editingTableName = selectedNode.id;
+                  newTableName = selectedNode.id;
+                }}
+              >
+                <Edit2 class="w-3 h-3" />
+              </button>
+            </div>
+          {/if}
           <span
             class="text-[9px] uppercase tracking-widest font-black opacity-30"
             >{config.label}</span
           >
         </div>
       </div>
-      <button
-        class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
-        onclick={dismiss}
-      >
-        <X class="w-4 h-4" />
-      </button>
+      <div class="flex items-center gap-1">
+        {#if !isConfirmingDelete}
+          <button
+            class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
+            onclick={() => (isConfirmingDelete = true)}
+            title="Delete Entity"
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+          </button>
+        {:else}
+          <div
+            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200"
+          >
+            <button
+              class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
+              onclick={() => deleteTable(selectedNode.id)}>Confirm</button
+            >
+            <button
+              class="btn btn-ghost btn-xs btn-circle"
+              onclick={() => (isConfirmingDelete = false)}
+              ><X class="w-3.5 h-3.5" /></button
+            >
+          </div>
+        {/if}
+        <button
+          class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
+          onclick={dismiss}
+        >
+          <X class="w-4 h-4" />
+        </button>
+      </div>
     </div>
 
     <!-- Content -->
     <div class="grow overflow-auto p-5 flex flex-col gap-6">
       {#if isAddingField}
-        <AddFieldForm 
-          tableName={selectedNode.id} 
-          onComplete={() => isAddingField = false} 
+        <AddFieldForm
+          tableName={selectedNode.id}
+          onComplete={() => (isAddingField = false)}
         />
       {:else if isForgingRelation}
-        <AddRelationForm 
-          sourceTableName={selectedNode.id} 
-          onComplete={() => isForgingRelation = false} 
+        <AddRelationForm
+          sourceTableName={selectedNode.id}
+          onComplete={() => (isForgingRelation = false)}
         />
       {:else}
         <div class="flex flex-col gap-3">
@@ -125,19 +294,56 @@
                 class="bg-base-200/40 p-3 rounded-2xl flex flex-col gap-1.5 border border-transparent hover:border-base-300 transition-all group"
               >
                 <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2 grow">
                     {#if col.isPk}
                       <Key class="w-3 h-3 text-amber-500" />
                     {/if}
-                    <span
-                      class="font-bold text-xs group-hover:text-primary transition-colors"
-                      >{col.name}</span
-                    >
+                    {#if editingColumnName === col.name}
+                      <div class="flex items-center gap-1 grow">
+                        <input
+                          bind:value={newColumnName}
+                          class="input input-xs input-bordered w-full rounded-lg font-bold text-[13px] h-7 bg-base-100 focus:border-primary transition-all"
+                          onkeydown={(e) =>
+                            e.key === "Enter" &&
+                            submitRenameColumn(selectedNode.id)}
+                        />
+                        <button
+                          class="btn btn-primary btn-xs btn-circle"
+                          onclick={() => submitRenameColumn(selectedNode.id)}
+                          ><Check class="w-3 h-3" /></button
+                        >
+                      </div>
+                    {:else}
+                      <div class="flex items-center gap-2 group/col-title">
+                        <span
+                          class="font-bold text-xs group-hover/field:text-primary transition-colors"
+                        >
+                          {col.name}
+                        </span>
+                        <button
+                          class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4 w-4"
+                          onclick={() => {
+                            editingColumnName = col.name;
+                            newColumnName = col.name;
+                          }}
+                        >
+                          <Edit2 class="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    {/if}
                   </div>
-                  <span
-                    class="text-[9px] font-mono opacity-40 uppercase bg-base-300/50 px-1.5 py-0.5 rounded"
-                    >{col.definition.split("(")[0]}</span
-                  >
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="text-[9px] font-mono opacity-40 uppercase bg-base-300/50 px-1.5 py-0.5 rounded"
+                      >{col.definition.split("(")[0]}</span
+                    >
+                    <button
+                      class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
+                      onclick={() => deleteColumn(selectedNode.id, col.name)}
+                    >
+                      <Trash2 class="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 {#if col.isReferences}
@@ -153,15 +359,15 @@
             {/each}
 
             <div class="grid grid-cols-2 gap-2 mt-2">
-              <button 
+              <button
                 class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
-                onclick={() => isAddingField = true}
+                onclick={() => (isAddingField = true)}
               >
                 <span class="text-xs font-bold uppercase">+ Field</span>
               </button>
-              <button 
+              <button
                 class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all"
-                onclick={() => isForgingRelation = true}
+                onclick={() => (isForgingRelation = true)}
               >
                 <span class="text-xs font-bold uppercase">+ Relation</span>
               </button>

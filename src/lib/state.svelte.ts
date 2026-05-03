@@ -1,3 +1,11 @@
+/**
+ * state.svelte.ts
+ * 
+ * Centralized application state for Strata Forge using Svelte 5 Runes.
+ * This class manages the reactive synchronization between the visual canvas (Svelte Flow),
+ * the internal AST parser, and the native filesystem (Tauri).
+ */
+
 import { type Node, type Edge } from '@xyflow/svelte';
 
 /**
@@ -45,18 +53,30 @@ class SchemaState {
 	 * Force-syncs the UI state with the current file on disk.
 	 * This is the definitive "Ground Truth" sync that bypasses local HTML previews.
 	 */
+	async async_syncWithFile() { // Rename to avoid confusion with internal helper
+		await this.syncWithFile();
+	}
+
 	async syncWithFile() {
 		if (!this.filePath) return;
 		this.isSyncing = true;
 		try {
 			// Dynamic imports to avoid SSR issues or circular dependencies
 			const { readTextFile } = await import("@tauri-apps/plugin-fs");
+			const { invoke } = await import("@tauri-apps/api/core");
 			const { parseSchema, wrapCode } = await import("./parser");
 			
 			const raw = await readTextFile(this.filePath);
 			const result = parseSchema(raw);
 			
 			if (result.success) {
+				// Initialize/Reset the OS-level file watcher
+				try {
+					await invoke("watch_file", { path: this.filePath });
+				} catch (err) {
+					console.warn("[Strata] Watcher failed to init:", err);
+				}
+
 				// Preserve selection state
 				const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
 				
@@ -81,6 +101,25 @@ class SchemaState {
 			setTimeout(() => {
 				this.isSyncing = false;
 			}, 300);
+		}
+	}
+
+	/**
+	 * Opens a native file dialog to select a Drizzle schema file and syncs it.
+	 */
+	async openNewFile() {
+		try {
+			const { open } = await import("@tauri-apps/plugin-dialog");
+			const selected = await open({
+				multiple: false,
+				filters: [{ name: "TypeScript", extensions: ["ts"] }],
+			});
+			if (selected && typeof selected === "string") {
+				this.filePath = selected;
+				await this.syncWithFile();
+			}
+		} catch (err) {
+			console.error("[Strata] File open failed:", err);
 		}
 	}
 
