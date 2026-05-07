@@ -45,18 +45,15 @@
     );
 
     if (schemaState.filePath) {
-      schemaState.isSaving = true;
+      schemaState.machine.send("SAVE");
       try {
-        schemaState.isSyncing = true;
-        const cleanCode = stripHtml(schemaState.rawCode);
-        const newCode = addEdgeToSchema(cleanCode, connection.source, connection.target);
+        const newCode = addEdgeToSchema(schemaState.rawCode, connection.source, connection.target);
         await writeTextFile(schemaState.filePath, newCode);
         await schemaState.syncWithFile();
+        schemaState.machine.send("SAVE_SUCCESS");
       } catch (err) {
-        schemaState.isSyncing = false;
+        schemaState.machine.send("SAVE_ERROR");
         console.error("[Strata] Connection save failed:", err);
-      } finally {
-        setTimeout(() => (schemaState.isSaving = false), 600);
       }
     }
   }
@@ -65,7 +62,7 @@
    * Marks the diagram as having unsaved layout changes (node positions).
    */
   async function onnodedragstop() {
-    schemaState.hasUnsavedChanges = true;
+    schemaState.machine.send("EDIT");
   }
 
   /**
@@ -76,8 +73,8 @@
     if (!schemaState.filePath || !schemaState.hasUnsavedChanges) return;
 
     try {
-      schemaState.isSyncing = true;
-      let currentCode = stripHtml(schemaState.rawCode);
+      schemaState.machine.send("SAVE");
+      let currentCode = schemaState.rawCode;
 
       // Batch update all node positions in the AST
       for (const node of schemaState.nodes) {
@@ -86,14 +83,13 @@
 
       await writeTextFile(schemaState.filePath, currentCode);
       await schemaState.syncWithFile();
-      schemaState.hasUnsavedChanges = false;
+      schemaState.machine.send("SAVE_SUCCESS");
       
       schemaState.isRecentlySaved = true;
       setTimeout(() => (schemaState.isRecentlySaved = false), 1500);
     } catch (err) {
+      schemaState.machine.send("SAVE_ERROR");
       console.error("[Strata] Save failed:", err);
-    } finally {
-      schemaState.isSyncing = false;
     }
   }
 
@@ -120,14 +116,6 @@
         }
       });
 
-      // Restore session if a file was previously open
-      if (schemaState.filePath) {
-        try {
-          await schemaState.syncWithFile();
-        } catch (e) {
-          schemaState.filePath = null;
-        }
-      }
     };
 
     init();
@@ -139,17 +127,11 @@
   });
 </script>
 
-<div class="h-screen w-screen bg-base-100 text-base-content font-sans overflow-hidden">
-  <Navbar />
+<DiagramCanvas {onconnect} {onnodedragstop} />
+<Overlays />
+<SchemaStats />
+<Inspector />
 
-  <main class="h-full w-full relative pt-16">
-    <DiagramCanvas {onconnect} {onnodedragstop} />
-    <Overlays />
-    <SchemaStats />
-    <Inspector />
-    
-    {#if schemaState.showNewTableModal}
-      <NewTableForm />
-    {/if}
-  </main>
-</div>
+{#if schemaState.showNewTableModal}
+  <NewTableForm />
+{/if}

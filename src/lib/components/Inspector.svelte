@@ -45,22 +45,21 @@
    */
   async function submitRenameTable() {
     if (!editingTableName || !newTableName || !schemaState.filePath) return;
-    schemaState.isSaving = true;
-    schemaState.isSyncing = true;
+    schemaState.machine.send("SAVE");
     try {
-      const cleanCode = stripHtml(schemaState.rawCode);
+      const { renameTableInSchema } = await import("$lib/parser");
       const newCode = renameTableInSchema(
-        cleanCode,
+        schemaState.rawCode,
         editingTableName,
         newTableName,
       );
       await writeTextFile(schemaState.filePath, newCode);
       await schemaState.syncWithFile();
+      schemaState.machine.send("SAVE_SUCCESS");
       editingTableName = null;
     } catch (e) {
+      schemaState.machine.send("SAVE_ERROR");
       console.error(e);
-    } finally {
-      schemaState.isSaving = false;
     }
   }
 
@@ -69,23 +68,22 @@
    */
   async function submitRenameColumn(tableName: string) {
     if (!editingColumnName || !newColumnName || !schemaState.filePath) return;
-    schemaState.isSaving = true;
-    schemaState.isSyncing = true;
+    schemaState.machine.send("SAVE");
     try {
-      const cleanCode = stripHtml(schemaState.rawCode);
+      const { renameColumnInSchema } = await import("$lib/parser");
       const newCode = renameColumnInSchema(
-        cleanCode,
+        schemaState.rawCode,
         tableName,
         editingColumnName,
         newColumnName,
       );
       await writeTextFile(schemaState.filePath, newCode);
       await schemaState.syncWithFile();
+      schemaState.machine.send("SAVE_SUCCESS");
       editingColumnName = null;
     } catch (e) {
+      schemaState.machine.send("SAVE_ERROR");
       console.error(e);
-    } finally {
-      schemaState.isSaving = false;
     }
   }
 
@@ -93,39 +91,15 @@
    * Deletes a column from the schema and syncs.
    */
   async function deleteColumn(tableName: string, colName: string) {
-    if (!schemaState.filePath) return;
-    schemaState.isSaving = true;
-    schemaState.isSyncing = true;
-    try {
-      const cleanCode = stripHtml(schemaState.rawCode);
-      const newCode = removeColumnFromSchema(cleanCode, tableName, colName);
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      schemaState.isSaving = false;
-    }
+    await schemaState.deleteColumn(tableName, colName);
   }
 
   /**
    * Deletes the entire table/entity and syncs.
    */
   async function deleteTable(tableName: string) {
-    if (!schemaState.filePath) return;
-    schemaState.isSaving = true;
-    schemaState.isSyncing = true;
-    try {
-      const cleanCode = stripHtml(schemaState.rawCode);
-      const newCode = removeTableFromSchema(cleanCode, tableName);
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-      isConfirmingDelete = false;
-    } catch (e) {
-      console.error(e);
-    } finally {
-      schemaState.isSaving = false;
-    }
+    await schemaState.deleteTable(tableName);
+    isConfirmingDelete = false;
   }
 
   /** Configuration for different storage targets */
@@ -186,7 +160,7 @@
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
-    class="absolute top-6 right-6 bottom-6 w-80 bg-base-100/95 backdrop-blur-xl border border-base-300 shadow-2xl rounded-[2.5rem] z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300"
+    class="absolute top-20 right-6 max-h-[calc(100vh-25rem)] w-80 bg-base-100/95 backdrop-blur-xl border border-base-300 shadow-2xl rounded-[2.5rem] z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300"
   >
     <!-- Header -->
     <div

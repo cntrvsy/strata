@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, blob } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
@@ -13,7 +13,7 @@ import { relations } from "drizzle-orm";
 // --- D1 TABLES (Relational Core) ---
 
 /** 
- * @strata {"x":30,"y":-15} 
+ * @strata {"x":15,"y":0} 
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
@@ -81,7 +81,7 @@ export const billingCache = {
 /** 
  * Real-time collaboration state managed by a Durable Object.
  * DOs are perfect for synchronized state like editor presence.
- * @strata {"x":750,"y":45,"target":"do","relations":[{"to":"projects"}]} 
+ * @strata {"x":750,"y":30,"target":"do","relations":[{"to":"projects"}]} 
  */
 export const collaborativeEditor = {
   projectId: "string",

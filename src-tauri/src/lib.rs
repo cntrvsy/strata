@@ -1,6 +1,6 @@
 use notify::{RecursiveMode, Watcher};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{Emitter, State};
 
 struct WatcherState(Mutex<Option<notify::RecommendedWatcher>>);
 

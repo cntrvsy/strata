@@ -34,9 +34,8 @@ interface ParseResult {
  * @returns The synchronized SourceFile object.
  */
 function syncSourceFile(code: string) {
-	const cleanCode = stripHtml(code);
-	if (sourceFile.getFullText() !== cleanCode) {
-		sourceFile.replaceWithText(cleanCode);
+	if (sourceFile.getFullText() !== code) {
+		sourceFile.replaceWithText(code);
 	}
 	return sourceFile;
 }
@@ -448,6 +447,7 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 	ensureImports(sf, 'drizzle-orm', ['relations']);
 	const relationName = `${source}Relations`;
 	let relDecl = sf.getVariableDeclaration(relationName);
+	const relPropName = target.endsWith('s') ? target : `${target}s`;
 
 	if (!relDecl) {
 		sf.addVariableStatement({
@@ -455,7 +455,7 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 			declarations: [{
 				name: relationName,
 				initializer: `relations(${source}, ({ many }) => ({
-  ${target}s: many(${target})
+  ${relPropName}: many(${target})
 }))`
 			}]
 		});
@@ -464,8 +464,8 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 		if (init?.isKind(SyntaxKind.CallExpression)) {
 			const body = (init.getArguments()[1] as any).getBody();
 			const obj = body.isKind(SyntaxKind.ObjectLiteralExpression) ? body : body.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)[0];
-			if (obj && !obj.getProperty(`${target}s`)) {
-				obj.addPropertyAssignment({ name: `${target}s`, initializer: `many(${target})` });
+			if (obj && !obj.getProperty(relPropName)) {
+				obj.addPropertyAssignment({ name: relPropName, initializer: `many(${target})` });
 			}
 		}
 	}

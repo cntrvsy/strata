@@ -1,12 +1,24 @@
-/**
- * state.svelte.ts
- * 
- * Centralized application state for Strata Forge using Svelte 5 Runes.
- * This class manages the reactive synchronization between the visual canvas (Svelte Flow),
- * the internal AST parser, and the native filesystem (Tauri).
- */
-
 import { type Node, type Edge } from '@xyflow/svelte';
+import { FiniteStateMachine } from "runed";
+
+/**
+ * Valid states for the SchemaState machine.
+ */
+type States = "EMPTY" | "LOADING" | "IDLE" | "DIRTY" | "SAVING" | "ERROR";
+
+/**
+ * Valid events that trigger state transitions.
+ */
+type Events = 
+	| "SYNC" 
+	| "OPEN" 
+	| "LOAD_SUCCESS" 
+	| "LOAD_ERROR" 
+	| "EDIT" 
+	| "SAVE" 
+	| "SAVE_SUCCESS" 
+	| "SAVE_ERROR"
+	| "RESET";
 
 /**
  * Global application state for Strata Forge.
@@ -25,21 +37,66 @@ class SchemaState {
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */
-	filePath = $state(
-		typeof window !== 'undefined' 
-			? localStorage.getItem('strata-last-file') 
-			: null
-	);
+	filePath = $state<string | null>(null);
 	/** HTML-wrapped code preview of the schema.ts file */
 	rawCode = $state('');
 	
-	// --- IO State ---
+	// --- FSM State ---
+	/** 
+	 * Formalized Finite State Machine for Strata.
+	 * Prevents "Impossible States" and ensures logical transitions.
+	 */
+	machine = new FiniteStateMachine<States, Events>(
+		this.filePath ? "LOADING" : "EMPTY", 
+		{
+			EMPTY: {
+				SYNC: "LOADING",
+				OPEN: "LOADING",
+				RESET: "EMPTY",
+			},
+			LOADING: {
+				LOAD_SUCCESS: "IDLE",
+				LOAD_ERROR: "ERROR",
+				SYNC: "LOADING",
+				RESET: "EMPTY",
+			},
+			IDLE: {
+				EDIT: "DIRTY",
+				SYNC: "LOADING",
+				OPEN: "LOADING",
+				RESET: "EMPTY",
+				LOAD_SUCCESS: "IDLE",
+				SAVE_SUCCESS: "IDLE",
+			},
+			DIRTY: {
+				SAVE: "SAVING",
+				SYNC: "LOADING",
+				OPEN: "LOADING",
+				EDIT: "DIRTY",
+				RESET: "EMPTY",
+			},
+			SAVING: {
+				SAVE_SUCCESS: "IDLE",
+				SAVE_ERROR: "ERROR",
+				SYNC: "LOADING",
+				RESET: "EMPTY",
+			},
+			ERROR: {
+				SYNC: "LOADING",
+				OPEN: "LOADING",
+				RESET: "EMPTY"
+			}
+		}
+	);
+
+	// --- Derived IO States (Legacy Support) ---
 	/** True if a write operation to disk is currently in progress */
-	isSaving = $state(false);
+	get isSaving() { return this.machine.current === "SAVING"; }
 	/** True if the diagram is currently being re-parsed or updated from disk */
-	isSyncing = $state(false);
+	get isSyncing() { return this.machine.current === "LOADING"; }
 	/** True if the user has moved nodes but hasn't saved the layout to disk (Ctrl+S) */
-	hasUnsavedChanges = $state(false);
+	get hasUnsavedChanges() { return this.machine.current === "DIRTY"; }
+	
 	/** True momentarily after a successful save operation */
 	isRecentlySaved = $state(false);
 
@@ -53,13 +110,16 @@ class SchemaState {
 	 * Force-syncs the UI state with the current file on disk.
 	 * This is the definitive "Ground Truth" sync that bypasses local HTML previews.
 	 */
-	async async_syncWithFile() { // Rename to avoid confusion with internal helper
+	async async_syncWithFile() {
 		await this.syncWithFile();
 	}
 
 	async syncWithFile() {
 		if (!this.filePath) return;
-		this.isSyncing = true;
+		
+		this.machine.send("SYNC");
+		this.error = null;
+		
 		try {
 			// Dynamic imports to avoid SSR issues or circular dependencies
 			const { readTextFile } = await import("@tauri-apps/plugin-fs");
@@ -86,21 +146,20 @@ class SchemaState {
 				}));
 				
 				this.edges = result.edges;
-				this.rawCode = wrapCode(raw);
+				this.rawCode = raw;
 				this.isValid = true;
 				this.error = null;
+				
+				this.machine.send("LOAD_SUCCESS");
 			} else {
 				this.isValid = false;
 				this.error = result.error || "Parse Error";
+				this.machine.send("LOAD_ERROR");
 			}
 		} catch (e: any) {
 			console.error("[Strata] Sync failed:", e);
 			this.error = e.message;
-		} finally {
-			// Small delay to let Svelte Flow settle its internal state
-			setTimeout(() => {
-				this.isSyncing = false;
-			}, 300);
+			this.machine.send("LOAD_ERROR");
 		}
 	}
 
@@ -116,6 +175,7 @@ class SchemaState {
 			});
 			if (selected && typeof selected === "string") {
 				this.filePath = selected;
+				this.machine.send("OPEN");
 				await this.syncWithFile();
 			}
 		} catch (err) {
@@ -123,19 +183,66 @@ class SchemaState {
 		}
 	}
 
+	/**
+	 * Deletes a column from a table in the schema and syncs to disk.
+	 */
+	async deleteColumn(tableName: string, colName: string) {
+		if (!this.filePath) return;
+		this.machine.send("SAVE");
+		try {
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+			const { removeColumnFromSchema } = await import("./parser");
+			
+			const newCode = removeColumnFromSchema(this.rawCode, tableName, colName);
+			
+			await writeTextFile(this.filePath, newCode);
+			await this.syncWithFile();
+			this.machine.send("SAVE_SUCCESS");
+		} catch (e: any) {
+			console.error("[Strata] Column delete failed:", e);
+			this.machine.send("SAVE_ERROR");
+			this.error = e.message;
+		}
+	}
+
+	/**
+	 * Deletes an entire table/entity from the schema and syncs to disk.
+	 */
+	async deleteTable(tableName: string) {
+		if (!this.filePath) return;
+		this.machine.send("SAVE");
+		try {
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+			const { removeTableFromSchema } = await import("./parser");
+			
+			const newCode = removeTableFromSchema(this.rawCode, tableName);
+			
+			await writeTextFile(this.filePath, newCode);
+			await this.syncWithFile();
+			this.machine.send("SAVE_SUCCESS");
+		} catch (e: any) {
+			console.error("[Strata] Table delete failed:", e);
+			this.machine.send("SAVE_ERROR");
+			this.error = e.message;
+		}
+	}
+
+	/**
+	 * Resets the entire application state to its initial empty state.
+	 * Primarily used for testing and starting a fresh session.
+	 */
+	reset() {
+		this.nodes = [];
+		this.edges = [];
+		this.filePath = null;
+		this.rawCode = '';
+		this.isValid = true;
+		this.error = null;
+		this.machine.send("RESET");
+	}
+
 	constructor() {
-		// Persist the open file path across sessions
-		$effect.root(() => {
-			$effect(() => {
-				if (typeof window !== 'undefined') {
-					if (this.filePath) {
-						localStorage.setItem('strata-last-file', this.filePath);
-					} else {
-						localStorage.removeItem('strata-last-file');
-					}
-				}
-			});
-		});
+		// Initialization logic if needed
 	}
 }
 
@@ -143,3 +250,4 @@ class SchemaState {
  * Singleton instance of the application state.
  */
 export const schemaState = new SchemaState();
+

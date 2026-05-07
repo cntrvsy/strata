@@ -24,17 +24,15 @@
           form.data.target as any,
         );
 
-        schemaState.isSaving = true;
-        schemaState.isSyncing = true;
+        schemaState.machine.send("SAVE");
         try {
           await writeTextFile(schemaState.filePath, newCode);
           await schemaState.syncWithFile();
-          schemaState.hasUnsavedChanges = false;
+          schemaState.machine.send("SAVE_SUCCESS");
           schemaState.showNewTableModal = false;
         } catch (err) {
+          schemaState.machine.send("SAVE_ERROR");
           console.error("Failed to auto-save new table:", err);
-        } finally {
-          setTimeout(() => (schemaState.isSaving = false), 600);
         }
       }
     },

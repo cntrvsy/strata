@@ -1,19 +1,19 @@
 <script lang="ts">
   /**
    * RelationEdge.svelte
-   * 
+   *
    * A custom edge component for Svelte Flow that renders relationships between tables.
    * Supports two styles:
    * - Solid: Physical Foreign Key relationships.
    * - Dashed (Animated): Logical Drizzle relations() or synthetic relationships.
    */
-  import { 
-    BaseEdge, 
-    EdgeLabel, 
-    getBezierPath, 
+  import {
+    BaseEdge,
+    EdgeLabel,
+    getBezierPath,
     getSmoothStepPath,
-    type EdgeProps 
-  } from '@xyflow/svelte';
+    type EdgeProps,
+  } from "@xyflow/svelte";
 
   let {
     id,
@@ -26,7 +26,6 @@
     label,
     labelStyle,
     style,
-    animated,
     data,
   }: EdgeProps = $props();
 
@@ -41,9 +40,7 @@
       targetPosition,
     };
 
-    return data?.isVirtual 
-      ? getBezierPath(params) 
-      : getSmoothStepPath(params);
+    return data?.isVirtual ? getBezierPath(params) : getSmoothStepPath(params);
   });
 
   // Nudge the label 40% closer to the source node
@@ -55,8 +52,8 @@
 
 {#if label}
   <EdgeLabel x={finalX} y={finalY}>
-    <div 
-      class="bg-base-100/95 border border-base-300 px-2 py-1 rounded-lg shadow-xl backdrop-blur-md select-none text-[10px] font-bold tracking-tight text-base-content/80 whitespace-nowrap"
+    <div
+      class="bg-base-100/95 border border-base-500 px-2 py-1 rounded-lg backdrop-blur-md select-none text-[10px] font-bold tracking-tight text-base-content/80 whitespace-nowrap"
       style={labelStyle}
     >
       {label}

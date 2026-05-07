@@ -10,10 +10,8 @@ Every mutation in the diagram must be reflected in the source code with 100% acc
 ## 0. Architectural Robustness (Runed FSM)
 *Eliminating "Impossible States" via Finite State Machines.*
 
-- [ ] **FSM Integration**: Replace manual boolean flags in `schemaState` with a formalized Finite State Machine using `runed`.
-  - **States**: `EMPTY`, `LOADING`, `IDLE`, `DIRTY` (unsaved changes), `SAVING`, `ERROR`.
-  - **Transitions**: Ensure `Save` can only be triggered from `DIRTY`, and `Sync` cancels or blocks other operations.
-- [ ] **Error Boundaries**: Use FSM error states to drive UI-level error overlays and recovery flows.
+- [x] **FSM Integration**: Replace manual boolean flags in `schemaState` with a formalized Finite State Machine using `runed`.
+- [x] **Error Boundaries**: Use FSM error states to drive UI-level error overlays and recovery flows.
 
 ---
 
@@ -21,14 +19,14 @@ Every mutation in the diagram must be reflected in the source code with 100% acc
 *Logic-first validation of the core engine.*
 
 ### **Parser & AST Logic**
-- [ ] **Complex Edge Cases**: Test parsing of schemas with multiple `relations()` blocks, circular dependencies, and custom naming conventions.
-- [ ] **JSDoc Preservation**: Ensure that non-Strata JSDoc (e.g., standard documentation) is never stripped during a write-back operation.
-- [ ] **Mutation Surgery**: Validate that `addColumn` or `renameTable` operations are surgically precise, only touching the relevant AST nodes.
-- [ ] **Storage Type Detection**: Verify `kv`, `do`, and `d1` detection logic via JSDoc `@strata { "target": "..." }`.
+- [x] **Complex Edge Cases**: Test parsing of schemas with multiple `relations()` blocks, circular dependencies, and custom naming conventions.
+- [x] **JSDoc Preservation**: Ensure that non-Strata JSDoc (e.g., standard documentation) is never stripped during a write-back operation.
+- [x] **Mutation Surgery**: Validate that `addColumn` or `renameTable` operations are surgically precise, only touching the relevant AST nodes.
+- [x] **Storage Type Detection**: Verify `kv`, `do`, and `d1` detection logic via JSDoc `@strata { "target": "..." }`.
 
 ### **State Management (Svelte Runes)**
-- [ ] **Schema State Sync**: Test that updates to `schemaState` correctly propagate to the AST logic.
-- [ ] **Node/Edge Deduplication**: Ensure that re-parsing a file doesn't result in duplicate IDs or visual jitter.
+- [x] **Schema State Sync**: Test that updates to `schemaState` correctly propagate to the AST logic.
+- [x] **Node/Edge Deduplication**: Ensure that re-parsing a file doesn't result in duplicate IDs or visual jitter.
 
 ---
 

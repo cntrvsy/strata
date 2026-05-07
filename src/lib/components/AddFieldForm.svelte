@@ -32,17 +32,15 @@
           form.data.referencesColumn,
         );
 
-        schemaState.isSaving = true;
-        schemaState.isSyncing = true;
+        schemaState.machine.send("SAVE");
         try {
           await writeTextFile(schemaState.filePath, newCode);
           await schemaState.syncWithFile();
-          schemaState.hasUnsavedChanges = false;
+          schemaState.machine.send("SAVE_SUCCESS");
           onComplete();
         } catch (err) {
+          schemaState.machine.send("SAVE_ERROR");
           console.error("Failed to auto-save new column:", err);
-        } finally {
-          setTimeout(() => (schemaState.isSaving = false), 600);
         }
       }
     },

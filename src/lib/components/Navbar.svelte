@@ -29,7 +29,7 @@
     const el = document.querySelector(".svelte-flow") as HTMLElement;
     if (!el || !schemaState.nodes.length) return;
 
-    schemaState.isSaving = true;
+    schemaState.machine.send("SAVE");
     try {
       const nodesBounds = getNodesBounds(schemaState.nodes);
       const imageWidth = nodesBounds.width + 100;
@@ -60,10 +60,10 @@
       a.href = dataUrl;
       a.download = `strata-forge-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
       a.click();
+      schemaState.machine.send("SAVE_SUCCESS");
     } catch (err: any) {
       console.error("[Strata] Capture failed:", err);
-    } finally {
-      schemaState.isSaving = false;
+      schemaState.machine.send("SAVE_ERROR");
     }
   }
 </script>

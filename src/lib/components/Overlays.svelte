@@ -14,7 +14,7 @@
 </script>
 
 <!-- Empty State Overlay -->
-{#if !schemaState.filePath}
+{#if schemaState.machine.current === 'EMPTY'}
   <div
     class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-base-100/60 backdrop-blur-sm animate-in fade-in duration-700"
   >
@@ -43,8 +43,20 @@
   </div>
 {/if}
 
+<!-- Loading State Overlay -->
+{#if schemaState.machine.current === 'LOADING'}
+  <div
+    class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-base-100/10 backdrop-blur-[1px] animate-in fade-in duration-300"
+  >
+    <div class="p-4 bg-base-100 border border-base-300 rounded-2xl shadow-xl flex items-center gap-3">
+      <span class="loading loading-spinner loading-sm text-primary"></span>
+      <span class="text-[10px] font-black uppercase tracking-widest opacity-40">Syncing Schema...</span>
+    </div>
+  </div>
+{/if}
+
 <!-- Validation Error Overlay -->
-{#if !schemaState.isValid}
+{#if schemaState.machine.current === 'ERROR'}
   <div
     class="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl animate-in slide-in-from-bottom-8"
   >
@@ -54,13 +66,27 @@
       <div class="p-2 bg-white/20 rounded-xl">
         <AlertCircle class="w-5 h-5" />
       </div>
-      <div class="flex flex-col gap-1">
+      <div class="flex flex-col gap-1 grow">
         <h3 class="font-bold text-sm uppercase tracking-tight">
           Sync Paused: Parse Error
         </h3>
         <p class="text-[10px] opacity-90 font-mono leading-tight">
           {schemaState.error}
         </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button 
+          class="btn btn-sm btn-ghost bg-white/10 hover:bg-white/20 rounded-xl whitespace-nowrap"
+          onclick={() => schemaState.syncWithFile()}
+        >
+          Retry
+        </button>
+        <button 
+          class="btn btn-sm btn-ghost bg-white/10 hover:bg-white/20 rounded-xl whitespace-nowrap"
+          onclick={() => schemaState.openNewFile()}
+        >
+          Open Different
+        </button>
       </div>
     </div>
   </div>

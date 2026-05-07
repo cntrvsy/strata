@@ -139,4 +139,50 @@ describe('Mutation Logic', () => {
     const newCode = renameColumnInSchema(code, 'users', 'name', 'fullName');
     expect(newCode).toContain('fullName: text("fullName")');
   });
+
+  describe('Edge Cases & Preservation', () => {
+    it('should preserve other JSDoc tags when updating @strata', () => {
+      const code = `
+        /**
+         * @description The user profile table
+         * @strata {"x":0,"y":0}
+         */
+        export const users = sqliteTable("users", { id: integer("id") });
+      `;
+      const newCode = updateNodePositionInSchema(code, 'users', 100, 200);
+      expect(newCode).toContain('@description The user profile table');
+      expect(newCode).toContain('"x":100,"y":200');
+    });
+
+    it('should handle multiple relations() blocks in one file', () => {
+      const code = `
+        import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+        import { relations } from "drizzle-orm";
+        export const a = sqliteTable("a", { id: integer("id") });
+        export const b = sqliteTable("b", { id: integer("id") });
+        export const c = sqliteTable("c", { id: integer("id") });
+        
+        export const aRelations = relations(a, ({ many }) => ({ bs: many(b) }));
+        export const bRelations = relations(b, ({ one }) => ({ c: one(c) }));
+      `;
+      const result = parseSchema(code);
+      expect(result.edges).toHaveLength(2);
+      expect(result.edges.some(e => e.source === 'a' && e.target === 'b')).toBe(true);
+      expect(result.edges.some(e => e.source === 'b' && e.target === 'c')).toBe(true);
+    });
+
+    it('should handle adding an edge when relations() already exists for the source', () => {
+      const code = `
+        export const users = sqliteTable("users", { id: integer("id") });
+        export const posts = sqliteTable("posts", { id: integer("id") });
+        export const comments = sqliteTable("comments", { id: integer("id") });
+        export const usersRelations = relations(users, ({ many }) => ({
+          posts: many(posts)
+        }));
+      `;
+      const newCode = addEdgeToSchema(code, 'users', 'comments');
+      expect(newCode).toContain('posts: many(posts)');
+      expect(newCode).toContain('comments: many(comments)');
+    });
+  });
 });
