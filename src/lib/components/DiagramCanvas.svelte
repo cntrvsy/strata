@@ -62,6 +62,9 @@
     --text-color: oklch(var(--bc));
     --node-border-radius: 12px;
     --node-box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   :global(.svelte-flow__controls button) {

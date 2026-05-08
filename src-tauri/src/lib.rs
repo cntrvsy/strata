@@ -89,4 +89,47 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(temp_file);
     }
+
+    #[test]
+    fn test_watch_file_non_existent() {
+        let app = mock_builder()
+            .manage(WatcherState(Mutex::new(None)))
+            .build(mock_context(tauri::test::noop_assets()))
+            .unwrap();
+
+        let handle = app.handle().clone();
+        tauri::async_runtime::block_on(async move {
+            let state: State<'_, WatcherState> = handle.state();
+            let result = watch_file(handle.clone(), state, "/non/existent/path".to_string()).await;
+            assert!(result.is_err(), "Should return error for non-existent path");
+        });
+    }
+
+    #[test]
+    fn test_watcher_replacement() {
+        let app = mock_builder()
+            .manage(WatcherState(Mutex::new(None)))
+            .build(mock_context(tauri::test::noop_assets()))
+            .unwrap();
+
+        let temp_dir = std::env::temp_dir();
+        let f1 = temp_dir.join("f1.ts");
+        let f2 = temp_dir.join("f2.ts");
+        std::fs::write(&f1, "").unwrap();
+        std::fs::write(&f2, "").unwrap();
+
+        let handle = app.handle().clone();
+        tauri::async_runtime::block_on(async move {
+            let state: State<'_, WatcherState> = handle.state();
+            
+            // Watch first file
+            watch_file(handle.clone(), state.clone(), f1.to_str().unwrap().to_string()).await.unwrap();
+            
+            // Watch second file (should replace first)
+            watch_file(handle.clone(), state, f2.to_str().unwrap().to_string()).await.unwrap();
+        });
+
+        let _ = std::fs::remove_file(f1);
+        let _ = std::fs::remove_file(f2);
+    }
 }

@@ -103,6 +103,7 @@
       <button
         class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20"
         onclick={() => (schemaState.showNewTableModal = true)}
+        data-testid="new-table-button"
       >
         <span class="text-lg leading-none">+</span>
         New Table

@@ -17,7 +17,6 @@ import { relations } from "drizzle-orm";
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
-  email: text("email").notNull().unique(),
   name: text("name"),
   createdAt: integer("created_at").notNull(),
 });
@@ -41,17 +40,6 @@ export const memberships = sqliteTable("memberships", {
   orgId: integer("org_id").notNull().references(() => organizations.id),
   role: text("role").default("member"),
 });
-
-/** 
- * @strata {"x":700,"y":350} 
- */
-export const projects = sqliteTable("projects", {
-  id: integer("id").primaryKey(),
-  orgId: integer("org_id").notNull().references(() => organizations.id),
-  name: text("name").notNull(),
-  status: text("status").default("active"),
-});
-
 // --- KV STORAGE (Key-Value Pairs) ---
 
 /** 
@@ -107,13 +95,6 @@ export const membershipsRelations = relations(memberships, ({ one }) => ({
   }),
   organization: one(organizations, {
     fields: [memberships.orgId],
-    references: [organizations.id],
-  }),
-}));
-
-export const projectsRelations = relations(projects, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [projects.orgId],
     references: [organizations.id],
   }),
 }));

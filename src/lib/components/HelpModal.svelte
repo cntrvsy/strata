@@ -1,13 +1,5 @@
 <script lang="ts">
-  import {
-    X,
-    Info,
-    Share2,
-    MousePointer2,
-    Code2,
-    Sparkles,
-  } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { X, Info, Share2, Code2, Sparkles } from "lucide-svelte";
 
   let { show = $bindable(false) } = $props();
 

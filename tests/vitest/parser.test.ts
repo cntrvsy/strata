@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { parseSchema, updateNodePositionInSchema, addEdgeToSchema, addColumnToSchema, removeTableFromSchema, renameTableInSchema, renameColumnInSchema } from './parser';
+import { 
+  parseSchema, 
+  updateNodePositionInSchema, 
+  addEdgeToSchema, 
+  addColumnToSchema, 
+  removeTableFromSchema, 
+  renameTableInSchema, 
+  renameColumnInSchema,
+  removeColumnFromSchema,
+  stripHtml,
+  wrapCode
+} from '../../src/lib/parser';
 
 describe('Parser Core', () => {
   it('should parse simple D1 tables', () => {
@@ -183,6 +194,78 @@ describe('Mutation Logic', () => {
       const newCode = addEdgeToSchema(code, 'users', 'comments');
       expect(newCode).toContain('posts: many(posts)');
       expect(newCode).toContain('comments: many(comments)');
+    });
+
+    it('should rename a column in a KV object', () => {
+      const code = `export const sessions = { id: "string", user: "string" };`;
+      const newCode = renameColumnInSchema(code, 'sessions', 'user', 'userId');
+      expect(newCode).toContain('userId: "string"');
+    });
+
+    it('should add a column to a KV object', () => {
+      const code = `export const sessions = { id: "string" };`;
+      const newCode = addColumnToSchema(code, 'sessions', 'ttl', 'number');
+      expect(newCode).toContain('ttl: "string"'); // Current implementation defaults to "string" for KV
+    });
+
+    it('should remove a column from a KV object', () => {
+      const code = `export const sessions = { id: "string", trash: "any" };`;
+      const newerCode = removeColumnFromSchema(code, 'sessions', 'trash');
+      expect(newerCode).not.toContain('trash: "any"');
+    });
+
+    it('should remove a column from a D1 table', () => {
+      const code = `export const users = sqliteTable("users", { id: integer("id"), bio: text("bio") });`;
+      const newCode = removeColumnFromSchema(code, 'users', 'bio');
+      expect(newCode).not.toContain('bio: text("bio")');
+    });
+
+    it('should create a JSDoc with @strata if none exists when updating position', () => {
+      const code = `export const t = sqliteTable("t", { id: integer("id") });`;
+      const newCode = updateNodePositionInSchema(code, 't', 10, 20);
+      expect(newCode).toContain('@strata { "x": 10, "y": 20 }');
+    });
+
+    it('should handle invalid JSON in @strata gracefully', () => {
+      const code = `/** @strata {invalid} */\nexport const t = sqliteTable("t", { id: integer("id") });`;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true); // Should fallback to defaults
+      expect(result.nodes[0].position.x).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should return error if no tables found in non-empty code', () => {
+      const code = `const x = 1;`;
+      const result = parseSchema(code);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No tables or schema objects found');
+    });
+
+    it('should strip HTML tags correctly', () => {
+      expect(stripHtml('<div>Hello</div>')).toBe('Hello');
+      expect(stripHtml('<b>World</b>')).toBe('World');
+    });
+
+    it('should wrap code correctly', () => {
+      expect(wrapCode('const x = 1;')).toBe('<pre><code>const x = 1;</code></pre>');
+    });
+
+    it('should handle complex sqliteTable initializers (descendants check)', () => {
+      const code = `export const users = someWrapper(sqliteTable("users", { id: integer("id") }));`;
+      const result = renameColumnInSchema(code, 'users', 'id', 'newId');
+      expect(result).toContain('newId: integer("newId")');
+    });
+
+    it('should handle source decl not being a table in addEdgeToSchema', () => {
+      const code = `/** @strata {"target":"kv"} */\nexport const a = { id: "s" };\nexport const b = { id: "s" };`;
+      // This should trigger the synthetic branch
+      const newCode = addEdgeToSchema(code, 'a', 'b');
+      expect(newCode).toContain('"relations":[{"to":"b"}]');
+    });
+
+    it('should add a column with references', () => {
+      const code = `export const users = sqliteTable("users", { id: integer("id") }); export const posts = sqliteTable("posts", { id: integer("id") });`;
+      const newCode = addColumnToSchema(code, 'posts', 'authorId', 'integer', 'users', 'id');
+      expect(newCode).toContain('.references(() => users.id)');
     });
   });
 });

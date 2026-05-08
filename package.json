@@ -12,7 +12,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "build:appimage": "NO_STRIP=true APPIMAGE_EXTRACT_AND_RUN=1 tauri build"
   },
   "license": "MIT",
   "dependencies": {
@@ -41,6 +42,7 @@
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "jsdom": "^29.1.1",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",

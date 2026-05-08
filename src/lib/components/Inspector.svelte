@@ -161,6 +161,7 @@
 
   <div
     class="absolute top-20 right-6 max-h-[calc(100vh-25rem)] w-80 bg-base-100/95 backdrop-blur-xl border border-base-300 shadow-2xl rounded-[2.5rem] z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300"
+    data-testid="inspector-panel"
   >
     <!-- Header -->
     <div
@@ -211,6 +212,7 @@
             class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
             onclick={() => (isConfirmingDelete = true)}
             title="Delete Entity"
+            data-testid="delete-entity-button"
           >
             <Trash2 class="w-3.5 h-3.5" />
           </button>
@@ -266,6 +268,7 @@
             {#each data.columns as col}
               <div
                 class="bg-base-200/40 p-3 rounded-2xl flex flex-col gap-1.5 border border-transparent hover:border-base-300 transition-all group"
+                data-testid="field-row-{col.name}"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2 grow">
@@ -336,12 +339,14 @@
               <button
                 class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
                 onclick={() => (isAddingField = true)}
+                data-testid="add-field-button"
               >
                 <span class="text-xs font-bold uppercase">+ Field</span>
               </button>
               <button
                 class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all"
                 onclick={() => (isForgingRelation = true)}
+                data-testid="add-relation-button"
               >
                 <span class="text-xs font-bold uppercase">+ Relation</span>
               </button>

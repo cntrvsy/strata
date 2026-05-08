@@ -109,12 +109,16 @@
     let unlistenFn: () => void;
     const init = async () => {
       // Listen for external file changes (e.g. edits made in VS Code)
-      unlistenFn = await listen("file-changed", async () => {
-        if (schemaState.filePath && !schemaState.isSyncing) {
-          console.log("[Strata] External file change detected, syncing...");
-          await schemaState.syncWithFile();
-        }
-      });
+      try {
+        unlistenFn = await listen("file-changed", async () => {
+          if (schemaState.filePath && !schemaState.isSyncing) {
+            console.log("[Strata] External file change detected, syncing...");
+            await schemaState.syncWithFile();
+          }
+        });
+      } catch (e) {
+        console.warn("[Strata] Tauri events not available");
+      }
 
     };
 

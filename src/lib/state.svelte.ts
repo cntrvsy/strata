@@ -251,3 +251,8 @@ class SchemaState {
  */
 export const schemaState = new SchemaState();
 
+// Expose to window for E2E testing
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+	(window as any).schemaState = schemaState;
+}
+

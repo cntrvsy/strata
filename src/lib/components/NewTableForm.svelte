@@ -46,6 +46,7 @@
 >
   <div
     class="bg-base-100 border border-base-300 rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
+    data-testid="new-table-modal"
   >
     <div
       class="p-6 border-b border-base-300 flex items-center justify-between bg-base-200/50"
