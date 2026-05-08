@@ -25,6 +25,7 @@
   import Overlays from "$lib/components/Overlays.svelte";
   import SchemaStats from "$lib/components/SchemaStats.svelte";
   import NewTableForm from "$lib/components/NewTableForm.svelte";
+  import CodeEditor from "$lib/components/CodeEditor.svelte";
 
   /**
    * Handles Svelte Flow connection events (dragging a line between nodes).
@@ -66,31 +67,11 @@
   }
 
   /**
-   * Persists all node layout changes back to the schema file's JSDoc metadata.
+   * Persists all changes back to the schema file.
    * Triggered by Ctrl+S or manual save actions.
    */
   async function saveDiagramChanges() {
-    if (!schemaState.filePath || !schemaState.hasUnsavedChanges) return;
-
-    try {
-      schemaState.machine.send("SAVE");
-      let currentCode = schemaState.rawCode;
-
-      // Batch update all node positions in the AST
-      for (const node of schemaState.nodes) {
-        currentCode = updateNodePositionInSchema(currentCode, node.id, node.position.x, node.position.y);
-      }
-
-      await writeTextFile(schemaState.filePath, currentCode);
-      await schemaState.syncWithFile();
-      schemaState.machine.send("SAVE_SUCCESS");
-      
-      schemaState.isRecentlySaved = true;
-      setTimeout(() => (schemaState.isRecentlySaved = false), 1500);
-    } catch (err) {
-      schemaState.machine.send("SAVE_ERROR");
-      console.error("[Strata] Save failed:", err);
-    }
+    await schemaState.saveToFile();
   }
 
   /**
@@ -131,10 +112,14 @@
   });
 </script>
 
-<DiagramCanvas {onconnect} {onnodedragstop} />
-<Overlays />
-<SchemaStats />
-<Inspector />
+{#if schemaState.viewMode === 'diagram'}
+  <DiagramCanvas {onconnect} {onnodedragstop} />
+  <Overlays />
+  <SchemaStats />
+  <Inspector />
+{:else}
+  <CodeEditor />
+{/if}
 
 {#if schemaState.showNewTableModal}
   <NewTableForm />

@@ -147,7 +147,24 @@ export function parseSchema(code: string): ParseResult {
 
 		return { success: true, nodes, edges: validEdges };
 	} catch (e: any) {
-		return { success: false, error: e.message, nodes: [], edges: [] };
+		console.error("[Strata] Parse critical failure:", e);
+		
+		// Attempt to extract line/column for inline linting
+		let line = 1;
+		let column = 0;
+		const match = e.message?.match(/(\d+):(\d+)/);
+		if (match) {
+			line = parseInt(match[1]);
+			column = parseInt(match[2]);
+		}
+
+		return { 
+			success: false, 
+			error: e.message || "Unknown Error",
+			errorLoc: { line, column },
+			nodes: [],
+			edges: []
+		};
 	}
 }
 

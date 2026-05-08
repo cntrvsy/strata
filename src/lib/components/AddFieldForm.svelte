@@ -8,7 +8,7 @@
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "../state.svelte";
   import { addColumnToSchema, wrapCode } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { X, Check } from "lucide-svelte";

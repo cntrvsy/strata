@@ -96,6 +96,26 @@
         {!schemaState.isValid ? "Parsing Error" : "Live Mirror Active"}
       </span>
     </div>
+
+    <!-- Mode Toggle -->
+    {#if schemaState.filePath}
+      <div class="flex items-center gap-1 bg-base-200 p-1 rounded-xl ml-4 shadow-inner border border-base-300">
+        <button 
+          class="btn btn-xs rounded-lg border-none {schemaState.viewMode === 'diagram' ? 'bg-base-100 shadow-sm text-primary' : 'bg-transparent text-base-content/40 hover:text-base-content'}"
+          onclick={() => schemaState.viewMode = 'diagram'}
+          data-testid="diagram-mode-button"
+        >
+          Diagram
+        </button>
+        <button 
+          class="btn btn-xs rounded-lg border-none {schemaState.viewMode === 'code' ? 'bg-base-100 shadow-sm text-primary' : 'bg-transparent text-base-content/40 hover:text-base-content'}"
+          onclick={() => schemaState.viewMode = 'code'}
+          data-testid="code-mode-button"
+        >
+          Code
+        </button>
+      </div>
+    {/if}
   </div>
 
   <div class="flex items-center gap-3">

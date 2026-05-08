@@ -20,19 +20,35 @@ export const test = base.extend({
 
       const listeners: Record<string, Function[]> = {};
 
+      const tauriInvoke = async (cmd: string, args: any) => {
+        console.log('[MOCK TAURI] invoke:', cmd, args);
+        switch (cmd) {
+          case 'watch_file': return null;
+          default: return {};
+        }
+      };
+
       (window as any).__TAURI__ = {
-        invoke: async (cmd: string, args: any) => {
-          console.log('[MOCK TAURI] invoke:', cmd, args);
-          switch (cmd) {
-            case 'watch_file': return null;
-            default: return {};
+        invoke: tauriInvoke,
+        event: {
+          listen: async (event: string, handler: Function) => {
+            if (!listeners[event]) listeners[event] = [];
+            listeners[event].push(handler);
+            return () => {
+              listeners[event] = listeners[event].filter(h => h !== handler);
+            };
           }
         }
       };
 
       (window as any).__TAURI_INTERNALS__ = {
-        invoke: (window as any).__TAURI__.invoke,
-        metadata: { package: { version: '0.1.0' }, app: { name: 'strata' } }
+        invoke: tauriInvoke,
+        metadata: { package: { version: '0.1.0' }, app: { name: 'strata' } },
+        plugins: {
+          event: {
+            listen: (window as any).__TAURI__.event.listen
+          }
+        }
       };
 
       (window as any).__TAURI_PLUGIN_FS__ = {
@@ -51,16 +67,6 @@ export const test = base.extend({
 
       (window as any).__TAURI_PLUGIN_DIALOG__ = {
         open: async () => '/mock/schema.ts'
-      };
-
-      (window as any).__TAURI_EVENT__ = {
-        listen: async (event: string, handler: Function) => {
-          if (!listeners[event]) listeners[event] = [];
-          listeners[event].push(handler);
-          return () => {
-            listeners[event] = listeners[event].filter(h => h !== handler);
-          };
-        }
       };
     });
 

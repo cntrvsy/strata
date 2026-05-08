@@ -34,6 +34,8 @@ class SchemaState {
 	isValid = $state(true);
 	/** Any error message from the last parse attempt */
 	error = $state<string | null>(null);
+	/** Exact location of the last parse error for inline linting */
+	errorLoc = $state<{ line: number, column: number } | null>(null);
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */
@@ -105,6 +107,8 @@ class SchemaState {
 	activeFilter = $state<'d1' | 'do' | 'kv' | null>(null);
 	/** Whether the 'New Table' modal is currently visible */
 	showNewTableModal = $state(false);
+	/** The current UI view mode: diagram canvas or code editor */
+	viewMode = $state<'diagram' | 'code'>('diagram');
 
 	/**
 	 * Force-syncs the UI state with the current file on disk.
@@ -149,11 +153,13 @@ class SchemaState {
 				this.rawCode = raw;
 				this.isValid = true;
 				this.error = null;
+				this.errorLoc = null;
 				
 				this.machine.send("LOAD_SUCCESS");
 			} else {
 				this.isValid = false;
 				this.error = result.error || "Parse Error";
+				this.errorLoc = result.errorLoc || null;
 				this.machine.send("LOAD_ERROR");
 			}
 		} catch (e: any) {
@@ -222,6 +228,39 @@ class SchemaState {
 			this.machine.send("SAVE_SUCCESS");
 		} catch (e: any) {
 			console.error("[Strata] Table delete failed:", e);
+			this.machine.send("SAVE_ERROR");
+			this.error = e.message;
+		}
+	}
+
+	/**
+	 * Persists the current rawCode to disk, including any pending node position updates.
+	 */
+	async saveToFile() {
+		if (!this.filePath || this.machine.current === "SAVING") return;
+		
+		this.machine.send("SAVE");
+		try {
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+			const { updateNodePositionInSchema } = await import("./parser");
+			
+			let currentCode = this.rawCode;
+			
+			// If we are in diagram mode, ensure positions are synced
+			if (this.viewMode === 'diagram') {
+				for (const node of this.nodes) {
+					currentCode = updateNodePositionInSchema(currentCode, node.id, node.position.x, node.position.y);
+				}
+			}
+			
+			await writeTextFile(this.filePath, currentCode);
+			await this.syncWithFile();
+			this.machine.send("SAVE_SUCCESS");
+			
+			this.isRecentlySaved = true;
+			setTimeout(() => (this.isRecentlySaved = false), 1500);
+		} catch (e: any) {
+			console.error("[Strata] Save failed:", e);
 			this.machine.send("SAVE_ERROR");
 			this.error = e.message;
 		}
