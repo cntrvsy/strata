@@ -14,7 +14,7 @@
     Edit2,
     Check,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "../state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
   import {

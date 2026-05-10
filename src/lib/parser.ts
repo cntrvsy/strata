@@ -24,6 +24,7 @@ interface ParseResult {
 	nodes: Node[];
 	edges: Edge[];
 	error?: string;
+	errorLoc?: { line: number, column: number } | null;
 }
 
 /**

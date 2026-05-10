@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "../state.svelte";
   import { Database, Cpu, Zap, Layers } from "lucide-svelte";
 
   const stats = $derived.by(() => {
@@ -39,24 +39,39 @@
       <!-- Entity Breakdown -->
       <div class="grid grid-cols-3 gap-2">
         <button
-          onclick={() => schemaState.activeFilter = schemaState.activeFilter === 'd1' ? null : 'd1'}
-          class="flex flex-col items-center p-2 bg-primary/5 rounded-xl border transition-all {schemaState.activeFilter === 'd1' ? 'border-primary ring-2 ring-primary/20' : 'border-primary/10 hover:bg-primary/10'}"
+          onclick={() =>
+            (schemaState.activeFilter =
+              schemaState.activeFilter === "d1" ? null : "d1")}
+          class="flex flex-col items-center p-2 bg-primary/5 rounded-xl border transition-all {schemaState.activeFilter ===
+          'd1'
+            ? 'border-primary ring-2 ring-primary/20'
+            : 'border-primary/10 hover:bg-primary/10'}"
         >
           <Database class="w-3 h-3 text-primary mb-1" />
           <span class="text-xs font-bold">{stats.d1}</span>
           <span class="text-[8px] opacity-40 uppercase">D1</span>
         </button>
         <button
-          onclick={() => schemaState.activeFilter = schemaState.activeFilter === 'do' ? null : 'do'}
-          class="flex flex-col items-center p-2 bg-secondary/5 rounded-xl border transition-all {schemaState.activeFilter === 'do' ? 'border-secondary ring-2 ring-secondary/20' : 'border-secondary/10 hover:bg-secondary/10'}"
+          onclick={() =>
+            (schemaState.activeFilter =
+              schemaState.activeFilter === "do" ? null : "do")}
+          class="flex flex-col items-center p-2 bg-secondary/5 rounded-xl border transition-all {schemaState.activeFilter ===
+          'do'
+            ? 'border-secondary ring-2 ring-secondary/20'
+            : 'border-secondary/10 hover:bg-secondary/10'}"
         >
           <Cpu class="w-3 h-3 text-secondary mb-1" />
           <span class="text-xs font-bold">{stats.do}</span>
           <span class="text-[8px] opacity-40 uppercase">DO</span>
         </button>
         <button
-          onclick={() => schemaState.activeFilter = schemaState.activeFilter === 'kv' ? null : 'kv'}
-          class="flex flex-col items-center p-2 bg-accent/5 rounded-xl border transition-all {schemaState.activeFilter === 'kv' ? 'border-accent ring-2 ring-accent/20' : 'border-accent/10 hover:bg-accent/10'}"
+          onclick={() =>
+            (schemaState.activeFilter =
+              schemaState.activeFilter === "kv" ? null : "kv")}
+          class="flex flex-col items-center p-2 bg-accent/5 rounded-xl border transition-all {schemaState.activeFilter ===
+          'kv'
+            ? 'border-accent ring-2 ring-accent/20'
+            : 'border-accent/10 hover:bg-accent/10'}"
         >
           <Zap class="w-3 h-3 text-accent mb-1" />
           <span class="text-xs font-bold">{stats.kv}</span>

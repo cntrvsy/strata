@@ -8,7 +8,7 @@
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { relationSchema } from "$lib/schemas";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "../state.svelte";
   import { addEdgeToSchema } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { Link, Check, X, ArrowRight } from "lucide-svelte";
@@ -26,7 +26,7 @@
         const newCode = addEdgeToSchema(
           schemaState.rawCode,
           form.data.source,
-          form.data.target
+          form.data.target,
         );
 
         schemaState.machine.send("SAVE");
@@ -53,13 +53,19 @@
 
   // Filter out the source table from targets
   const potentialTargets = $derived(
-    schemaState.nodes.filter(n => n.id !== sourceTableName).map(n => n.id)
+    schemaState.nodes.filter((n) => n.id !== sourceTableName).map((n) => n.id),
   );
 </script>
 
-<div class="flex flex-col gap-5 p-1 animate-in fade-in slide-in-from-top-2 duration-300">
-  <div class="flex items-center justify-between border-b border-base-300 pb-3 mb-1">
-    <h4 class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Forge Relation</h4>
+<div
+  class="flex flex-col gap-5 p-1 animate-in fade-in slide-in-from-top-2 duration-300"
+>
+  <div
+    class="flex items-center justify-between border-b border-base-300 pb-3 mb-1"
+  >
+    <h4 class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
+      Forge Relation
+    </h4>
     <button class="btn btn-ghost btn-xs btn-circle" onclick={onComplete}>
       <X class="w-3 h-3" />
     </button>
@@ -69,9 +75,12 @@
     <Form.Field {form} name="target">
       <Form.Control>
         {#snippet children({ props })}
-          <Form.Label class="text-[10px] font-bold opacity-50 mb-1.5 block uppercase">Target Entity</Form.Label>
-          <select 
-            {...props} 
+          <Form.Label
+            class="text-[10px] font-bold opacity-50 mb-1.5 block uppercase"
+            >Target Entity</Form.Label
+          >
+          <select
+            {...props}
             bind:value={$formData.target}
             class="select select-sm select-bordered w-full rounded-xl bg-base-200 focus:border-primary transition-all text-xs"
           >
@@ -86,8 +95,8 @@
     </Form.Field>
 
     <div class="flex flex-col gap-2 pt-2">
-      <button 
-        type="submit" 
+      <button
+        type="submit"
         class="btn btn-primary btn-sm rounded-xl w-full gap-2 shadow-lg shadow-primary/20"
         disabled={!$formData.target}
       >
@@ -95,7 +104,7 @@
         Forge Edge
       </button>
       <p class="text-[9px] text-center opacity-40 px-2 leading-tight">
-        D1 &rarr; D1: Writes Drizzle relations.<br/>
+        D1 &rarr; D1: Writes Drizzle relations.<br />
         D1 &rarr; KV/DO: Writes Synthetic JSDoc.
       </p>
     </div>

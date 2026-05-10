@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Overlays.svelte
-   * 
+   *
    * Manages global UI layers including:
    * - Empty state (Select File prompt)
    * - Validation errors (Parse failures)
@@ -9,12 +9,12 @@
    * - Live coordinate stats
    */
   import { FileCode, FolderOpen, AlertCircle, Check } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "../state.svelte";
   import { fade, fly } from "svelte/transition";
 </script>
 
 <!-- Empty State Overlay -->
-{#if schemaState.machine.current === 'EMPTY'}
+{#if schemaState.machine.current === "EMPTY"}
   <div
     class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-base-100/60 backdrop-blur-sm animate-in fade-in duration-700"
   >
@@ -44,19 +44,23 @@
 {/if}
 
 <!-- Loading State Overlay -->
-{#if schemaState.machine.current === 'LOADING'}
+{#if schemaState.machine.current === "LOADING"}
   <div
     class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-base-100/10 backdrop-blur-[1px] animate-in fade-in duration-300"
   >
-    <div class="p-4 bg-base-100 border border-base-300 rounded-2xl shadow-xl flex items-center gap-3">
+    <div
+      class="p-4 bg-base-100 border border-base-300 rounded-2xl shadow-xl flex items-center gap-3"
+    >
       <span class="loading loading-spinner loading-sm text-primary"></span>
-      <span class="text-[10px] font-black uppercase tracking-widest opacity-40">Syncing Schema...</span>
+      <span class="text-[10px] font-black uppercase tracking-widest opacity-40"
+        >Syncing Schema...</span
+      >
     </div>
   </div>
 {/if}
 
 <!-- Validation Error Overlay -->
-{#if schemaState.machine.current === 'ERROR'}
+{#if schemaState.machine.current === "ERROR"}
   <div
     class="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl animate-in slide-in-from-bottom-8"
   >
@@ -75,13 +79,13 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <button 
+        <button
           class="btn btn-sm btn-ghost bg-white/10 hover:bg-white/20 rounded-xl whitespace-nowrap"
           onclick={() => schemaState.syncWithFile()}
         >
           Retry
         </button>
-        <button 
+        <button
           class="btn btn-sm btn-ghost bg-white/10 hover:bg-white/20 rounded-xl whitespace-nowrap"
           onclick={() => schemaState.openNewFile()}
         >
