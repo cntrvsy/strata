@@ -2,9 +2,9 @@ import { sqliteTable, text, integer, blob } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
- * STRATA FORGE - EXAMPLE SCHEMA
+ * STRATA - EXAMPLE SCHEMA
  * 
- * This file demonstrates how Strata Forge visualizes a hybrid Cloudflare architecture:
+ * This file demonstrates how Strata visualizes a hybrid Cloudflare architecture:
  * 1. D1 Databases: Standard relational tables (sqliteTable)
  * 2. KV Storage: High-performance key-value pairs (plain objects)
  * 3. Durable Objects: State-persistent objects (plain objects with target: "do")

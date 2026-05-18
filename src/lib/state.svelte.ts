@@ -21,7 +21,7 @@ type Events =
 	| "RESET";
 
 /**
- * Global application state for Strata Forge.
+ * Global application state for Strata.
  * Manages schema synchronization, file persistence, and UI modes.
  */
 class SchemaState {

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * Strata Forge: The Drizzle Design Companion
-   * 
+   * Strata: The Drizzle Design Companion
+   *
    * This is the root page component that assembles the visual editor.
    * It handles global keyboard shortcuts, drag-and-drop relationship forging,
    * and coordinates the synchronization between UI events and AST persistence.
@@ -10,16 +10,11 @@
   import type { Connection } from "@xyflow/svelte";
   import { onMount } from "svelte";
   import { schemaState } from "$lib/state.svelte";
-  import {
-    addEdgeToSchema,
-    updateNodePositionInSchema,
-    stripHtml,
-  } from "$lib/parser";
+  import { addEdgeToSchema } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { listen } from "@tauri-apps/api/event";
 
   // --- Components ---
-  import Navbar from "$lib/components/Navbar.svelte";
   import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
   import Inspector from "$lib/components/Inspector.svelte";
   import Overlays from "$lib/components/Overlays.svelte";
@@ -33,7 +28,7 @@
    */
   async function onconnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
-    
+
     // Optimistic UI update for immediate feedback
     schemaState.edges = addEdge(
       {
@@ -48,7 +43,11 @@
     if (schemaState.filePath) {
       schemaState.machine.send("SAVE");
       try {
-        const newCode = addEdgeToSchema(schemaState.rawCode, connection.source, connection.target);
+        const newCode = addEdgeToSchema(
+          schemaState.rawCode,
+          connection.source,
+          connection.target,
+        );
         await writeTextFile(schemaState.filePath, newCode);
         await schemaState.syncWithFile();
         schemaState.machine.send("SAVE_SUCCESS");
@@ -86,7 +85,7 @@
 
   onMount(() => {
     window.addEventListener("keydown", handleKeyDown);
-    
+
     let unlistenFn: () => void;
     const init = async () => {
       // Listen for external file changes (e.g. edits made in VS Code)
@@ -100,7 +99,6 @@
       } catch (e) {
         console.warn("[Strata] Tauri events not available");
       }
-
     };
 
     init();
@@ -112,7 +110,7 @@
   });
 </script>
 
-{#if schemaState.viewMode === 'diagram'}
+{#if schemaState.viewMode === "diagram"}
   <DiagramCanvas {onconnect} {onnodedragstop} />
   <Overlays />
   <SchemaStats />

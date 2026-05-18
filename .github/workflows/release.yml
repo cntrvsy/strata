@@ -3,7 +3,7 @@ name: "release"
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   release:
@@ -49,8 +49,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: "Strata Forge v__VERSION__"
-          releaseBody: "See the assets below to download the latest version of Strata Forge."
+          releaseName: "Strata v__VERSION__"
+          releaseBody: "See the assets below to download the latest version of Strata."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

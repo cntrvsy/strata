@@ -18,7 +18,7 @@ test.describe('Help Modal', () => {
 
     // 3. The modal should now be visible
     await expect(modal).toBeVisible();
-    await expect(page.getByText('Strata Forge Guide')).toBeVisible();
+    await expect(page.getByText('Strata Guide')).toBeVisible();
 
     // 4. Click the "Got it" button to close
     const closeButton = page.getByText('Got it');

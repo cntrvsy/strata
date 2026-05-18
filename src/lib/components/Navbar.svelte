@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { 
-    Share2, 
-    Camera, 
-    FolderOpen, 
+  import {
+    Share2,
+    Camera,
+    FolderOpen,
     HelpCircle,
-    HelpCircle as HelpIcon
+    HelpCircle as HelpIcon,
   } from "lucide-svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { schemaState } from "$lib/state.svelte";
@@ -58,7 +58,7 @@
 
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `strata-forge-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
+      a.download = `strata-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
       a.click();
       schemaState.machine.send("SAVE_SUCCESS");
     } catch (err: any) {
@@ -79,7 +79,7 @@
     <div class="flex flex-col">
       <span
         class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 leading-none mb-1"
-        >Strata Forge</span
+        >Strata</span
       >
       <h1 class="text-sm font-bold tracking-tight">
         {schemaState.filePath?.split("/").pop() || "No Schema Loaded"}
@@ -99,17 +99,25 @@
 
     <!-- Mode Toggle -->
     {#if schemaState.filePath}
-      <div class="flex items-center gap-1 bg-base-200 p-1 rounded-xl ml-4 shadow-inner border border-base-300">
-        <button 
-          class="btn btn-xs rounded-lg border-none {schemaState.viewMode === 'diagram' ? 'bg-base-100 shadow-sm text-primary' : 'bg-transparent text-base-content/40 hover:text-base-content'}"
-          onclick={() => schemaState.viewMode = 'diagram'}
+      <div
+        class="flex items-center gap-1 bg-base-200 p-1 rounded-xl ml-4 shadow-inner border border-base-300"
+      >
+        <button
+          class="btn btn-xs rounded-lg border-none {schemaState.viewMode ===
+          'diagram'
+            ? 'bg-base-100 shadow-sm text-primary'
+            : 'bg-transparent text-base-content/40 hover:text-base-content'}"
+          onclick={() => (schemaState.viewMode = "diagram")}
           data-testid="diagram-mode-button"
         >
           Diagram
         </button>
-        <button 
-          class="btn btn-xs rounded-lg border-none {schemaState.viewMode === 'code' ? 'bg-base-100 shadow-sm text-primary' : 'bg-transparent text-base-content/40 hover:text-base-content'}"
-          onclick={() => schemaState.viewMode = 'code'}
+        <button
+          class="btn btn-xs rounded-lg border-none {schemaState.viewMode ===
+          'code'
+            ? 'bg-base-100 shadow-sm text-primary'
+            : 'bg-transparent text-base-content/40 hover:text-base-content'}"
+          onclick={() => (schemaState.viewMode = "code")}
           data-testid="code-mode-button"
         >
           Code

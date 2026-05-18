@@ -5,10 +5,10 @@
 
   const sections = [
     {
-      title: "The Forge Philosophy",
+      title: "The Philosophy",
       icon: Sparkles,
       content:
-        "Strata Forge is a bidirectional editor. Your schema.ts is the source of truth. Drag nodes to move them, and we'll save the positions back to your code using JSDoc.",
+        "Strata is a bidirectional editor. Your schema.ts is the source of truth. Drag nodes to move them, and we'll save the positions back to your code using JSDoc.",
     },
     {
       title: "Storage Targets",
@@ -26,7 +26,7 @@
       title: "AI Power",
       icon: Code2,
       content:
-        "Download the STRATA_FORGE_AI.md file and feed it to your favorite LLM. It will learn how to design schemas that perfectly sync with this UI.",
+        "Download the STRATA_AI.md file and feed it to your favorite LLM. It will learn how to design schemas that perfectly sync with this UI.",
     },
   ];
 </script>
@@ -47,7 +47,7 @@
             <Info class="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 class="text-xl font-bold tracking-tight">Strata Forge Guide</h2>
+            <h2 class="text-xl font-bold tracking-tight">Strata Guide</h2>
             <p
               class="text-[10px] uppercase font-black tracking-widest opacity-40"
             >

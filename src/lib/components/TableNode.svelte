@@ -2,7 +2,7 @@
   /**
    * TableNode.svelte
    *
-   * The primary visual entity in Strata Forge.
+   * The primary visual entity in Strata.
    * Renders a table/object with its columns/fields.
    * Dynamically adapts its styling (icons, colors, badges) based on the storage target:
    * - D1: Standard SQLite relational tables.

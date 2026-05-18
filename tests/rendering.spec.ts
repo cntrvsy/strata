@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Strata Forge UI Rendering', () => {
+test.describe('Strata UI Rendering', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => localStorage.clear());
@@ -8,7 +8,7 @@ test.describe('Strata Forge UI Rendering', () => {
   });
 
   test('should render the navbar branding', async ({ page }) => {
-    const brand = page.getByText('Strata Forge');
+    const brand = page.getByText('Strata');
     await expect(brand).toBeVisible();
   });
 

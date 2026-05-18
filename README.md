@@ -1,14 +1,14 @@
-# Strata Forge: The Drizzle Design Companion
+# Strata: The Drizzle Design Companion
 
-Strata Forge is a high-performance, local-first ERD (Entity Relationship Diagram) tool designed specifically for the **Cloudflare D1 + Drizzle ORM** stack. 
+Strata is a high-performance, local-first ERD (Entity Relationship Diagram) tool designed specifically for the **Cloudflare D1 + Drizzle ORM** stack.
 
 It solves the "stale diagram" problem by using your TypeScript schema as the single source of truth. No sidecar JSON files, no proprietary formats—just your code, visualized and editable.
 
 ---
 
-## 🏗️ The "Forge" Philosophy
+## 🏗️ The Philosophy
 
-Traditional ERD tools live outside your codebase. Strata Forge lives *inside* the development loop. It acts as a visual front-end for your AST (Abstract Syntax Tree).
+Traditional ERD tools live outside your codebase. Strata lives _inside_ the development loop. It acts as a visual front-end for your AST (Abstract Syntax Tree).
 
 ```text
        ┌──────────────────────────┐
@@ -32,14 +32,15 @@ Traditional ERD tools live outside your codebase. Strata Forge lives *inside* th
 
 ## 🔗 Adoption & Zero Lock-in
 
-Strata Forge is designed to be a "zero-dependency" addition to your workflow. It uses a non-intrusive JSDoc standard to store metadata (like coordinates) that your database doesn't care about.
+Strata is designed to be a "zero-dependency" addition to your workflow. It uses a non-intrusive JSDoc standard to store metadata (like coordinates) that your database doesn't care about.
 
 ### The `@strata` Standard
+
 To pin a table's position or define its storage target (D1, KV, or Durable Object), simply add a JSDoc block. This is understood by both humans and AI assistants:
 
 ```typescript
-/** 
- * @strata { "target": "d1", "x": 100, "y": 200 } 
+/**
+ * @strata { "target": "d1", "x": 100, "y": 200 }
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
@@ -47,9 +48,10 @@ export const users = sqliteTable("users", {
 ```
 
 **Why this matters**:
+
 - **Humans**: Write code as you normally do; the diagram updates in real-time.
 - **AI**: Tell your AI to "Move the users table to the center," and it will simply update the JSDoc coordinates in the file.
-- **Freedom**: If you stop using Strata Forge, your code remains valid, standard Drizzle. Just delete the comments if you want them gone.
+- **Freedom**: If you stop using Strata, your code remains valid, standard Drizzle. Just delete the comments if you want them gone.
 
 ---
 

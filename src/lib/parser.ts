@@ -1,7 +1,7 @@
 /**
  * parser.ts
  * 
- * The core engine of Strata Forge. This module handles the bidirectional mapping
+ * The core engine of Strata. This module handles the bidirectional mapping
  * between TypeScript source code (Drizzle ORM) and the visual ERD representation.
  * 
  * It uses `ts-morph` for Abstract Syntax Tree (AST) manipulation, allowing us to
