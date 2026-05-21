@@ -4,6 +4,8 @@ Strata is a high-performance, local-first ERD (Entity Relationship Diagram) tool
 
 It solves the "stale diagram" problem by using your TypeScript schema as the single source of truth. No sidecar JSON files, no proprietary formats—just your code, visualized and editable.
 
+![Strata Demo](video/demo.gif)
+
 ---
 
 ## The Philosophy

@@ -13,7 +13,7 @@ import { relations } from "drizzle-orm";
 // --- D1 TABLES (Relational Core) ---
 
 /** 
- * @strata {"x":15,"y":0} 
+ * @strata {"x":-15,"y":-45} 
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
@@ -22,7 +22,7 @@ export const users = sqliteTable("users", {
 });
 
 /** 
- * @strata {"x":330,"y":-120} 
+ * @strata {"x":405,"y":-120} 
  */
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey(),
@@ -116,3 +116,10 @@ export const projectsRelations = relations(projects, ({ one }) => ({
     references: [organizations.id],
   }),
 }));
+
+/** 
+ * @strata {"x":45,"y":-210,"target":"kv"} 
+ */
+export const test = {
+  id: "string",
+};
