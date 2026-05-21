@@ -75,9 +75,9 @@
 </script>
 
 <div
-  class="relative group/node min-w-[220px] transition-[opacity,filter] duration-500 {isMatch
+  class="relative group/node min-w-[220px] transition-opacity duration-300 {isMatch
     ? 'opacity-100'
-    : 'opacity-20 grayscale pointer-events-none'}"
+    : 'opacity-30 pointer-events-none'}"
   data-testid="table-node"
   data-table-name={data.label}
 >

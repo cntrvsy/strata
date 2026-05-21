@@ -80,7 +80,7 @@ export const billingCache = {
 /** 
  * Real-time collaboration state managed by a Durable Object.
  * DOs are perfect for synchronized state like editor presence.
- * @strata {"x":750,"y":30,"target":"do","relations":[{"to":"projects"}]} 
+ * @strata {"x":735,"y":30,"target":"do","relations":[{"to":"projects"}]} 
  */
 export const collaborativeEditor = {
   projectId: "string",

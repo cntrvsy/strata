@@ -11,19 +11,12 @@
     X,
     Key,
     Trash2,
-    Edit2,
     Check,
+    Pencil,
   } from "lucide-svelte";
   import { schemaState } from "../state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
-  import {
-    removeTableFromSchema,
-    removeColumnFromSchema,
-    renameTableInSchema,
-    renameColumnInSchema,
-    stripHtml,
-  } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
 
   // --- Local UI State ---
@@ -196,7 +189,7 @@
                   newTableName = selectedNode.id;
                 }}
               >
-                <Edit2 class="w-3 h-3" />
+                <Pencil class="w-3 h-3" />
               </button>
             </div>
           {/if}
@@ -304,7 +297,7 @@
                             newColumnName = col.name;
                           }}
                         >
-                          <Edit2 class="w-2.5 h-2.5" />
+                          <Pencil class="w-2.5 h-2.5" />
                         </button>
                       </div>
                     {/if}

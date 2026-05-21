@@ -3,10 +3,9 @@
     Share2,
     Camera,
     FolderOpen,
-    HelpCircle,
-    HelpCircle as HelpIcon,
+    RefreshCw,
+    HandHelping,
   } from "lucide-svelte";
-  import { open } from "@tauri-apps/plugin-dialog";
   import { schemaState } from "$lib/state.svelte";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
@@ -86,15 +85,82 @@
       </h1>
     </div>
     <div class="h-6 w-px bg-base-300 mx-2"></div>
-    <div class="flex items-center gap-2">
+    <div
+      class="flex items-center gap-2.5 bg-base-200/40 hover:bg-base-200/80 px-3.5 py-1.5 rounded-full border border-base-300 transition-all cursor-help relative group"
+    >
+      <span
+        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
+        >Code</span
+      >
+      <div class="flex items-center gap-0.5 text-primary">
+        <RefreshCw
+          class="w-3 h-3 animate-spin duration-3000 [animation-duration:8s]"
+        />
+      </div>
+      <span
+        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
+        >UI</span
+      >
+      <div class="h-3 w-px bg-base-300"></div>
+      <div class="flex items-center gap-1.5">
+        <div
+          class="w-1.5 h-1.5 rounded-full {!schemaState.isValid
+            ? 'bg-error animate-ping'
+            : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.isValid
+            ? 'text-error'
+            : 'text-success'}"
+        ></div>
+        <span
+          class="text-[9px] font-mono uppercase font-bold text-base-content/60"
+        >
+          {!schemaState.isValid ? "Sync Error" : "Live Active"}
+        </span>
+      </div>
+
+      <!-- Detail Card (glorious tooltip) -->
       <div
-        class="w-2 h-2 rounded-full {!schemaState.isValid
-          ? 'bg-error animate-pulse'
-          : 'bg-success'} shadow-[0_0_8px_currentColor]"
-      ></div>
-      <span class="text-[9px] font-mono uppercase opacity-50 tracking-wider">
-        {!schemaState.isValid ? "Parsing Error" : "Live Mirror Active"}
-      </span>
+        class="absolute top-12 left-0 w-80 p-5 bg-base-100/98 border border-base-300 rounded-[1.5rem] shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
+      >
+        <div class="flex items-center gap-2.5">
+          <div class="p-1.5 bg-primary/10 rounded-xl">
+            <RefreshCw class="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <span
+              class="text-[9px] font-black uppercase tracking-widest text-primary/75 block leading-none mb-0.5"
+              >Bi-Directional Engine</span
+            >
+            <span class="font-bold text-xs text-base-content"
+              >Code ⇄ UI Synchronization</span
+            >
+          </div>
+        </div>
+        <p class="text-[11px] leading-relaxed text-base-content/75">
+          Strata keeps your <code
+            class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
+            >schema.ts</code
+          > file as the absolute single source of truth.
+        </p>
+        <div
+          class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1"
+        >
+          <span
+            >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
+            the file watcher to instantly parse the AST and refresh the diagram.</span
+          >
+          <span
+            >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications surgically
+            patch the AST and write back in real-time.</span
+          >
+        </div>
+        <div class="h-px bg-base-200/80 my-1"></div>
+        <div
+          class="flex items-center justify-between text-[9px] font-mono text-base-content/40"
+        >
+          <span>AST engine: ts-morph</span>
+          <span>Watcher: notify (Rust)</span>
+        </div>
+      </div>
     </div>
 
     <!-- Mode Toggle -->
@@ -156,7 +222,9 @@
       onclick={() => (showHelp = true)}
       data-testid="help-button"
     >
-      <HelpIcon class="w-5 h-5 opacity-40 hover:opacity-100 transition-all" />
+      <HandHelping
+        class="w-5 h-5 opacity-40 hover:opacity-100 transition-all"
+      />
     </button>
   </div>
 </div>

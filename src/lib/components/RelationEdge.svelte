@@ -53,7 +53,7 @@
 {#if label}
   <EdgeLabel x={finalX} y={finalY}>
     <div
-      class="bg-base-100/95 border border-base-500 px-2 py-1 rounded-lg backdrop-blur-md select-none text-[10px] font-bold tracking-tight text-base-content/80 whitespace-nowrap"
+      class="bg-base-100 border border-base-500 px-2 py-1 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/80 whitespace-nowrap"
       style={labelStyle}
     >
       {label}

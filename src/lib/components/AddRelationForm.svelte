@@ -11,7 +11,7 @@
   import { schemaState } from "../state.svelte";
   import { addEdgeToSchema } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
-  import { Link, Check, X, ArrowRight } from "lucide-svelte";
+  import { Link, X } from "lucide-svelte";
 
   const { sourceTableName, onComplete } = $props<{
     sourceTableName: string;

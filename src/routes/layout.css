@@ -72,4 +72,13 @@ body {
   .svelte-flow__handle {
     border-color: var(--color-base-100) !important;
   }
+
+  /* Override Svelte Flow's GPU compositing behavior which causes WebKit (Tauri/Safari) to render blurry nodes on zoom */
+  .svelte-flow__viewport,
+  .svelte-flow__node,
+  .svelte-flow__edge,
+  .svelte-flow__edges,
+  .svelte-flow__nodes {
+    will-change: auto !important;
+  }
 }

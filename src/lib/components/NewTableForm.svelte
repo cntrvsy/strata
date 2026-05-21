@@ -9,7 +9,7 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
   import { schemaState } from "../state.svelte";
-  import { addTableToSchema, wrapCode } from "$lib/parser";
+  import { addTableToSchema } from "$lib/parser";
   import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { Database, Cpu, Zap, X } from "lucide-svelte";
 
