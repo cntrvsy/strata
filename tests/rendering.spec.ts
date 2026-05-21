@@ -8,7 +8,7 @@ test.describe('Strata UI Rendering', () => {
   });
 
   test('should render the navbar branding', async ({ page }) => {
-    const brand = page.getByText('Strata');
+    const brand = page.locator('[data-testid="navbar"]').getByText('Strata', { exact: true });
     await expect(brand).toBeVisible();
   });
 

@@ -29,7 +29,7 @@ test.describe('Modal Flows', () => {
     const helpModal = page.getByTestId('help-modal');
     await expect(helpModal).toBeVisible();
     
-    await page.getByText('Got it').click();
+    await page.getByText('Acknowledge & Close').click();
     await expect(helpModal).not.toBeVisible();
   });
 });

@@ -28,20 +28,29 @@
     const el = document.querySelector(".svelte-flow") as HTMLElement;
     if (!el || !schemaState.nodes.length) return;
 
+    const viewportEl = el.querySelector(".svelte-flow__viewport") as HTMLElement;
+    const originalTransform = viewportEl ? viewportEl.style.transform : "";
+
     schemaState.machine.send("SAVE");
     try {
       const nodesBounds = getNodesBounds(schemaState.nodes);
-      const imageWidth = nodesBounds.width + 100;
-      const imageHeight = nodesBounds.height + 100;
+      const padding = 100;
+      const imageWidth = nodesBounds.width + padding * 2;
+      const imageHeight = nodesBounds.height + padding * 2;
 
       const viewport = getViewportForBounds(
         nodesBounds,
         imageWidth,
         imageHeight,
-        0.5,
-        2.0,
-        0.2,
+        0.1,
+        4.0,
+        0.1,
       );
+
+      // Temporarily override the live viewport transform so that html-to-image captures all tables perfectly in view
+      if (viewportEl) {
+        viewportEl.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
+      }
 
       const dataUrl = await toPng(el, {
         backgroundColor: "#ffffff",
@@ -50,7 +59,16 @@
         style: {
           width: `${imageWidth}px`,
           height: `${imageHeight}px`,
-          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+        },
+        filter: (node) => {
+          const cl = (node as HTMLElement).classList;
+          if (cl) {
+            return (
+              !cl.contains("svelte-flow__controls") &&
+              !cl.contains("svelte-flow__minimap")
+            );
+          }
+          return true;
         },
         pixelRatio: 4,
       });
@@ -60,9 +78,20 @@
       a.download = `strata-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
       a.click();
       schemaState.machine.send("SAVE_SUCCESS");
+
+      // Show the export successful toast for 4 seconds
+      schemaState.showExportToast = true;
+      setTimeout(() => {
+        schemaState.showExportToast = false;
+      }, 4000);
     } catch (err: any) {
       console.error("[Strata] Capture failed:", err);
       schemaState.machine.send("SAVE_ERROR");
+    } finally {
+      // Cleanly restore the viewport's original user zoom and pan transformation
+      if (viewportEl) {
+        viewportEl.style.transform = originalTransform;
+      }
     }
   }
 </script>
@@ -113,7 +142,7 @@
         <span
           class="text-[9px] font-mono uppercase font-bold text-base-content/60"
         >
-          {!schemaState.isValid ? "Sync Error" : "Live Active"}
+          {!schemaState.isValid ? "Sync Error" : "Live Mirror Active"}
         </span>
       </div>
 

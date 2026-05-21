@@ -96,8 +96,31 @@
   </div>
 {/if}
 
+<!-- Export Completed Toast -->
+{#if schemaState.showExportToast}
+  <div
+    in:fly={{ y: 20, duration: 400 }}
+    out:fade={{ duration: 400 }}
+    class="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm"
+  >
+    <div
+      class="alert bg-success text-success-content backdrop-blur-md shadow-2xl rounded-2xl border border-white/10 py-3"
+    >
+      <div class="p-2 bg-white/20 rounded-xl">
+        <Check class="w-4 h-4" />
+      </div>
+      <div class="flex flex-col">
+        <span class="text-xs font-bold tracking-tight">Export Successful</span>
+        <span class="text-[9px] opacity-80 uppercase tracking-widest font-black">
+          Check your Downloads folder for the PNG
+        </span>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- Unsaved Changes Toast -->
-{#if schemaState.hasUnsavedChanges || schemaState.isRecentlySaved}
+{#if (schemaState.hasUnsavedChanges || schemaState.isRecentlySaved) && !schemaState.showExportToast}
   <div
     in:fly={{ y: 20, duration: 400 }}
     out:fade={{ duration: 1000 }}

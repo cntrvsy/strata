@@ -22,7 +22,7 @@ export const users = sqliteTable("users", {
 });
 
 /** 
- * @strata {"x":435,"y":-75} 
+ * @strata {"x":330,"y":-120} 
  */
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey(),
@@ -56,7 +56,7 @@ export const projects = sqliteTable("projects", {
 /** 
  * User sessions stored in Cloudflare KV for global performance.
  * We use @strata relations to link this logical entity to our D1 users.
- * @strata {"x":-315,"y":180,"target":"kv","relations":[{"to":"users"}]} 
+ * @strata {"x":-360,"y":165,"target":"kv","relations":[{"to":"users"}]} 
  */
 export const userSessions = {
   sessionId: "string",

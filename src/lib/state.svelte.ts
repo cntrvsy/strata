@@ -69,6 +69,7 @@ class SchemaState {
 				RESET: "EMPTY",
 				LOAD_SUCCESS: "IDLE",
 				SAVE_SUCCESS: "IDLE",
+				SAVE: "SAVING",
 			},
 			DIRTY: {
 				SAVE: "SAVING",
@@ -101,6 +102,8 @@ class SchemaState {
 	
 	/** True momentarily after a successful save operation */
 	isRecentlySaved = $state(false);
+	/** Whether the 'Export Successful' toast is visible */
+	showExportToast = $state(false);
 
 	// --- UI State ---
 	/** Active filter for storage target (d1, do, kv) */
