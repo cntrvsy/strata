@@ -8,7 +8,7 @@
  * surgically inject, rename, and remove code while preserving user formatting and comments.
  */
 
-import { Project, VariableDeclaration, SyntaxKind, SourceFile } from 'ts-morph';
+import { Project, VariableDeclaration, SyntaxKind, SourceFile, ImportSpecifier, Node as ASTNode } from 'ts-morph';
 import { type Node, type Edge } from '@xyflow/svelte';
 
 /**
@@ -42,13 +42,38 @@ function syncSourceFile(code: string) {
 }
 
 /**
- * Strips HTML tags from a string. Used to clean code previews before parsing.
+ * Robustly checks if a variable declaration is initialized with a Drizzle sqliteTable.
+ * Resolves the sqliteTable symbol to confirm it is imported from a module starting with 'drizzle-orm'.
  */
-export function stripHtml(html: string) {
-	if (typeof document === 'undefined') return html.replace(/<[^>]*>/g, '');
-	const div = document.createElement('div');
-	div.innerHTML = html;
-	return div.textContent || div.innerText || '';
+function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
+	const initializer = decl.getInitializer();
+	if (!initializer) return false;
+
+	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
+		? initializer
+		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	if (!tableCall) return false;
+
+	const identifier = tableCall.getExpression();
+	const symbol = identifier.getSymbol();
+	if (!symbol) {
+		// Fallback to text matching if symbol resolution is unavailable
+		return initializer.getText().includes('sqliteTable');
+	}
+
+	const declarations = symbol.getDeclarations();
+	for (const d of declarations) {
+		if (d.isKind(SyntaxKind.ImportSpecifier)) {
+			const importDecl = d.getImportDeclaration();
+			const moduleSpecifier = importDecl.getModuleSpecifierValue();
+			if (moduleSpecifier.startsWith('drizzle-orm')) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -76,8 +101,7 @@ export function parseSchema(code: string): ParseResult {
 		for (const statement of variableStatements) {
 			const declarations = statement.getDeclarations();
 			for (const decl of declarations) {
-				const initializer = decl.getInitializer()?.getText() || '';
-				const isTable = initializer.includes('sqliteTable');
+				const isTable = isDrizzleTableDeclaration(decl);
 				
 				// Extract @strata metadata from JSDoc
 				const jsDocs = statement.getJsDocs();
@@ -170,6 +194,43 @@ export function parseSchema(code: string): ParseResult {
 }
 
 /**
+ * Helper to parse a chained column declaration call expression (e.g. integer("id").primaryKey().notNull())
+ */
+interface ChainElement {
+	name: string;
+	args: string[];
+}
+
+function parseColumnChain(node: ASTNode): { baseCallText: string, modifiers: ChainElement[] } {
+	const modifiers: ChainElement[] = [];
+	let current = node;
+
+	while (current.isKind(SyntaxKind.CallExpression)) {
+		const expr = current.getExpression();
+		if (expr.isKind(SyntaxKind.PropertyAccessExpression)) {
+			const name = expr.getName();
+			const args = current.getArguments().map(a => a.getText());
+			modifiers.unshift({ name, args });
+			current = expr.getExpression();
+		} else {
+			break;
+		}
+	}
+	return {
+		baseCallText: current.getText(),
+		modifiers
+	};
+}
+
+function buildColumnChain(baseCallText: string, modifiers: ChainElement[]): string {
+	let chain = baseCallText;
+	for (const mod of modifiers) {
+		chain += `.${mod.name}(${mod.args.join(', ')})`;
+	}
+	return chain;
+}
+
+/**
  * Extracts column definitions from a Drizzle sqliteTable declaration.
  */
 function extractColumns(decl: VariableDeclaration) {
@@ -190,11 +251,30 @@ function extractColumns(decl: VariableDeclaration) {
 					if (prop.isKind(SyntaxKind.PropertyAssignment)) {
 						const name = prop.getName();
 						const def = prop.getInitializer()?.getText() || '';
+						const initNode = prop.getInitializer();
+						let isPk = def.includes('.primaryKey()');
+						let notNull = def.includes('.notNull()');
+						let defaultVal: string | undefined = undefined;
+						let isReferences = def.includes('.references(');
+
+						if (initNode) {
+							const { modifiers } = parseColumnChain(initNode);
+							isPk = modifiers.some(m => m.name === 'primaryKey');
+							notNull = modifiers.some(m => m.name === 'notNull');
+							const defaultMod = modifiers.find(m => m.name === 'default' || m.name === 'defaultTo');
+							if (defaultMod && defaultMod.args.length > 0) {
+								defaultVal = defaultMod.args[0];
+							}
+							isReferences = modifiers.some(m => m.name === 'references');
+						}
+
 						columns.push({
 							name: name,
 							definition: def,
-							isPk: def.includes('.primaryKey()'),
-							isReferences: def.includes('.references(')
+							isPk,
+							notNull,
+							defaultVal,
+							isReferences
 						});
 					}
 				}
@@ -614,3 +694,79 @@ export function renameColumnInSchema(code: string, tableName: string, oldColName
 	
 	return sf.getFullText();
 }
+
+/**
+ * Surgically updates column modifiers (notNull, primaryKey, default) for a Drizzle column.
+ */
+export function updateColumnModifiersInSchema(
+	code: string,
+	tableName: string,
+	columnName: string,
+	modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null }
+): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(tableName);
+	const initializer = decl?.getInitializer();
+	
+	if (!initializer) return code;
+	
+	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
+		? initializer
+		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	if (tableCall) {
+		const args = tableCall.getArguments();
+		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+			const prop = args[1].getProperty(columnName);
+			if (prop?.isKind(SyntaxKind.PropertyAssignment)) {
+				const colInit = prop.getInitializer();
+				if (colInit) {
+					const { baseCallText, modifiers: chainMods } = parseColumnChain(colInit);
+					
+					// Update isPk
+					if (modifiers.isPk !== undefined) {
+						const hasPk = chainMods.some(m => m.name === 'primaryKey');
+						if (modifiers.isPk && !hasPk) {
+							chainMods.push({ name: 'primaryKey', args: [] });
+						} else if (!modifiers.isPk && hasPk) {
+							const index = chainMods.findIndex(m => m.name === 'primaryKey');
+							if (index !== -1) chainMods.splice(index, 1);
+						}
+					}
+
+					// Update notNull
+					if (modifiers.notNull !== undefined) {
+						const hasNotNull = chainMods.some(m => m.name === 'notNull');
+						if (modifiers.notNull && !hasNotNull) {
+							chainMods.push({ name: 'notNull', args: [] });
+						} else if (!modifiers.notNull && hasNotNull) {
+							const index = chainMods.findIndex(m => m.name === 'notNull');
+							if (index !== -1) chainMods.splice(index, 1);
+						}
+					}
+
+					// Update defaultVal
+					if (modifiers.defaultVal !== undefined) {
+						const defaultIdx = chainMods.findIndex(m => m.name === 'default' || m.name === 'defaultTo');
+						if (modifiers.defaultVal === null || modifiers.defaultVal === undefined || modifiers.defaultVal.trim() === '') {
+							if (defaultIdx !== -1) {
+								chainMods.splice(defaultIdx, 1);
+							}
+						} else {
+							if (defaultIdx !== -1) {
+								chainMods[defaultIdx] = { name: chainMods[defaultIdx].name, args: [modifiers.defaultVal] };
+							} else {
+								chainMods.push({ name: 'default', args: [modifiers.defaultVal] });
+							}
+						}
+					}
+
+					const newColDef = buildColumnChain(baseCallText, chainMods);
+					colInit.replaceWithText(newColDef);
+				}
+			}
+		}
+	}
+	return sf.getFullText();
+}
+

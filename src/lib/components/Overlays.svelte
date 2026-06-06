@@ -28,9 +28,9 @@
       </div>
       <h2 class="text-2xl font-black mb-3 tracking-tight">Ready?</h2>
       <p class="text-sm text-base-content/50 mb-8 leading-relaxed">
-        Connect your Drizzle <code
+        Drag & drop your Drizzle <code
           class="bg-base-200 px-1.5 py-0.5 rounded text-primary">schema.ts</code
-        > and see your mental model come to life.
+        > here and see your mental model come to life.
       </p>
       <button
         class="btn btn-primary btn-lg rounded-2xl px-12 shadow-xl shadow-primary/30"
@@ -59,7 +59,7 @@
   </div>
 {/if}
 
-<!-- Validation Error Overlay -->
+<!-- Validation / Disk Error Overlay -->
 {#if schemaState.machine.current === "ERROR"}
   <div
     class="absolute bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl animate-in slide-in-from-bottom-8"
@@ -72,7 +72,9 @@
       </div>
       <div class="flex flex-col gap-1 grow">
         <h3 class="font-bold text-sm uppercase tracking-tight">
-          Sync Paused: Parse Error
+          {schemaState.errorType === "disk"
+            ? "Failed to Save: Disk Write Error"
+            : "Sync Paused: Parse Error"}
         </h3>
         <p class="text-[10px] opacity-90 font-mono leading-tight">
           {schemaState.error}
@@ -81,7 +83,10 @@
       <div class="flex items-center gap-2">
         <button
           class="btn btn-sm btn-ghost bg-white/10 hover:bg-white/20 rounded-xl whitespace-nowrap"
-          onclick={() => schemaState.syncWithFile()}
+          onclick={() =>
+            schemaState.errorType === "disk"
+              ? schemaState.saveToFile()
+              : schemaState.syncWithFile()}
         >
           Retry
         </button>
@@ -111,7 +116,9 @@
       </div>
       <div class="flex flex-col">
         <span class="text-xs font-bold tracking-tight">Export Successful</span>
-        <span class="text-[9px] opacity-80 uppercase tracking-widest font-black">
+        <span
+          class="text-[9px] opacity-80 uppercase tracking-widest font-black"
+        >
           Check your Downloads folder for the PNG
         </span>
       </div>
@@ -168,7 +175,7 @@
 
 <!-- Coordinate Stats -->
 <div
-  class="absolute bottom-10 left-28 z-10 pointer-events-none opacity-40 hover:opacity-100 transition-opacity"
+  class="absolute bottom-10 right-28 z-10 pointer-events-none opacity-40 hover:opacity-100 transition-opacity"
 >
   <div
     class="bg-neutral text-neutral-content px-3 py-1.5 rounded-xl text-[10px] font-mono shadow-2xl flex gap-3 border border-white/10 backdrop-blur-md"

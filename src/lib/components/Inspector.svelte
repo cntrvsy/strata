@@ -153,7 +153,7 @@
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
-    class="absolute top-20 right-6 max-h-[calc(100vh-25rem)] w-80 bg-base-100/95 backdrop-blur-xl border border-base-300 shadow-2xl rounded-[2.5rem] z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300"
+    class="w-full h-full bg-base-100/90 border-r border-base-300 flex flex-col overflow-hidden animate-in slide-in-from-left-8 duration-300"
     data-testid="inspector-panel"
   >
     <!-- Header -->
@@ -323,6 +323,43 @@
                       class="text-[9px] text-secondary font-medium uppercase tracking-tighter"
                       >Foreign Key Reference</span
                     >
+                  </div>
+                {/if}
+
+                {#if data.target === 'd1'}
+                  <div class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/30 text-[10px]">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={col.isPk}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        onchange={(e) => schemaState.updateColumnModifiers(selectedNode.id, col.name, { isPk: e.currentTarget.checked })}
+                      />
+                      <span class="font-medium opacity-70">PK</span>
+                    </label>
+
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={col.notNull}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        onchange={(e) => schemaState.updateColumnModifiers(selectedNode.id, col.name, { notNull: e.currentTarget.checked })}
+                      />
+                      <span class="font-medium opacity-70">Not Null</span>
+                    </label>
+                  </div>
+
+                  <div class="flex items-center gap-2 mt-2 pt-1">
+                    <span class="text-[9px] font-semibold uppercase tracking-wider opacity-40">Default</span>
+                    <input
+                      type="text"
+                      placeholder="None"
+                      value={col.defaultVal || ''}
+                      class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all"
+                      onchange={(e) => {
+                        schemaState.updateColumnModifiers(selectedNode.id, col.name, { defaultVal: e.currentTarget.value });
+                      }}
+                    />
                   </div>
                 {/if}
               </div>

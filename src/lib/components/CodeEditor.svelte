@@ -3,7 +3,57 @@
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";
   import { schemaState } from "$lib/state.svelte";
-  import { FileCode, ShieldCheck } from "lucide-svelte";
+  import { FileCode, Activity } from "lucide-svelte";
+  import { parseSchema } from "$lib/parser";
+
+  let debounceTimer: any;
+  let localValue = $state(schemaState.rawCode);
+
+  // Sync editor when rawCode is updated from external/diagram operations
+  $effect(() => {
+    if (schemaState.rawCode !== localValue) {
+      localValue = schemaState.rawCode;
+    }
+  });
+
+  // Parse and sync whenever localValue changes from user input
+  $effect(() => {
+    if (localValue !== schemaState.rawCode) {
+      handleCodeChange(localValue);
+    }
+  });
+
+  // Debounce parser execution to ensure smooth typing performance
+  function handleCodeChange(newCode: string) {
+    schemaState.rawCode = newCode;
+
+    if (schemaState.machine.current === "IDLE") {
+      schemaState.machine.send("EDIT");
+    }
+
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      if (schemaState.isSyncing) return;
+
+      const result = parseSchema(newCode);
+      if (result.success) {
+        const selectedNodeIds = new Set(schemaState.nodes.filter(n => n.selected).map(n => n.id));
+        
+        schemaState.nodes = result.nodes.map(n => ({
+          ...n,
+          selected: selectedNodeIds.has(n.id)
+        }));
+        schemaState.edges = result.edges;
+        schemaState.isValid = true;
+        schemaState.error = null;
+        schemaState.errorLoc = null;
+      } else {
+        schemaState.isValid = false;
+        schemaState.error = result.error || "Parse Error";
+        schemaState.errorLoc = result.errorLoc || null;
+      }
+    }, 450);
+  }
 </script>
 
 <div class="w-full h-full bg-[#282c34] flex flex-col overflow-hidden">
@@ -27,21 +77,21 @@
     </div>
 
     <div
-      class="flex items-center gap-2 px-3 py-1.5 bg-success/10 rounded-full border border-success/20"
+      class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full border border-primary/20"
     >
-      <ShieldCheck class="w-3.5 h-3.5 text-success" />
-      <span class="text-[9px] font-bold text-success uppercase tracking-wider"
-        >Read Only Mode</span
+      <Activity class="w-3.5 h-3.5 text-primary" />
+      <span class="text-[9px] font-bold text-primary uppercase tracking-wider"
+        >Live Editing Mode</span
       >
     </div>
   </div>
 
-  <!-- Editor Container (Read Only) -->
+  <!-- Editor Container -->
   <div class="grow relative overflow-hidden bg-[#282c34]">
     <div class="absolute inset-0 overflow-auto scrollbar-hide">
       <CodeMirror
-        value={schemaState.rawCode}
-        readonly={true}
+        bind:value={localValue}
+        readonly={false}
         lang={javascript({ typescript: true })}
         theme={oneDark}
         styles={{
@@ -50,7 +100,7 @@
             fontSize: "14px",
           },
           ".cm-scroller": {
-            fontFamily: "'Space Grotesk Variable', monospace",
+            fontFamily: "'JetBrains Mono', monospace",
             overflow: "auto !important",
           },
           ".cm-content": {
@@ -66,7 +116,7 @@
     class="p-3 bg-base-200/50 border-t border-white/5 flex items-center justify-between px-6 shrink-0"
   >
     <p class="text-[10px] text-white font-medium italic">
-      To edit this code, use your external IDE or modify the diagram.
+      Press Ctrl+S to persist your live code edits to disk.
     </p>
     {#if !schemaState.isValid}
       <span class="text-[10px] font-bold text-error uppercase tracking-widest"

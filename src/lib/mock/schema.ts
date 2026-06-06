@@ -118,7 +118,7 @@ export const projectsRelations = relations(projects, ({ one }) => ({
 }));
 
 /** 
- * @strata {"x":45,"y":-210,"target":"kv"} 
+ * @strata {"x":105,"y":-210,"target":"kv"} 
  */
 export const test = {
   id: "string",

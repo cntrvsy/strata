@@ -45,7 +45,7 @@
   class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-base-900/60 backdrop-blur-sm animate-in fade-in duration-300"
 >
   <div
-    class="bg-base-100 border border-base-300 rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
+    class="bg-base-100 border border-base-300 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
     data-testid="new-table-modal"
   >
     <div
@@ -77,7 +77,7 @@
               {...props}
               bind:value={$formData.name}
               placeholder="e.g. users_table"
-              class="input input-bordered w-full rounded-2xl bg-base-200/50 border-base-300 focus:border-primary transition-all font-mono text-sm"
+              class="input input-bordered w-full rounded-lg bg-base-200/50 border-base-300 focus:border-primary transition-all font-mono text-sm"
             />
           {/snippet}
         </Form.Control>
@@ -102,7 +102,7 @@
                     class="sr-only"
                   />
                   <div
-                    class="flex flex-col items-center p-4 rounded-2xl border-2 transition-all {$formData.target ===
+                    class="flex flex-col items-center p-4 rounded-lg border-2 transition-all {$formData.target ===
                     t
                       ? 'border-primary bg-primary/5'
                       : 'border-base-300 bg-base-200/30 opacity-50 hover:opacity-100'}"
@@ -137,7 +137,7 @@
       <div class="mt-4 flex flex-col gap-3">
         <button
           type="submit"
-          class="btn btn-primary btn-lg rounded-2xl w-full shadow-xl shadow-primary/20"
+          class="btn btn-primary btn-lg rounded-lg w-full shadow-xl shadow-primary/20"
         >
           Forge Entity
         </button>

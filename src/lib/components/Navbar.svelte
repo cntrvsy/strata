@@ -28,7 +28,9 @@
     const el = document.querySelector(".svelte-flow") as HTMLElement;
     if (!el || !schemaState.nodes.length) return;
 
-    const viewportEl = el.querySelector(".svelte-flow__viewport") as HTMLElement;
+    const viewportEl = el.querySelector(
+      ".svelte-flow__viewport",
+    ) as HTMLElement;
     const originalTransform = viewportEl ? viewportEl.style.transform : "";
 
     schemaState.machine.send("SAVE");
@@ -97,23 +99,10 @@
 </script>
 
 <div
-  class="absolute top-0 left-0 right-0 h-16 border-b border-base-300 bg-base-100/80 backdrop-blur-xl z-30 flex items-center justify-between px-6"
+  class="w-full h-14 border-b border-base-300 bg-base-100/80 backdrop-blur-xl z-30 flex items-center justify-between px-6 select-none shrink-0"
   data-testid="navbar"
 >
   <div class="flex items-center gap-4">
-    <div class="p-2.5 bg-primary/10 rounded-2xl shadow-inner">
-      <Share2 class="w-6 h-6 text-primary" />
-    </div>
-    <div class="flex flex-col">
-      <span
-        class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 leading-none mb-1"
-        >Strata</span
-      >
-      <h1 class="text-sm font-bold tracking-tight">
-        {schemaState.filePath?.split("/").pop() || "No Schema Loaded"}
-      </h1>
-    </div>
-    <div class="h-6 w-px bg-base-300 mx-2"></div>
     <div
       class="flex items-center gap-2.5 bg-base-200/40 hover:bg-base-200/80 px-3.5 py-1.5 rounded-full border border-base-300 transition-all cursor-help relative group"
     >

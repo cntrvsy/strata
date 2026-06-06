@@ -18,7 +18,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('SchemaState FSM & Reactivity', () => {
   beforeEach(() => {
     schemaState.reset();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('should initialize in EMPTY state', () => {
@@ -86,7 +86,8 @@ describe('SchemaState FSM & Reactivity', () => {
   });
 
   it('should delete a column and sync', async () => {
-    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    const { writeTextFile, readTextFile } = await import('@tauri-apps/plugin-fs');
+    vi.mocked(readTextFile).mockResolvedValue('export const t = sqliteTable("t", {});');
     schemaState.filePath = '/mock/schema.ts';
     schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
     schemaState.machine.send("SYNC");
@@ -119,12 +120,67 @@ describe('SchemaState FSM & Reactivity', () => {
     
     expect(schemaState.filePath).toBe('/new/path.ts');
     expect(syncSpy).toHaveBeenCalled();
+    syncSpy.mockRestore();
   });
 
   it('should call async_syncWithFile', async () => {
     const syncSpy = vi.spyOn(schemaState, 'syncWithFile').mockResolvedValue(undefined);
     await schemaState.async_syncWithFile();
     expect(syncSpy).toHaveBeenCalled();
+    syncSpy.mockRestore();
+  });
+
+  it('should rename a table and sync', async () => {
+    const { writeTextFile, readTextFile } = await import('@tauri-apps/plugin-fs');
+    vi.mocked(readTextFile).mockResolvedValue('export const customers = sqliteTable("customers", { id: integer("id") });');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("LOAD_SUCCESS");
+
+    await schemaState.renameTable('t', 'customers');
+    expect(vi.mocked(writeTextFile)).toHaveBeenCalled();
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  it('should set errorType to disk when saveToFile fails', async () => {
+    const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+    vi.mocked(writeTextFile).mockRejectedValue(new Error('Write error'));
+    
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("LOAD_SUCCESS"); // Transition to IDLE
+
+    await schemaState.saveToFile();
+    
+    expect(schemaState.machine.current).toBe('ERROR');
+    expect(schemaState.errorType).toBe('disk');
+    expect(schemaState.error).toBe('Write error');
+  });
+
+  it('should set errorType to parse when sync fails to parse code', async () => {
+    const { readTextFile } = await import('@tauri-apps/plugin-fs');
+    vi.mocked(readTextFile).mockResolvedValue('invalid code here');
+    
+    schemaState.filePath = '/mock/schema.ts';
+    await schemaState.syncWithFile();
+    
+    expect(schemaState.machine.current).toBe('ERROR');
+    expect(schemaState.errorType).toBe('parse');
+  });
+
+  it('should update column modifiers and sync', async () => {
+    const { writeTextFile, readTextFile } = await import('@tauri-apps/plugin-fs');
+    vi.mocked(readTextFile).mockResolvedValue('export const t = sqliteTable("t", { id: integer("id").primaryKey().notNull() });');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("LOAD_SUCCESS");
+
+    await schemaState.updateColumnModifiers('t', 'id', { isPk: true, notNull: true });
+    expect(vi.mocked(writeTextFile)).toHaveBeenCalled();
+    expect(schemaState.machine.current).toBe('IDLE');
   });
 
 });

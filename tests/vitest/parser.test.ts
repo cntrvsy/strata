@@ -8,7 +8,7 @@ import {
   renameTableInSchema, 
   renameColumnInSchema,
   removeColumnFromSchema,
-  stripHtml,
+  updateColumnModifiersInSchema,
   wrapCode
 } from '../../src/lib/parser';
 
@@ -240,10 +240,6 @@ describe('Mutation Logic', () => {
       expect(result.error).toBe('No tables or schema objects found');
     });
 
-    it('should strip HTML tags correctly', () => {
-      expect(stripHtml('<div>Hello</div>')).toBe('Hello');
-      expect(stripHtml('<b>World</b>')).toBe('World');
-    });
 
     it('should wrap code correctly', () => {
       expect(wrapCode('const x = 1;')).toBe('<pre><code>const x = 1;</code></pre>');
@@ -266,6 +262,29 @@ describe('Mutation Logic', () => {
       const code = `export const users = sqliteTable("users", { id: integer("id") }); export const posts = sqliteTable("posts", { id: integer("id") });`;
       const newCode = addColumnToSchema(code, 'posts', 'authorId', 'integer', 'users', 'id');
       expect(newCode).toContain('.references(() => users.id)');
+    });
+
+    it('should surgically add, update, and remove column modifiers (pk, notNull, default)', () => {
+      const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
+      
+      // Add primaryKey and notNull
+      let code = updateColumnModifiersInSchema(baseCode, 'users', 'id', { isPk: true, notNull: true });
+      expect(code).toContain('id: integer("id").primaryKey().notNull()');
+
+      // Add default value
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { defaultVal: '10' });
+      expect(code).toContain('id: integer("id").primaryKey().notNull().default(10)');
+
+      // Update default value
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { defaultVal: '"test"' });
+      expect(code).toContain('id: integer("id").primaryKey().notNull().default("test")');
+
+      // Remove primaryKey, notNull, and default
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { isPk: false, notNull: false, defaultVal: null });
+      expect(code).toContain('id: integer("id")');
+      expect(code).not.toContain('.primaryKey()');
+      expect(code).not.toContain('.notNull()');
+      expect(code).not.toContain('.default(');
     });
   });
 });

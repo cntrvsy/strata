@@ -36,6 +36,8 @@ class SchemaState {
 	error = $state<string | null>(null);
 	/** Exact location of the last parse error for inline linting */
 	errorLoc = $state<{ line: number, column: number } | null>(null);
+	/** Differentiates between parsing errors and disk write errors */
+	errorType = $state<'parse' | 'disk' | null>(null);
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */
@@ -126,6 +128,7 @@ class SchemaState {
 		
 		this.machine.send("SYNC");
 		this.error = null;
+		this.errorType = null;
 		
 		try {
 			// Dynamic imports to avoid SSR issues or circular dependencies
@@ -134,6 +137,12 @@ class SchemaState {
 			const { parseSchema, wrapCode } = await import("./parser");
 			
 			const raw = await readTextFile(this.filePath);
+			if (raw === this.rawCode && this.isValid) {
+				// Prevent duplicate syncing/parsing if code matches local rawCode
+				this.machine.send("LOAD_SUCCESS");
+				return;
+			}
+			
 			const result = parseSchema(raw);
 			
 			if (result.success) {
@@ -157,17 +166,20 @@ class SchemaState {
 				this.isValid = true;
 				this.error = null;
 				this.errorLoc = null;
+				this.errorType = null;
 				
 				this.machine.send("LOAD_SUCCESS");
 			} else {
 				this.isValid = false;
 				this.error = result.error || "Parse Error";
 				this.errorLoc = result.errorLoc || null;
+				this.errorType = 'parse';
 				this.machine.send("LOAD_ERROR");
 			}
 		} catch (e: any) {
 			console.error("[Strata] Sync failed:", e);
 			this.error = e.message;
+			this.errorType = 'parse';
 			this.machine.send("LOAD_ERROR");
 		}
 	}
@@ -193,6 +205,33 @@ class SchemaState {
 	}
 
 	/**
+	 * Updates column modifiers (primary key, nullability, default) and syncs to disk.
+	 */
+	async updateColumnModifiers(
+		tableName: string,
+		columnName: string,
+		modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null }
+	) {
+		if (!this.filePath) return;
+		this.machine.send("SAVE");
+		try {
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+			const { updateColumnModifiersInSchema } = await import("./parser");
+
+			const newCode = updateColumnModifiersInSchema(this.rawCode, tableName, columnName, modifiers);
+
+			await writeTextFile(this.filePath, newCode);
+			await this.syncWithFile();
+			this.machine.send("SAVE_SUCCESS");
+		} catch (e: any) {
+			console.error("[Strata] Column modifier update failed:", e);
+			this.error = e.message;
+			this.errorType = 'disk';
+			this.machine.send("SAVE_ERROR");
+		}
+	}
+
+	/**
 	 * Deletes a column from a table in the schema and syncs to disk.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
@@ -209,8 +248,9 @@ class SchemaState {
 			this.machine.send("SAVE_SUCCESS");
 		} catch (e: any) {
 			console.error("[Strata] Column delete failed:", e);
-			this.machine.send("SAVE_ERROR");
 			this.error = e.message;
+			this.errorType = 'disk';
+			this.machine.send("SAVE_ERROR");
 		}
 	}
 
@@ -231,8 +271,9 @@ class SchemaState {
 			this.machine.send("SAVE_SUCCESS");
 		} catch (e: any) {
 			console.error("[Strata] Table delete failed:", e);
-			this.machine.send("SAVE_ERROR");
 			this.error = e.message;
+			this.errorType = 'disk';
+			this.machine.send("SAVE_ERROR");
 		}
 	}
 
@@ -264,8 +305,32 @@ class SchemaState {
 			setTimeout(() => (this.isRecentlySaved = false), 1500);
 		} catch (e: any) {
 			console.error("[Strata] Save failed:", e);
-			this.machine.send("SAVE_ERROR");
 			this.error = e.message;
+			this.errorType = 'disk';
+			this.machine.send("SAVE_ERROR");
+		}
+	}
+
+	/**
+	 * Renames a table in the schema and syncs to disk.
+	 */
+	async renameTable(oldName: string, newName: string) {
+		if (!this.filePath) return;
+		this.machine.send("SAVE");
+		try {
+			const { writeTextFile } = await import("@tauri-apps/plugin-fs");
+			const { renameTableInSchema } = await import("./parser");
+			
+			const newCode = renameTableInSchema(this.rawCode, oldName, newName);
+			
+			await writeTextFile(this.filePath, newCode);
+			await this.syncWithFile();
+			this.machine.send("SAVE_SUCCESS");
+		} catch (e: any) {
+			console.error("[Strata] Table rename failed:", e);
+			this.error = e.message;
+			this.errorType = 'disk';
+			this.machine.send("SAVE_ERROR");
 		}
 	}
 
