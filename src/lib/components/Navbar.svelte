@@ -137,7 +137,7 @@
 
       <!-- Detail Card (glorious tooltip) -->
       <div
-        class="absolute top-12 left-0 w-80 p-5 bg-base-100/98 border border-base-300 rounded-[1.5rem] shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
+        class="absolute top-12 left-0 w-80 p-5 bg-base-100/98 border border-base-300 rounded-3xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
       >
         <div class="flex items-center gap-2.5">
           <div class="p-1.5 bg-primary/10 rounded-xl">
