@@ -13,6 +13,7 @@
     Trash2,
     Check,
     Pencil,
+    Heart,
   } from "lucide-svelte";
   import { schemaState } from "../state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
@@ -181,16 +182,15 @@
           </button>
         {:else}
           <div
-            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200"
+            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
           >
             <button
               class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
               onclick={() => deleteTable(selectedNode.id)}>Confirm</button
             >
             <button
-              class="btn btn-ghost btn-xs btn-circle"
-              onclick={() => (isConfirmingDelete = false)}
-              ><X class="w-3.5 h-3.5" /></button
+              class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px]"
+              onclick={() => (isConfirmingDelete = false)}>Cancel</button
             >
           </div>
         {/if}
@@ -296,38 +296,61 @@
                   </div>
                 {/if}
 
-                {#if data.target === 'd1'}
-                  <div class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/30 text-[10px]">
-                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                {#if data.target === "d1"}
+                  <div
+                    class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/30 text-[10px]"
+                  >
+                    <label
+                      class="flex items-center gap-1.5 cursor-pointer select-none"
+                    >
                       <input
                         type="checkbox"
                         checked={col.isPk}
                         class="checkbox checkbox-xs checkbox-primary rounded"
-                        onchange={(e) => schemaState.updateColumnModifiers(selectedNode.id, col.name, { isPk: e.currentTarget.checked })}
+                        onchange={(e) =>
+                          schemaState.updateColumnModifiers(
+                            selectedNode.id,
+                            col.name,
+                            { isPk: e.currentTarget.checked },
+                          )}
                       />
                       <span class="font-medium opacity-70">PK</span>
                     </label>
 
-                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                    <label
+                      class="flex items-center gap-1.5 cursor-pointer select-none"
+                    >
                       <input
                         type="checkbox"
                         checked={col.notNull}
                         class="checkbox checkbox-xs checkbox-primary rounded"
-                        onchange={(e) => schemaState.updateColumnModifiers(selectedNode.id, col.name, { notNull: e.currentTarget.checked })}
+                        onchange={(e) =>
+                          schemaState.updateColumnModifiers(
+                            selectedNode.id,
+                            col.name,
+                            { notNull: e.currentTarget.checked },
+                          )}
                       />
                       <span class="font-medium opacity-70">Not Null</span>
                     </label>
                   </div>
 
                   <div class="flex items-center gap-2 mt-2 pt-1">
-                    <span class="text-[9px] font-semibold uppercase tracking-wider opacity-40">Default</span>
+                    <span
+                      class="text-[9px] font-semibold uppercase tracking-wider opacity-40"
+                      >Default</span
+                    >
                     <input
                       type="text"
                       placeholder="None"
-                      value={col.defaultVal || ''}
+                      value={col.defaultVal || ""}
                       class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all"
                       onchange={(e) => {
-                        schemaState.updateColumnModifiers(selectedNode.id, col.name, { defaultVal: e.currentTarget.value });
+                        schemaState.updateColumnModifiers(
+                          selectedNode.id,
+                          col.name,
+                          { defaultVal: e.currentTarget.value },
+                        );
                       }}
                     />
                   </div>
@@ -359,16 +382,9 @@
     <!-- Footer Stats/Hint -->
     <div class="p-6 bg-base-200/50 border-t border-base-300">
       <div class="flex flex-col items-center gap-4">
-        <div
-          class="flex items-center gap-2 px-3 py-1.5 bg-base-100 rounded-full border border-base-300 shadow-sm"
-        >
-          <div class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></div>
-          <span class="text-[9px] font-bold uppercase tracking-wider opacity-60"
-            >Live Sync Active</span
-          >
-        </div>
-        <p class="text-[10px] opacity-40 text-center leading-relaxed">
-          Changes to <code>schema.ts</code> will reflect here instantly.
+        <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
+          Made with<Heart class="w-4 h-4" fill="red" /> from
+          <a href="https://frstudios.co.ke">FRStudios</a>.
         </p>
       </div>
     </div>
