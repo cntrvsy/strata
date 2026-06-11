@@ -11,10 +11,7 @@
   import { onMount } from "svelte";
   import { Splitpanes, Pane } from "svelte-splitpanes";
   import { schemaState } from "$lib/state.svelte";
-  import { addEdgeToSchema } from "$lib/parser";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
-  import { listen } from "@tauri-apps/api/event";
-  import { Debounced } from "runed";
+  import { PlatformService } from "$lib/services/platform";
 
   // --- Components ---
   import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
@@ -42,39 +39,29 @@
       schemaState.edges,
     );
 
-    if (schemaState.filePath) {
-      schemaState.machine.send("SAVE");
-      try {
-        const newCode = addEdgeToSchema(
-          schemaState.rawCode,
-          connection.source,
-          connection.target,
-        );
-        await writeTextFile(schemaState.filePath, newCode);
-        await schemaState.syncWithFile();
-        schemaState.machine.send("SAVE_SUCCESS");
-      } catch (err: any) {
-        schemaState.error = err.message || "Write failure";
-        schemaState.errorType = "disk";
-        schemaState.machine.send("SAVE_ERROR");
-        console.error("[Strata] Connection save failed:", err);
-      }
-    }
+    await schemaState.addRelation(connection.source, connection.target);
   }
 
-  let triggerSave = $state(0);
-  const debouncedSave = new Debounced(() => triggerSave, 1000);
+  let saveTimeout: any;
 
+  // Register the file with the Rust-side watcher when the path changes
   $effect(() => {
-    if (debouncedSave.current > 0) {
-      schemaState.saveToFile();
+    if (schemaState.filePath) {
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        invoke("watch_file", { path: schemaState.filePath })
+          .catch((err) => console.warn("[Strata] Watcher path register failed:", err));
+      });
     }
   });
 
   async function onnodedragstop() {
     schemaState.nodes = [...schemaState.nodes];
     schemaState.machine.send("EDIT");
-    triggerSave += 1;
+    
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      schemaState.saveToFile();
+    }, 1500);
   }
 
   /**
@@ -102,34 +89,48 @@
     let unlistenDragDrop: () => void;
 
     const init = async () => {
-      // Listen for external file changes (e.g. edits made in VS Code)
+      // Listen for external file changes globally
       try {
-        unlistenFn = await listen("file-changed", async () => {
-          if (schemaState.filePath && !schemaState.isSyncing && schemaState.machine.current !== "SAVING") {
-            console.log("[Strata] External file change detected, syncing...");
-            await schemaState.syncWithFile();
-          }
-        });
+        unlistenFn = await PlatformService.listenEvent(
+          "file-changed",
+          async () => {
+            if (schemaState.ignoreNextWatch) {
+              schemaState.ignoreNextWatch = false;
+              return;
+            }
+            if (
+              schemaState.filePath &&
+              (schemaState.machine.current === "IDLE" ||
+                schemaState.machine.current === "DIRTY")
+            ) {
+              console.log("[Strata] External file change detected, syncing...");
+              await schemaState.syncWithFile();
+            }
+          },
+        );
       } catch (e) {
-        console.warn("[Strata] Tauri events not available");
+        console.warn("[Strata] File watcher not available:", e);
       }
 
       // Listen for external file drag and drop
       try {
-        unlistenDragDrop = await listen("tauri://drag-drop", async (event: any) => {
-          const paths = event.payload?.paths;
-          if (paths && paths.length > 0) {
-            const droppedPath = paths[0];
-            if (droppedPath.endsWith(".ts")) {
-              console.log("[Strata] File dropped, opening:", droppedPath);
-              schemaState.filePath = droppedPath;
-              schemaState.machine.send("OPEN");
-              await schemaState.syncWithFile();
+        unlistenDragDrop = await PlatformService.listenEvent(
+          "tauri://drag-drop",
+          async (event: any) => {
+            const paths = event.payload?.paths;
+            if (paths && paths.length > 0) {
+              const droppedPath = paths[0];
+              if (droppedPath.endsWith(".ts")) {
+                console.log("[Strata] File dropped, opening:", droppedPath);
+                schemaState.filePath = droppedPath;
+                schemaState.machine.send("OPEN");
+                await schemaState.syncWithFile();
+              }
             }
-          }
-        });
+          },
+        );
       } catch (e) {
-        console.warn("[Strata] Drag-and-drop listener not available");
+        console.warn("[Strata] Drag-and-drop listener not available:", e);
       }
     };
 
@@ -139,6 +140,7 @@
       window.removeEventListener("keydown", handleKeyDown);
       if (unlistenFn) unlistenFn();
       if (unlistenDragDrop) unlistenDragDrop();
+      clearTimeout(saveTimeout);
     };
   });
 </script>
@@ -148,12 +150,12 @@
     <Overlays />
   {:else}
     <Splitpanes theme="modern" class="w-full h-full">
-      <Pane minSize={20} size={40}>
+      <Pane minSize={20} size={45}>
         <CodeEditor />
       </Pane>
-      <Pane minSize={20} size={60}>
+      <Pane minSize={20} size={55}>
         <Splitpanes horizontal={false}>
-          {#if schemaState.nodes.some(n => n.selected)}
+          {#if schemaState.nodes.some((n) => n.selected)}
             <Pane minSize={15} size={25}>
               <Inspector />
             </Pane>

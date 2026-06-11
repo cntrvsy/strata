@@ -9,8 +9,6 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
   import { schemaState } from "../state.svelte";
-  import { addTableToSchema } from "$lib/parser";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { Database, Cpu, Zap, X } from "lucide-svelte";
 
   const form = superForm(defaults(valibot(tableSchema)), {
@@ -18,22 +16,8 @@
     validators: valibot(tableSchema),
     async onUpdate({ form }) {
       if (form.valid && schemaState.filePath) {
-        const newCode = addTableToSchema(
-          schemaState.rawCode,
-          form.data.name,
-          form.data.target as any,
-        );
-
-        schemaState.machine.send("SAVE");
-        try {
-          await writeTextFile(schemaState.filePath, newCode);
-          await schemaState.syncWithFile();
-          schemaState.machine.send("SAVE_SUCCESS");
-          schemaState.showNewTableModal = false;
-        } catch (err) {
-          schemaState.machine.send("SAVE_ERROR");
-          console.error("Failed to auto-save new table:", err);
-        }
+        await schemaState.addTable(form.data.name, form.data.target as any);
+        schemaState.showNewTableModal = false;
       }
     },
   });

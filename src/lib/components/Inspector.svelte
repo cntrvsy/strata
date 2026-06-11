@@ -17,7 +17,6 @@
   import { schemaState } from "../state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
 
   // --- Local UI State ---
   /** Whether the user is currently filling out the 'Add Field' form */
@@ -37,47 +36,18 @@
    * Renames a table/entity and syncs.
    */
   async function submitRenameTable() {
-    if (!editingTableName || !newTableName || !schemaState.filePath) return;
-    schemaState.machine.send("SAVE");
-    try {
-      const { renameTableInSchema } = await import("$lib/parser");
-      const newCode = renameTableInSchema(
-        schemaState.rawCode,
-        editingTableName,
-        newTableName,
-      );
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-      schemaState.machine.send("SAVE_SUCCESS");
-      editingTableName = null;
-    } catch (e) {
-      schemaState.machine.send("SAVE_ERROR");
-      console.error(e);
-    }
+    if (!editingTableName || !newTableName) return;
+    await schemaState.renameTable(editingTableName, newTableName);
+    editingTableName = null;
   }
 
   /**
    * Renames a column and syncs.
    */
   async function submitRenameColumn(tableName: string) {
-    if (!editingColumnName || !newColumnName || !schemaState.filePath) return;
-    schemaState.machine.send("SAVE");
-    try {
-      const { renameColumnInSchema } = await import("$lib/parser");
-      const newCode = renameColumnInSchema(
-        schemaState.rawCode,
-        tableName,
-        editingColumnName,
-        newColumnName,
-      );
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-      schemaState.machine.send("SAVE_SUCCESS");
-      editingColumnName = null;
-    } catch (e) {
-      schemaState.machine.send("SAVE_ERROR");
-      console.error(e);
-    }
+    if (!editingColumnName || !newColumnName) return;
+    await schemaState.renameColumn(tableName, editingColumnName, newColumnName);
+    editingColumnName = null;
   }
 
   /**

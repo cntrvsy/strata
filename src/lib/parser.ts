@@ -42,6 +42,16 @@ function syncSourceFile(code: string) {
 }
 
 /**
+ * Resolves the underlying drizzle sqliteTable CallExpression node from an initializer.
+ */
+function findSqliteTableCall(initializer: ASTNode): any {
+	if (initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
+		return initializer;
+	}
+	return initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+}
+
+/**
  * Robustly checks if a variable declaration is initialized with a Drizzle sqliteTable.
  * Resolves the sqliteTable symbol to confirm it is imported from a module starting with 'drizzle-orm'.
  */
@@ -49,9 +59,7 @@ function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
 	const initializer = decl.getInitializer();
 	if (!initializer) return false;
 
-	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	const tableCall = findSqliteTableCall(initializer);
 
 	if (!tableCall) return false;
 
@@ -238,9 +246,7 @@ function extractColumns(decl: VariableDeclaration) {
 	const initializer = decl.getInitializer();
 	if (!initializer) return columns;
 	
-	let tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	let tableCall = findSqliteTableCall(initializer);
 	
 	if (tableCall) {
 		const args = tableCall.getArguments();
@@ -433,6 +439,44 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 }
 
 /**
+ * Batches updates to node positions inside @strata JSDoc metadata in a single AST pass.
+ */
+export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): string {
+	const sf = syncSourceFile(code);
+	for (const node of nodes) {
+		const decl = sf.getVariableDeclaration(node.id);
+		if (decl) {
+			const statement = decl.getVariableStatement();
+			if (statement) {
+				const jsDocs = statement.getJsDocs();
+				let strataFound = false;
+
+				for (const doc of jsDocs) {
+					const text = doc.getText();
+					const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+					
+					if (strataMatch) {
+						try {
+							const metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
+							metadata.x = Math.round(node.position.x);
+							metadata.y = Math.round(node.position.y);
+							doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+							strataFound = true;
+							break;
+						} catch (e) { console.error(e); }
+					}
+				}
+
+				if (!strataFound) {
+					statement.addJsDoc({ description: `\n * @strata { "x": ${Math.round(node.position.x)}, "y": ${Math.round(node.position.y)} }\n ` });
+				}
+			}
+		}
+	}
+	return sf.getFullText();
+}
+
+/**
  * Ensures required imports exist in a file.
  */
 function ensureImports(sf: SourceFile, module: string, names: string[]) {
@@ -483,9 +527,7 @@ export function addColumnToSchema(
 	const initializer = decl?.getInitializer();
 	if (!initializer) return code;
 	
-	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	const tableCall = findSqliteTableCall(initializer);
 		
 	if (tableCall) {
 		const args = tableCall.getArguments();
@@ -600,9 +642,7 @@ export function removeColumnFromSchema(code: string, tableName: string, columnNa
 	
 	if (!initializer) return code;
 	
-	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	const tableCall = findSqliteTableCall(initializer);
 
 	if (tableCall) {
 		const args = tableCall.getArguments();
@@ -665,9 +705,7 @@ export function renameColumnInSchema(code: string, tableName: string, oldColName
 	
 	if (!initializer) return code;
 	
-	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	const tableCall = findSqliteTableCall(initializer);
 
 	if (tableCall) {
 		const args = tableCall.getArguments();
@@ -710,9 +748,7 @@ export function updateColumnModifiersInSchema(
 	
 	if (!initializer) return code;
 	
-	const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-		? initializer
-		: initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+	const tableCall = findSqliteTableCall(initializer);
 
 	if (tableCall) {
 		const args = tableCall.getArguments();

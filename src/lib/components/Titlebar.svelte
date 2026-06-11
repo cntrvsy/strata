@@ -1,31 +1,29 @@
 <script lang="ts">
   import { Minus, Square, X } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
+  import { PlatformService } from "$lib/services/platform";
 
   async function minimizeWindow() {
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().minimize();
+      await PlatformService.minimizeWindow();
     } catch (e) {
-      console.warn("Tauri window control not available:", e);
+      console.warn("Window control not available:", e);
     }
   }
 
   async function toggleMaximizeWindow() {
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().toggleMaximize();
+      await PlatformService.toggleMaximizeWindow();
     } catch (e) {
-      console.warn("Tauri window control not available:", e);
+      console.warn("Window control not available:", e);
     }
   }
 
   async function closeWindow() {
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().close();
+      await PlatformService.closeWindow();
     } catch (e) {
-      console.warn("Tauri window control not available:", e);
+      console.warn("Window control not available:", e);
     }
   }
 </script>

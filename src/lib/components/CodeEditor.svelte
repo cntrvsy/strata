@@ -37,11 +37,13 @@
 
       const result = parseSchema(newCode);
       if (result.success) {
-        const selectedNodeIds = new Set(schemaState.nodes.filter(n => n.selected).map(n => n.id));
-        
-        schemaState.nodes = result.nodes.map(n => ({
+        const selectedNodeIds = new Set(
+          schemaState.nodes.filter((n) => n.selected).map((n) => n.id),
+        );
+
+        schemaState.nodes = result.nodes.map((n) => ({
           ...n,
-          selected: selectedNodeIds.has(n.id)
+          selected: selectedNodeIds.has(n.id),
         }));
         schemaState.edges = result.edges;
         schemaState.isValid = true;
@@ -74,15 +76,6 @@
           >{schemaState.filePath?.split("/").pop()}</span
         >
       </div>
-    </div>
-
-    <div
-      class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full border border-primary/20"
-    >
-      <Activity class="w-3.5 h-3.5 text-primary" />
-      <span class="text-[9px] font-bold text-primary uppercase tracking-wider"
-        >Live Editing Mode</span
-      >
     </div>
   </div>
 

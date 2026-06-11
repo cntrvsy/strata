@@ -9,8 +9,6 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
   import { schemaState } from "../state.svelte";
-  import { addColumnToSchema } from "$lib/parser";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
@@ -23,25 +21,14 @@
     validators: valibot(columnSchema),
     async onUpdate({ form }) {
       if (form.valid && schemaState.filePath) {
-        const newCode = addColumnToSchema(
-          schemaState.rawCode,
+        await schemaState.addColumn(
           tableName,
           form.data.name,
           form.data.type,
           form.data.referencesTable,
           form.data.referencesColumn,
         );
-
-        schemaState.machine.send("SAVE");
-        try {
-          await writeTextFile(schemaState.filePath, newCode);
-          await schemaState.syncWithFile();
-          schemaState.machine.send("SAVE_SUCCESS");
-          onComplete();
-        } catch (err) {
-          schemaState.machine.send("SAVE_ERROR");
-          console.error("Failed to auto-save new column:", err);
-        }
+        onComplete();
       }
     },
   });

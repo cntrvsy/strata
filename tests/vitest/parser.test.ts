@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { 
   parseSchema, 
   updateNodePositionInSchema, 
+  updateAllNodePositionsInSchema,
   addEdgeToSchema, 
   addColumnToSchema, 
   removeTableFromSchema, 
@@ -111,6 +112,21 @@ describe('Mutation Logic', () => {
     const newCode = updateNodePositionInSchema(code, 't', 150, 250);
     expect(newCode).toContain('"x":150,"y":250');
     expect(newCode).toContain('export const t = sqliteTable');
+  });
+
+  it('should update multiple node positions in a single pass', () => {
+    const code = `
+      /** @strata {"x":0,"y":0} */
+      export const users = sqliteTable("users", { id: integer("id") });
+      /** @strata {"x":10,"y":10} */
+      export const posts = sqliteTable("posts", { id: integer("id") });
+    `;
+    const newCode = updateAllNodePositionsInSchema(code, [
+      { id: 'users', position: { x: 100, y: 150 } },
+      { id: 'posts', position: { x: 200, y: 250 } }
+    ] as any);
+    expect(newCode).toContain('"x":100,"y":150');
+    expect(newCode).toContain('"x":200,"y":250');
   });
 
   it('should add synthetic relations to existing @strata tags', () => {

@@ -44,7 +44,7 @@
 {/if}
 
 <!-- Loading State Overlay -->
-{#if schemaState.machine.current === "LOADING"}
+{#if schemaState.machine.current === "BUSY"}
   <div
     class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-base-100/10 backdrop-blur-[1px] animate-in fade-in duration-300"
   >
@@ -153,14 +153,12 @@
         <span class="text-xs font-bold tracking-tight">
           {schemaState.isRecentlySaved
             ? "Positions Synced"
-            : "Pending Positions"}
+            : "Saving Changes..."}
         </span>
         {#if !schemaState.isRecentlySaved}
           <span
             class="text-[9px] opacity-60 uppercase tracking-widest font-black"
-            >Press <code class="bg-white/10 px-1 rounded text-white"
-              >Ctrl + S</code
-            > to save</span
+            >Autosaving coordinate updates</span
           >
         {:else}
           <span

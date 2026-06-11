@@ -4,7 +4,7 @@
     Camera,
     FolderOpen,
     RefreshCw,
-    HandHelping,
+    BadgeQuestionMark,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
   import { toPng } from "html-to-image";
@@ -79,7 +79,7 @@
       a.href = dataUrl;
       a.download = `strata-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
       a.click();
-      schemaState.machine.send("SAVE_SUCCESS");
+      schemaState.machine.send("SUCCESS");
 
       // Show the export successful toast for 4 seconds
       schemaState.showExportToast = true;
@@ -88,7 +88,7 @@
       }, 4000);
     } catch (err: any) {
       console.error("[Strata] Capture failed:", err);
-      schemaState.machine.send("SAVE_ERROR");
+      schemaState.machine.send("FAIL");
     } finally {
       // Cleanly restore the viewport's original user zoom and pan transformation
       if (viewportEl) {
@@ -180,34 +180,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Mode Toggle -->
-    {#if schemaState.filePath}
-      <div
-        class="flex items-center gap-1 bg-base-200 p-1 rounded-xl ml-4 shadow-inner border border-base-300"
-      >
-        <button
-          class="btn btn-xs rounded-lg border-none {schemaState.viewMode ===
-          'diagram'
-            ? 'bg-base-100 shadow-sm text-primary'
-            : 'bg-transparent text-base-content/40 hover:text-base-content'}"
-          onclick={() => (schemaState.viewMode = "diagram")}
-          data-testid="diagram-mode-button"
-        >
-          Diagram
-        </button>
-        <button
-          class="btn btn-xs rounded-lg border-none {schemaState.viewMode ===
-          'code'
-            ? 'bg-base-100 shadow-sm text-primary'
-            : 'bg-transparent text-base-content/40 hover:text-base-content'}"
-          onclick={() => (schemaState.viewMode = "code")}
-          data-testid="code-mode-button"
-        >
-          Code
-        </button>
-      </div>
-    {/if}
   </div>
 
   <div class="flex items-center gap-3">
@@ -240,7 +212,7 @@
       onclick={() => (showHelp = true)}
       data-testid="help-button"
     >
-      <HandHelping
+      <BadgeQuestionMark
         class="w-5 h-5 opacity-40 hover:opacity-100 transition-all"
       />
     </button>
