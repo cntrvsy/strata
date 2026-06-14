@@ -56,7 +56,7 @@ export const projects = sqliteTable("projects", {
 /** 
  * User sessions stored in Cloudflare KV for global performance.
  * We use @strata relations to link this logical entity to our D1 users.
- * @strata {"x":-360,"y":165,"target":"kv","relations":[{"to":"users"}]} 
+ * @strata {"x":-345,"y":180,"target":"kv","relations":[{"to":"users"}]} 
  */
 export const userSessions = {
   sessionId: "string",
@@ -80,7 +80,7 @@ export const billingCache = {
 /** 
  * Real-time collaboration state managed by a Durable Object.
  * DOs are perfect for synchronized state like editor presence.
- * @strata {"x":735,"y":30,"target":"do","relations":[{"to":"projects"}]} 
+ * @strata {"x":690,"y":-60,"target":"do","relations":[{"to":"projects"}]} 
  */
 export const collaborativeEditor = {
   projectId: "string",
@@ -116,10 +116,3 @@ export const projectsRelations = relations(projects, ({ one }) => ({
     references: [organizations.id],
   }),
 }));
-
-/** 
- * @strata {"x":105,"y":-210,"target":"kv"} 
- */
-export const test = {
-  id: "string",
-};

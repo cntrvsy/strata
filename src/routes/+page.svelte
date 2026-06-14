@@ -155,7 +155,7 @@
       </Pane>
       <Pane minSize={20} size={55}>
         <Splitpanes horizontal={false}>
-          {#if schemaState.nodes.some((n) => n.selected)}
+          {#if schemaState.activeInspectorNodeId}
             <Pane minSize={15} size={25}>
               <Inspector />
             </Pane>

@@ -63,7 +63,7 @@
             <p
               class="text-[10px] uppercase font-black tracking-widest opacity-40"
             >
-              Single Source of Truth ERD Tool
+              Making it easier to visualize your cloudflare applications
             </p>
           </div>
         </div>
@@ -150,10 +150,9 @@
                     >➔</span
                   >
                   <div
-                    class="flex-1 bg-primary/10 border border-primary/20 py-2.5 rounded-xl"
+                    class="flex-1 bg-base-100 border border-primary/20 py-2.5 rounded-xl"
                   >
-                    <span
-                      class="font-mono text-[10px] font-bold text-primary block"
+                    <span class="font-mono text-[10px] font-bold block"
                       >2. AST Parser</span
                     >
                     <span class="text-[8px] opacity-50 text-primary/70"
@@ -182,9 +181,9 @@
                 <div class="flex gap-2">
                   <span class="text-primary font-bold">●</span>
                   <span
-                    ><strong>Instant Code Sync:</strong> Every visual interaction—such
-                    as dragging nodes, adding columns, or forging relationships—triggers
-                    surgical AST editing that patches the file on disk.</span
+                    ><strong>Instant Code Sync:</strong> Every visual interaction
+                    (such as dragging nodes, adding columns, or forging relationships)
+                    triggers surgical AST editing that patches the file on disk.</span
                   >
                 </div>
                 <div class="flex gap-2">
@@ -196,21 +195,42 @@
                     canvas instantly.</span
                   >
                 </div>
-              </div>
-
-              <div
-                class="alert alert-info/10 bg-primary/5 rounded-2xl border border-primary/10 p-3.5 flex items-start gap-3"
-              >
-                <Info class="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <p class="text-[11px] leading-relaxed text-base-content/85">
-                  <strong>Pro-Tip:</strong> The visual positions ($x, y$ layout
-                  coordinates) are saved directly in standard JSDoc blocks above
-                  each table in the code. Press
-                  <code
-                    class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] font-bold"
-                    >Ctrl + S</code
-                  > in the canvas to write positions back to your schema file.
-                </p>
+                <div class="flex gap-2">
+                  <span class="text-primary font-bold">●</span>
+                  <span
+                    ><strong>Node Inspector:</strong> Double-click any table node
+                    on the canvas to open the sidebar Inspector, where you can rename
+                    the table, add/remove fields, customize keys, or manage relations.</span
+                  >
+                </div>
+                <div class="flex gap-2">
+                  <span class="text-primary font-bold">●</span>
+                  <span
+                    ><strong>Canvas Navigation:</strong> Designed for both mouse
+                    and trackpads:
+                    <ul
+                      class="list-disc pl-4 mt-1 flex flex-col gap-1 text-[11px] opacity-90"
+                    >
+                      <li>
+                        <strong>Trackpad:</strong> Swipe with two fingers to pan
+                        in any direction. Pinch to zoom in/out.
+                      </li>
+                      <li>
+                        <strong>Mouse:</strong> Hold Right-Click or Middle-Click
+                        and drag to pan. Hold
+                        <code
+                          class="bg-base-200 px-1 py-0.5 rounded font-mono text-[9px]"
+                          >Ctrl</code
+                        >
+                        /
+                        <code
+                          class="bg-base-200 px-1 py-0.5 rounded font-mono text-[9px]"
+                          >Cmd</code
+                        > and scroll the wheel to zoom.
+                      </li>
+                    </ul>
+                  </span>
+                </div>
               </div>
             </div>
           {/if}
@@ -357,6 +377,24 @@
                     >
                   </div>
                 </div>
+
+                <div
+                  class="flex items-center gap-4 bg-base-200/60 p-3 rounded-2xl border border-base-300"
+                >
+                  <div
+                    class="w-20 shrink-0 text-center font-bold text-[10px] uppercase bg-base-300 text-base-content/70 px-2 py-1 rounded-lg border border-base-400"
+                  >
+                    Arrowhead
+                  </div>
+                  <div class="flex flex-col gap-0.5">
+                    <span class="font-bold text-xs"
+                      >Dependency / Cardinality Direction</span
+                    >
+                    <span class="text-[10px] opacity-60 font-medium"
+                      >A closed arrowhead points from the Child table (possessing the Foreign Key) to the Parent table (One side). This establishes relationship flows instantly.</span
+                    >
+                  </div>
+                </div>
               </div>
 
               <!-- Drag Forge Guide -->
@@ -377,6 +415,40 @@
                     relationship blocks directly into your source code!</span
                   >
                 </div>
+              </div>
+
+              <!-- Synthetic JSDoc Connections -->
+              <div
+                class="flex flex-col gap-2 bg-base-200/40 border border-base-300 rounded-2xl p-4"
+              >
+                <div class="flex items-center gap-2 text-secondary">
+                  <Zap class="w-4 h-4" />
+                  <span class="font-bold text-xs"
+                    >Synthetic JSDoc Connections</span
+                  >
+                </div>
+                <p class="text-[11px] opacity-70 leading-relaxed">
+                  When establishing relations involving non-relational storage
+                  targets (like Key-Value namespaces or Durable Objects),
+                  standard SQL foreign keys are not available. Strata handles
+                  this by saving the relation directly inside your entity's
+                  JSDoc metadata under the <code
+                    class="bg-base-300 px-1 py-0.5 rounded text-[10px] font-mono"
+                    >relations</code
+                  > key:
+                </p>
+                <pre
+                  class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 mt-1">
+<span class="text-success"
+                    >/**
+ * @strata &#123; "target": "kv", "relations": [&#123;"to": "users"&#125;] &#125;
+ */</span
+                  ></pre>
+                <p class="text-[10px] opacity-50 leading-relaxed">
+                  These connections render on your visual canvas as dashed
+                  lines, but have **zero compilation or runtime overhead** on
+                  your database engine.
+                </p>
               </div>
             </div>
           {/if}
@@ -466,8 +538,12 @@
               >
                 <CodeXml class="w-4 h-4 text-primary shrink-0 mt-0.5" />
                 <p class="text-[11px] leading-relaxed text-base-content/85">
-                  <strong>Learn more:</strong> Inspect the STRATA_FORGE_AI.md (github
-                  repo) file in your workspace for standard system prompts and concrete
+                  <strong>Learn more:</strong> Inspect the
+                  <a
+                    href="https://github.com/cntrvsy/strata/blob/main/STRATA_FORGE_AI.md"
+                    class="text-primary underline underline-offset-2"
+                    >STRATA_FORGE_AI.md</a
+                  > file in your workspace for standard system prompts and concrete
                   visual design pattern models!
                 </p>
               </div>

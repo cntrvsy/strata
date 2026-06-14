@@ -65,7 +65,7 @@
   >
     <div class="flex items-center gap-3">
       <div class="p-2 bg-primary/10 rounded-lg">
-        <FileCode class="w-4 h-4 text-primary" />
+        <FileCode class="w-4 h-4 text-white" />
       </div>
       <div class="flex flex-col">
         <span
@@ -102,20 +102,6 @@
         }}
       />
     </div>
-  </div>
-
-  <!-- Footer Info -->
-  <div
-    class="p-3 bg-base-200/50 border-t border-white/5 flex items-center justify-between px-6 shrink-0"
-  >
-    <p class="text-[10px] text-white font-medium italic">
-      Press Ctrl+S to persist your live code edits to disk.
-    </p>
-    {#if !schemaState.isValid}
-      <span class="text-[10px] font-bold text-error uppercase tracking-widest"
-        >Parsing Error Detected</span
-      >
-    {/if}
   </div>
 </div>
 

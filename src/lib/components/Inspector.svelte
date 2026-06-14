@@ -97,17 +97,14 @@
     isConfirmingDelete = false;
     editingTableName = null;
     editingColumnName = null;
-    schemaState.nodes = schemaState.nodes.map((n) => ({
-      ...n,
-      selected: false,
-    }));
+    schemaState.activeInspectorNodeId = null;
   }
 
   /**
    * Auto-reset forms when a different node is selected.
    */
   $effect(() => {
-    if (schemaState.nodes.some((n) => n.selected)) {
+    if (schemaState.activeInspectorNodeId) {
       isAddingField = false;
       isForgingRelation = false;
       isConfirmingDelete = false;
@@ -117,11 +114,12 @@
   });
 </script>
 
-{#if schemaState.nodes.some((n) => n.selected)}
-  {@const selectedNode = schemaState.nodes.find((n) => n.selected)!}
-  {@const data = selectedNode.data as any}
-  {@const config =
-    targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
+{#if schemaState.activeInspectorNodeId}
+  {@const selectedNode = schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId)}
+  {#if selectedNode}
+    {@const data = selectedNode.data as any}
+    {@const config =
+      targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
     class="w-full h-full bg-base-100/90 border-r border-base-300 flex flex-col overflow-hidden animate-in slide-in-from-left-8 duration-300"
@@ -388,5 +386,6 @@
         </p>
       </div>
     </div>
-  </div>
+    </div>
+  {/if}
 {/if}

@@ -65,6 +65,7 @@
     } else if (action === "fit_view") {
       fitView();
     } else if (action === "add_field" && targetId) {
+      schemaState.activeInspectorNodeId = targetId;
       schemaState.nodes = schemaState.nodes.map(n => ({
         ...n,
         selected: n.id === targetId
@@ -91,6 +92,14 @@
     onreconnect={() => {}}
     {onnodedragstop}
     {onconnect}
+    ondelete={({ nodes, edges }) => {
+      for (const node of nodes) {
+        schemaState.deleteTable(node.id);
+      }
+      for (const edge of edges) {
+        schemaState.deleteRelation(edge.source, edge.target, edge.label);
+      }
+    }}
     onnodecontextmenu={(e) => {
       e.event.preventDefault();
       handleNodeContextMenu(e.event, e.node);
@@ -98,6 +107,9 @@
     onpanecontextmenu={(e) => {
       e.event.preventDefault();
       handlePaneContextMenu(e.event);
+    }}
+    onpaneclick={() => {
+      schemaState.activeInspectorNodeId = null;
     }}
     connectionMode={ConnectionMode.Loose}
     fitView
@@ -107,6 +119,24 @@
     colorMode="light"
     minZoom={0.1}
     maxZoom={2}
+    panOnScroll={true}
+    zoomOnScroll={false}
+    zoomOnPinch={true}
+    panOnDrag={[1, 2]}
+    zoomActivationKey="Control"
+    onnodedrag={({ targetNode }) => {
+      if (targetNode) {
+        schemaState.activeCoordinates = { x: Math.round(targetNode.position.x), y: Math.round(targetNode.position.y) };
+      }
+    }}
+    onselectionchange={({ nodes }: { nodes: any[] }) => {
+      const selected = nodes.find(n => n.selected);
+      if (selected) {
+        schemaState.activeCoordinates = { x: Math.round(selected.position.x), y: Math.round(selected.position.y) };
+      } else {
+        schemaState.activeCoordinates = null;
+      }
+    }}
   >
     <Controls
       position="bottom-left"

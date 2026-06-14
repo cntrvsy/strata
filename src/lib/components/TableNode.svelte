@@ -80,6 +80,16 @@
     : 'opacity-30 pointer-events-none'}"
   data-testid="table-node"
   data-table-name={data.label}
+  role="button"
+  tabindex="0"
+  ondblclick={() => {
+    schemaState.activeInspectorNodeId = data.label;
+  }}
+  onkeydown={(e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      schemaState.activeInspectorNodeId = data.label;
+    }
+  }}
 >
   <div
     class="bg-base-100 border border-base-400 rounded-xl overflow-hidden transition-all {config.border} border-t-4 {config.borderTop}"

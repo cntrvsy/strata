@@ -39,6 +39,10 @@ class SchemaState {
 	errorLoc = $state<{ line: number, column: number } | null>(null);
 	/** Differentiates between parsing errors and disk write errors */
 	errorType = $state<'parse' | 'disk' | null>(null);
+	/** The ID of the node currently displayed in the inspector panel */
+	activeInspectorNodeId = $state<string | null>(null);
+	/** Selection coordinates of the currently active/dragged node */
+	activeCoordinates = $state<{ x: number; y: number } | null>(null);
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */
@@ -282,6 +286,19 @@ class SchemaState {
 		await this.executeSchemaMutation("Table delete", (code) => 
 			removeTableFromSchema(code, tableName)
 		);
+		if (this.activeInspectorNodeId === tableName) {
+			this.activeInspectorNodeId = null;
+		}
+	}
+
+	/**
+	 * Deletes a relationship/edge from the schema and syncs to disk.
+	 */
+	async deleteRelation(source: string, target: string, name?: string) {
+		const { removeEdgeFromSchema } = await import("./parser");
+		await this.executeSchemaMutation("Relation delete", (code) => 
+			removeEdgeFromSchema(code, source, target, name)
+		);
 	}
 
 	/**
@@ -311,6 +328,9 @@ class SchemaState {
 		await this.executeSchemaMutation("Table rename", (code) => 
 			renameTableInSchema(code, oldName, newName)
 		);
+		if (this.activeInspectorNodeId === oldName) {
+			this.activeInspectorNodeId = newName;
+		}
 	}
 
 	/**
@@ -370,6 +390,7 @@ class SchemaState {
 		this.rawCode = '';
 		this.isValid = true;
 		this.error = null;
+		this.activeInspectorNodeId = null;
 		this.machine.send("RESET");
 	}
 

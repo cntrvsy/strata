@@ -27,6 +27,8 @@
     labelStyle,
     style,
     data,
+    markerStart,
+    markerEnd,
   }: EdgeProps = $props();
 
   // Choose path algorithm based on virtual/physical status
@@ -48,15 +50,17 @@
   const finalY = $derived(labelY + (sourceY - labelY) * 0.4);
 </script>
 
-<BaseEdge {id} path={edgePath} {style} />
+<BaseEdge {id} path={edgePath} {style} {markerStart} {markerEnd} />
 
 {#if label}
+  {@const card = data?.cardinality && data.cardinality !== 'unknown' ? data.cardinality : (data?.isVirtual ? 'unknown' : 'FK')}
   <EdgeLabel x={finalX} y={finalY}>
     <div
-      class="bg-base-100 border border-base-500 px-2 py-1 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/80 whitespace-nowrap"
+      class="flex items-center gap-1.5 bg-base-100 border border-base-400 px-2 py-0.5 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/85 whitespace-nowrap shadow-sm"
       style={labelStyle}
     >
-      {label}
+      <span class="text-[8px] font-black font-mono bg-base-200 text-base-content/60 px-1 py-0.2 rounded leading-none">{card}</span>
+      <span>{label}</span>
     </div>
   </EdgeLabel>
 {/if}

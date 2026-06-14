@@ -171,21 +171,3 @@
   </div>
 {/if}
 
-<!-- Coordinate Stats -->
-<div
-  class="absolute bottom-10 right-28 z-10 pointer-events-none opacity-40 hover:opacity-100 transition-opacity"
->
-  <div
-    class="bg-neutral text-neutral-content px-3 py-1.5 rounded-xl text-[10px] font-mono shadow-2xl flex gap-3 border border-white/10 backdrop-blur-md"
-  >
-    <span class="opacity-30">NODES: {schemaState.nodes.length}</span>
-    <div class="h-3 w-px bg-white/10"></div>
-    <span
-      >COORD: {Math.round(
-        schemaState.nodes.find((n) => n.selected)?.position.x ?? 0,
-      )}, {Math.round(
-        schemaState.nodes.find((n) => n.selected)?.position.y ?? 0,
-      )}</span
-    >
-  </div>
-</div>
