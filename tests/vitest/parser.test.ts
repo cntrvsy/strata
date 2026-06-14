@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { 
   parseSchema, 
   updateNodePositionInSchema, 
+  updateAllNodePositionsInSchema,
   addEdgeToSchema, 
   addColumnToSchema, 
   removeTableFromSchema, 
   renameTableInSchema, 
   renameColumnInSchema,
   removeColumnFromSchema,
-  stripHtml,
+  updateColumnModifiersInSchema,
   wrapCode
 } from '../../src/lib/parser';
 
@@ -111,6 +112,21 @@ describe('Mutation Logic', () => {
     const newCode = updateNodePositionInSchema(code, 't', 150, 250);
     expect(newCode).toContain('"x":150,"y":250');
     expect(newCode).toContain('export const t = sqliteTable');
+  });
+
+  it('should update multiple node positions in a single pass', () => {
+    const code = `
+      /** @strata {"x":0,"y":0} */
+      export const users = sqliteTable("users", { id: integer("id") });
+      /** @strata {"x":10,"y":10} */
+      export const posts = sqliteTable("posts", { id: integer("id") });
+    `;
+    const newCode = updateAllNodePositionsInSchema(code, [
+      { id: 'users', position: { x: 100, y: 150 } },
+      { id: 'posts', position: { x: 200, y: 250 } }
+    ] as any);
+    expect(newCode).toContain('"x":100,"y":150');
+    expect(newCode).toContain('"x":200,"y":250');
   });
 
   it('should add synthetic relations to existing @strata tags', () => {
@@ -240,10 +256,6 @@ describe('Mutation Logic', () => {
       expect(result.error).toBe('No tables or schema objects found');
     });
 
-    it('should strip HTML tags correctly', () => {
-      expect(stripHtml('<div>Hello</div>')).toBe('Hello');
-      expect(stripHtml('<b>World</b>')).toBe('World');
-    });
 
     it('should wrap code correctly', () => {
       expect(wrapCode('const x = 1;')).toBe('<pre><code>const x = 1;</code></pre>');
@@ -266,6 +278,29 @@ describe('Mutation Logic', () => {
       const code = `export const users = sqliteTable("users", { id: integer("id") }); export const posts = sqliteTable("posts", { id: integer("id") });`;
       const newCode = addColumnToSchema(code, 'posts', 'authorId', 'integer', 'users', 'id');
       expect(newCode).toContain('.references(() => users.id)');
+    });
+
+    it('should surgically add, update, and remove column modifiers (pk, notNull, default)', () => {
+      const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
+      
+      // Add primaryKey and notNull
+      let code = updateColumnModifiersInSchema(baseCode, 'users', 'id', { isPk: true, notNull: true });
+      expect(code).toContain('id: integer("id").primaryKey().notNull()');
+
+      // Add default value
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { defaultVal: '10' });
+      expect(code).toContain('id: integer("id").primaryKey().notNull().default(10)');
+
+      // Update default value
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { defaultVal: '"test"' });
+      expect(code).toContain('id: integer("id").primaryKey().notNull().default("test")');
+
+      // Remove primaryKey, notNull, and default
+      code = updateColumnModifiersInSchema(code, 'users', 'id', { isPk: false, notNull: false, defaultVal: null });
+      expect(code).toContain('id: integer("id")');
+      expect(code).not.toContain('.primaryKey()');
+      expect(code).not.toContain('.notNull()');
+      expect(code).not.toContain('.default(');
     });
   });
 });

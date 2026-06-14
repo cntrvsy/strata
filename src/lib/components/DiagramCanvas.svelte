@@ -5,10 +5,12 @@
     Background,
     MiniMap,
     ConnectionMode,
+    useSvelteFlow,
   } from "@xyflow/svelte";
   import { schemaState } from "$lib/state.svelte";
   import TableNode from "$lib/components/TableNode.svelte";
   import RelationEdge from "$lib/components/RelationEdge.svelte";
+  import ContextMenu from "$lib/components/ContextMenu.svelte";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;
@@ -22,6 +24,62 @@
   const edgeTypes = {
     relation: RelationEdge,
   };
+
+  const { fitView } = useSvelteFlow();
+
+  let contextMenu = $state<{
+    x: number;
+    y: number;
+    type: "canvas" | "node";
+    targetId?: string;
+    visible: boolean;
+  }>({
+    x: 0,
+    y: 0,
+    type: "canvas",
+    visible: false,
+  });
+
+  function handleNodeContextMenu(event: MouseEvent, node: any) {
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      type: "node",
+      targetId: node.id,
+      visible: true,
+    };
+  }
+
+  function handlePaneContextMenu(event: MouseEvent) {
+    contextMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      type: "canvas",
+      visible: true,
+    };
+  }
+
+  function handleContextMenuAction(action: string, targetId?: string) {
+    if (action === "new_table") {
+      schemaState.showNewTableModal = true;
+    } else if (action === "fit_view") {
+      fitView();
+    } else if (action === "add_field" && targetId) {
+      schemaState.nodes = schemaState.nodes.map(n => ({
+        ...n,
+        selected: n.id === targetId
+      }));
+    } else if (action === "rename_table" && targetId) {
+      const newName = prompt("Enter new name for the entity:", targetId);
+      if (newName && newName !== targetId) {
+        schemaState.renameTable(targetId, newName);
+      }
+    } else if (action === "delete_table" && targetId) {
+      if (confirm(`Are you sure you want to delete the entity "${targetId}"?`)) {
+        schemaState.deleteTable(targetId);
+      }
+    }
+  }
 </script>
 
 <div class="w-full h-full bg-base-200/30">
@@ -33,6 +91,14 @@
     onreconnect={() => {}}
     {onnodedragstop}
     {onconnect}
+    onnodecontextmenu={(e) => {
+      e.event.preventDefault();
+      handleNodeContextMenu(e.event, e.node);
+    }}
+    onpanecontextmenu={(e) => {
+      e.event.preventDefault();
+      handlePaneContextMenu(e.event);
+    }}
     connectionMode={ConnectionMode.Loose}
     fitView
     fitViewOptions={{ padding: 0.5 }}
@@ -52,6 +118,17 @@
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl!"
     />
   </SvelteFlow>
+
+  {#if contextMenu.visible}
+    <ContextMenu
+      x={contextMenu.x}
+      y={contextMenu.y}
+      type={contextMenu.type}
+      targetId={contextMenu.targetId}
+      onClose={() => (contextMenu.visible = false)}
+      onAction={handleContextMenuAction}
+    />
+  {/if}
 </div>
 
 <style>

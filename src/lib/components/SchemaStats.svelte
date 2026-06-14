@@ -23,7 +23,7 @@
 </script>
 
 <div
-  class="absolute top-24 left-6 z-10 flex flex-col gap-2 animate-in fade-in slide-in-from-left-4 duration-500"
+  class="absolute top-24 right-6 z-10 flex flex-col gap-2 animate-in fade-in slide-in-from-right-4 duration-500"
 >
   <div
     class="bg-base-100/80 backdrop-blur-md border border-base-300 rounded-2xl shadow-xl p-4 min-w-[180px]"

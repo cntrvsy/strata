@@ -37,6 +37,16 @@ async fn watch_file<R: tauri::Runtime>(
     Ok(())
 }
 
+#[tauri::command]
+async fn read_schema_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn write_schema_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -44,7 +54,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![watch_file])
+        .invoke_handler(tauri::generate_handler![watch_file, read_schema_file, write_schema_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -54,6 +64,26 @@ mod tests {
     use super::*;
     use tauri::Manager;
     use tauri::test::{mock_builder, mock_context};
+
+    #[test]
+    fn test_read_write_schema_file_commands() {
+        let temp_dir = std::env::temp_dir();
+        let temp_file = temp_dir.join("test_rw_schema.ts");
+        let path = temp_file.to_str().unwrap().to_string();
+        let test_content = "export const user = {}";
+
+        // Write content using the command
+        let write_res = tauri::async_runtime::block_on(write_schema_file(path.clone(), test_content.to_string()));
+        assert!(write_res.is_ok());
+
+        // Read content using the command
+        let read_res = tauri::async_runtime::block_on(read_schema_file(path.clone()));
+        assert!(read_res.is_ok());
+        assert_eq!(read_res.unwrap(), test_content);
+
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file);
+    }
 
     #[test]
     fn test_watcher_state_init() {

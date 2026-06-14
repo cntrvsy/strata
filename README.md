@@ -6,6 +6,11 @@ It solves the "stale diagram" problem by using your TypeScript schema as the sin
 
 ![Strata Demo](video/demo.gif)
 
+## Limitations
+
+- **It's not a full-fledged database client**: This is a visual schema tool. You can't run arbitrary SQL queries or inspect data.
+- **Its hyper taylored to Cloudflare D1 and Drizzle ORM**: This is a visual schema tool for Cloudflare D1 and Drizzle ORM.
+
 ---
 
 ## The Philosophy
@@ -99,6 +104,7 @@ We take schema integrity seriously. Every mutation is validated against a suite 
 ## Current Stage & Reliability
 
 Strata has graduated from a proof of concept to a **production-ready visual schema tool**:
+
 - **Zero Data Loss**: 100% AST-level idempotency ensures that saving and re-parsing a schema file leaves it entirely unchanged (proven under high-iteration unit tests).
 - **Formal State Machine**: No race conditions or impossible UI states, thanks to a robust, formal finite state machine orchestrating loads, watcher events, and disk writes.
 - **Robust E2E Suite**: The visual frontend is fully covered by Playwright visual-interaction tests simulating complex user scenarios with a custom Tauri plugin mock.
@@ -109,4 +115,3 @@ Strata has graduated from a proof of concept to a **production-ready visual sche
 - **SQLite/D1 Dialect**: Tailored specifically for Cloudflare D1 and standard SQLite patterns (e.g. integer date mappings).
 - **Native Tauri Shell**: Requires the Tauri 2.0 runtime environment to provide native OS file system watcher and file manipulation capabilities.
 - **Unified schema.ts**: Operates on a single, clean `schema.ts` file as the unified, single source of truth.
-

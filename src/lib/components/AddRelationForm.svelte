@@ -9,8 +9,6 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { relationSchema } from "$lib/schemas";
   import { schemaState } from "../state.svelte";
-  import { addEdgeToSchema } from "$lib/parser";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { Link, X } from "lucide-svelte";
 
   const { sourceTableName, onComplete } = $props<{
@@ -23,22 +21,11 @@
     validators: valibot(relationSchema),
     async onUpdate({ form }) {
       if (form.valid && schemaState.filePath) {
-        const newCode = addEdgeToSchema(
-          schemaState.rawCode,
+        await schemaState.addRelation(
           form.data.source,
           form.data.target,
         );
-
-        schemaState.machine.send("SAVE");
-        try {
-          await writeTextFile(schemaState.filePath, newCode);
-          await schemaState.syncWithFile();
-          schemaState.machine.send("SAVE_SUCCESS");
-          onComplete();
-        } catch (err) {
-          schemaState.machine.send("SAVE_ERROR");
-          console.error("Failed to auto-save relation:", err);
-        }
+        onComplete();
       }
     },
   });

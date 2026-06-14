@@ -13,11 +13,11 @@
     Trash2,
     Check,
     Pencil,
+    Heart,
   } from "lucide-svelte";
   import { schemaState } from "../state.svelte";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
 
   // --- Local UI State ---
   /** Whether the user is currently filling out the 'Add Field' form */
@@ -37,47 +37,18 @@
    * Renames a table/entity and syncs.
    */
   async function submitRenameTable() {
-    if (!editingTableName || !newTableName || !schemaState.filePath) return;
-    schemaState.machine.send("SAVE");
-    try {
-      const { renameTableInSchema } = await import("$lib/parser");
-      const newCode = renameTableInSchema(
-        schemaState.rawCode,
-        editingTableName,
-        newTableName,
-      );
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-      schemaState.machine.send("SAVE_SUCCESS");
-      editingTableName = null;
-    } catch (e) {
-      schemaState.machine.send("SAVE_ERROR");
-      console.error(e);
-    }
+    if (!editingTableName || !newTableName) return;
+    await schemaState.renameTable(editingTableName, newTableName);
+    editingTableName = null;
   }
 
   /**
    * Renames a column and syncs.
    */
   async function submitRenameColumn(tableName: string) {
-    if (!editingColumnName || !newColumnName || !schemaState.filePath) return;
-    schemaState.machine.send("SAVE");
-    try {
-      const { renameColumnInSchema } = await import("$lib/parser");
-      const newCode = renameColumnInSchema(
-        schemaState.rawCode,
-        tableName,
-        editingColumnName,
-        newColumnName,
-      );
-      await writeTextFile(schemaState.filePath, newCode);
-      await schemaState.syncWithFile();
-      schemaState.machine.send("SAVE_SUCCESS");
-      editingColumnName = null;
-    } catch (e) {
-      schemaState.machine.send("SAVE_ERROR");
-      console.error(e);
-    }
+    if (!editingColumnName || !newColumnName) return;
+    await schemaState.renameColumn(tableName, editingColumnName, newColumnName);
+    editingColumnName = null;
   }
 
   /**
@@ -153,7 +124,7 @@
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
-    class="absolute top-20 right-6 max-h-[calc(100vh-25rem)] w-80 bg-base-100/95 backdrop-blur-xl border border-base-300 shadow-2xl rounded-[2.5rem] z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8 duration-300"
+    class="w-full h-full bg-base-100/90 border-r border-base-300 flex flex-col overflow-hidden animate-in slide-in-from-left-8 duration-300"
     data-testid="inspector-panel"
   >
     <!-- Header -->
@@ -211,16 +182,15 @@
           </button>
         {:else}
           <div
-            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200"
+            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
           >
             <button
               class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
               onclick={() => deleteTable(selectedNode.id)}>Confirm</button
             >
             <button
-              class="btn btn-ghost btn-xs btn-circle"
-              onclick={() => (isConfirmingDelete = false)}
-              ><X class="w-3.5 h-3.5" /></button
+              class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px]"
+              onclick={() => (isConfirmingDelete = false)}>Cancel</button
             >
           </div>
         {/if}
@@ -325,6 +295,66 @@
                     >
                   </div>
                 {/if}
+
+                {#if data.target === "d1"}
+                  <div
+                    class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/30 text-[10px]"
+                  >
+                    <label
+                      class="flex items-center gap-1.5 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={col.isPk}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        onchange={(e) =>
+                          schemaState.updateColumnModifiers(
+                            selectedNode.id,
+                            col.name,
+                            { isPk: e.currentTarget.checked },
+                          )}
+                      />
+                      <span class="font-medium opacity-70">PK</span>
+                    </label>
+
+                    <label
+                      class="flex items-center gap-1.5 cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={col.notNull}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        onchange={(e) =>
+                          schemaState.updateColumnModifiers(
+                            selectedNode.id,
+                            col.name,
+                            { notNull: e.currentTarget.checked },
+                          )}
+                      />
+                      <span class="font-medium opacity-70">Not Null</span>
+                    </label>
+                  </div>
+
+                  <div class="flex items-center gap-2 mt-2 pt-1">
+                    <span
+                      class="text-[9px] font-semibold uppercase tracking-wider opacity-40"
+                      >Default</span
+                    >
+                    <input
+                      type="text"
+                      placeholder="None"
+                      value={col.defaultVal || ""}
+                      class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all"
+                      onchange={(e) => {
+                        schemaState.updateColumnModifiers(
+                          selectedNode.id,
+                          col.name,
+                          { defaultVal: e.currentTarget.value },
+                        );
+                      }}
+                    />
+                  </div>
+                {/if}
               </div>
             {/each}
 
@@ -352,16 +382,9 @@
     <!-- Footer Stats/Hint -->
     <div class="p-6 bg-base-200/50 border-t border-base-300">
       <div class="flex flex-col items-center gap-4">
-        <div
-          class="flex items-center gap-2 px-3 py-1.5 bg-base-100 rounded-full border border-base-300 shadow-sm"
-        >
-          <div class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></div>
-          <span class="text-[9px] font-bold uppercase tracking-wider opacity-60"
-            >Live Sync Active</span
-          >
-        </div>
-        <p class="text-[10px] opacity-40 text-center leading-relaxed">
-          Changes to <code>schema.ts</code> will reflect here instantly.
+        <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
+          Made with<Heart class="w-4 h-4" fill="red" /> from
+          <a href="https://frstudios.co.ke">FRStudios</a>.
         </p>
       </div>
     </div>

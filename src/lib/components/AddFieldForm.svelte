@@ -9,8 +9,6 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
   import { schemaState } from "../state.svelte";
-  import { addColumnToSchema } from "$lib/parser";
-  import { writeTextFile } from "@tauri-apps/plugin-fs";
   import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
@@ -23,25 +21,14 @@
     validators: valibot(columnSchema),
     async onUpdate({ form }) {
       if (form.valid && schemaState.filePath) {
-        const newCode = addColumnToSchema(
-          schemaState.rawCode,
+        await schemaState.addColumn(
           tableName,
           form.data.name,
           form.data.type,
           form.data.referencesTable,
           form.data.referencesColumn,
         );
-
-        schemaState.machine.send("SAVE");
-        try {
-          await writeTextFile(schemaState.filePath, newCode);
-          await schemaState.syncWithFile();
-          schemaState.machine.send("SAVE_SUCCESS");
-          onComplete();
-        } catch (err) {
-          schemaState.machine.send("SAVE_ERROR");
-          console.error("Failed to auto-save new column:", err);
-        }
+        onComplete();
       }
     },
   });
@@ -90,7 +77,7 @@
               {...props}
               bind:value={$formData.name}
               placeholder="id, created_at..."
-              class="input input-sm input-bordered w-full rounded-xl bg-base-200 focus:border-primary transition-all text-xs"
+              class="input input-sm input-bordered w-full rounded-lg bg-base-200 focus:border-primary transition-all text-xs"
             />
           {/snippet}
         </Form.Control>
@@ -106,7 +93,7 @@
             <select
               {...props}
               bind:value={$formData.type}
-              class="select select-sm select-bordered w-full rounded-xl bg-base-200 focus:border-primary transition-all text-xs"
+              class="select select-sm select-bordered w-full rounded-lg bg-base-200 focus:border-primary transition-all text-xs"
             >
               <option value="text">Text</option>
               <option value="integer">Integer</option>
@@ -120,7 +107,7 @@
 
     <!-- Foreign Key Section -->
     <div
-      class="bg-base-200/50 p-4 rounded-4xl border border-base-300 flex flex-col gap-3"
+      class="bg-base-200/50 p-4 rounded-lg border border-base-300 flex flex-col gap-3"
     >
       <div class="flex items-center gap-2 opacity-40">
         <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
@@ -136,7 +123,7 @@
               <select
                 {...props}
                 bind:value={$formData.referencesTable}
-                class="select select-xs select-bordered w-full rounded-xl bg-base-100 transition-all text-[10px]"
+                class="select select-xs select-bordered w-full rounded-lg bg-base-100 transition-all text-[10px]"
               >
                 <option value="">No Reference</option>
                 {#each potentialTargets as target}
@@ -154,7 +141,7 @@
                 {...props}
                 bind:value={$formData.referencesColumn}
                 disabled={!$formData.referencesTable}
-                class="select select-xs select-bordered w-full rounded-xl bg-base-100 transition-all text-[10px]"
+                class="select select-xs select-bordered w-full rounded-lg bg-base-100 transition-all text-[10px]"
               >
                 <option value="">Select col...</option>
                 {#each potentialColumns as col}
@@ -169,7 +156,7 @@
 
     <button
       type="submit"
-      class="btn btn-primary btn-sm rounded-xl w-full gap-2 mt-2 shadow-lg shadow-primary/20"
+      class="btn btn-primary btn-sm rounded-lg w-full gap-2 mt-2 shadow-lg shadow-primary/20"
     >
       <Check class="w-3 h-3" />
       Forge Field

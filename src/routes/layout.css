@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @import "@xyflow/svelte/dist/style.css";
 
-@import "@fontsource-variable/space-grotesk";
-@import "@fontsource-variable/cormorant";
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono";
 
 body {
   font-family: var(--font-sans);
@@ -11,45 +11,45 @@ body {
 @plugin "daisyui";
 
 @theme {
-  --font-sans: "Space Grotesk Variable", sans-serif;
-  --font-serif: "Cormorant Variable", serif;
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
-  /* Base — cool blue-tinted whites, like the PS4's soft ambient glow */
-  --color-base-100: oklch(97% 0.008 240);
-  --color-base-200: oklch(93% 0.012 240);
-  --color-base-300: oklch(88% 0.018 240);
-  --color-base-content: oklch(18% 0.02 255);
+  /* Base — Solid professional Zinc/Slate values */
+  --color-base-100: oklch(14.39% 0.012 256.12); /* #09090b */
+  --color-base-200: oklch(20.57% 0.013 255.45); /* #18181b */
+  --color-base-300: oklch(27.13% 0.013 254.43); /* #27272a */
+  --color-base-content: oklch(98.11% 0.004 264.54); /* #fafafa */
 
-  /* Primary — deep cobalt, the XMB's signature icon blue */
-  --color-primary: oklch(52% 0.18 255);
-  --color-primary-content: oklch(97% 0.015 255);
+  /* Primary — Industrial Blue */
+  --color-primary: oklch(58.62% 0.227 268.43); /* Blue accent */
+  --color-primary-content: oklch(98.11% 0.004 264.54);
 
-  /* Secondary — calm sky blue, the PS2 browser's horizon haze */
-  --color-secondary: oklch(64% 0.12 220);
-  --color-secondary-content: oklch(97% 0.01 220);
+  /* Secondary — Crisp Teal */
+  --color-secondary: oklch(67.3% 0.124 191.24);
+  --color-secondary-content: oklch(98.11% 0.004 264.54);
 
-  /* Accent — soft indigo-violet, subtle and deliberate */
-  --color-accent: oklch(55% 0.22 290);
-  --color-accent-content: oklch(97% 0.015 290);
+  /* Accent — Amber/Orange highlight */
+  --color-accent: oklch(74.45% 0.16 30.27);
+  --color-accent-content: oklch(98.11% 0.004 264.54);
 
-  /* Neutral — near-black with blue undertone, like the PS2's void */
-  --color-neutral: oklch(30% 0.025 255);
-  --color-neutral-content: oklch(97% 0 0);
+  /* Neutral — Dark gray contrast */
+  --color-neutral: oklch(33.86% 0.014 253.94); /* #3f3f46 */
+  --color-neutral-content: oklch(98.11% 0.004 264.54);
 
-  /* Semantic — purposeful, WCAG AA compliant at 4.5:1+ */
-  --color-info: oklch(56% 0.19 242);
-  --color-info-content: oklch(97% 0.015 242);
-  --color-success: oklch(58% 0.13 168);
-  --color-success-content: oklch(97% 0.018 168);
-  --color-warning: oklch(68% 0.16 68);
-  --color-warning-content: oklch(97% 0.015 68);
-  --color-error: oklch(56% 0.22 15);
-  --color-error-content: oklch(97% 0.015 15);
+  /* Semantic — Solid WCAG AAA contrast */
+  --color-info: oklch(65% 0.15 250);
+  --color-info-content: oklch(98.11% 0.004 264.54);
+  --color-success: oklch(65% 0.15 150);
+  --color-success-content: oklch(98.11% 0.004 264.54);
+  --color-warning: oklch(75% 0.15 75);
+  --color-warning-content: oklch(14.39% 0.012 256.12);
+  --color-error: oklch(58% 0.18 25);
+  --color-error-content: oklch(98.11% 0.004 264.54);
 
-  /* Shape — your logo's geometry: angular selectors, softened fields, generous boxes */
+  /* Shape — Compact and sharp */
   --radius-selector: 0.25rem;
-  --radius-field: 0.5rem;
-  --radius-box: 1.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
 
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
