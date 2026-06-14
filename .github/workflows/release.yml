@@ -27,7 +27,7 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -59,3 +59,45 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  checksums:
+    name: Generate Checksums
+    runs-on: ubuntu-22.04
+    needs: release
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch and hash release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          echo "Tag name: $TAG_NAME"
+          
+          mkdir -p assets
+          cd assets
+          
+          gh release download "$TAG_NAME" --repo "${{ github.repository }}"
+          
+          sha256sum * > SHA256SUMS.txt
+          
+          gh release upload "$TAG_NAME" SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
+          
+          echo -e "\n### SHA-256 Checksums\n" > table.md
+          echo -e "| File | SHA-256 Checksum |" >> table.md
+          echo -e "| --- | --- |" >> table.md
+          while read -r line; do
+            HASH=$(echo "$line" | awk '{print $1}')
+            FILE=$(echo "$line" | awk '{print $2}')
+            if [ "$FILE" != "SHA256SUMS.txt" ]; then
+              echo "| \`$FILE\` | \`$HASH\` |" >> table.md
+            fi
+          done < SHA256SUMS.txt
+          
+          gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json body --jq .body > current_body.md
+          
+          if ! grep -q "### SHA-256 Checksums" current_body.md; then
+            cat current_body.md table.md > new_body.md
+            gh release edit "$TAG_NAME" --notes-file new_body.md --repo "${{ github.repository }}"
+          fi
+
