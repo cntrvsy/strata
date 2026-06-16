@@ -22,7 +22,7 @@
 <div class="h-screen w-screen bg-base-100 text-base-content font-sans overflow-hidden flex flex-col">
 	<Titlebar />
 	<Navbar />
-	<main class="grow w-full relative">
+	<main class="flex-1 min-h-0 w-full relative overflow-hidden">
 		{@render children()}
 	</main>
 </div>

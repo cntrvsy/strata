@@ -83,7 +83,7 @@
   }
 </script>
 
-<div class="w-full h-full bg-base-200/30">
+<div class="w-full h-full bg-base-200/30 relative overflow-hidden">
   <SvelteFlow
     bind:nodes={schemaState.nodes}
     bind:edges={schemaState.edges}

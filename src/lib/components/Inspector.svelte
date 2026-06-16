@@ -122,7 +122,7 @@
       targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
-    class="w-full h-full bg-base-100/90 border-r border-base-300 flex flex-col overflow-hidden animate-in slide-in-from-left-8 duration-300"
+    class="w-full h-full max-h-full bg-base-100/90 border-r border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
     data-testid="inspector-panel"
   >
     <!-- Header -->
@@ -202,7 +202,7 @@
     </div>
 
     <!-- Content -->
-    <div class="grow overflow-auto p-5 flex flex-col gap-6">
+    <div class="flex-1 overflow-y-auto min-h-0 p-5 flex flex-col gap-6">
       {#if isAddingField}
         <AddFieldForm
           tableName={selectedNode.id}

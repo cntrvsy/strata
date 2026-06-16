@@ -27,7 +27,7 @@
 {#if show}
   <!-- Backdrop Overlay -->
   <div
-    class="fixed inset-0 z-100 bg-base-900/60 backdrop-blur-md transition-all duration-300"
+    class="fixed inset-0 z-[100] bg-base-900/60 backdrop-blur-md transition-all duration-300"
     role="button"
     tabindex="0"
     onclick={() => (show = false)}
@@ -41,7 +41,7 @@
 
   <!-- Modal Wrapper -->
   <div
-    class="fixed inset-0 z-100 flex items-center justify-center p-4 pointer-events-none"
+    class="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none"
   >
     <!-- Modal Container -->
     <div

@@ -26,7 +26,7 @@
 </script>
 
 <div
-  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-base-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+  class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-base-900/60 backdrop-blur-sm animate-in fade-in duration-300"
 >
   <div
     class="bg-base-100 border border-base-300 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"

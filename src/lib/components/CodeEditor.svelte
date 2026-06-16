@@ -58,7 +58,7 @@
   }
 </script>
 
-<div class="w-full h-full bg-[#282c34] flex flex-col overflow-hidden">
+<div class="w-full h-full bg-[#282c34] flex flex-col min-h-0 overflow-hidden">
   <!-- Viewer Toolbar -->
   <div
     class="flex items-center justify-between px-6 py-3 border-b border-white/5 bg-[#21252b] shrink-0"

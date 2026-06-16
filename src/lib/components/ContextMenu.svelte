@@ -49,7 +49,7 @@
 <div
   bind:this={menuElement}
   style="top: {y}px; left: {x}px;"
-  class="fixed z-200 w-52 bg-base-100 border border-base-300 rounded-lg shadow-xl py-1 flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100"
+  class="fixed z-[200] w-52 bg-base-100 border border-base-300 rounded-lg shadow-xl py-1 flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100"
 >
   {#if type === "node" && targetId}
     <div class="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider opacity-40 border-b border-base-300/50 mb-1 leading-none">
