@@ -27,7 +27,7 @@
 {#if show}
   <!-- Backdrop Overlay -->
   <div
-    class="fixed inset-0 z-[100] bg-base-900/60 backdrop-blur-md transition-all duration-300"
+    class="fixed inset-0 z-100 bg-base-900/60 backdrop-blur-md transition-all duration-300"
     role="button"
     tabindex="0"
     onclick={() => (show = false)}
@@ -41,7 +41,7 @@
 
   <!-- Modal Wrapper -->
   <div
-    class="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none"
+    class="fixed inset-0 z-100 flex items-center justify-center p-4 pointer-events-none"
   >
     <!-- Modal Container -->
     <div
@@ -391,7 +391,9 @@
                       >Dependency / Cardinality Direction</span
                     >
                     <span class="text-[10px] opacity-60 font-medium"
-                      >A closed arrowhead points from the Child table (possessing the Foreign Key) to the Parent table (One side). This establishes relationship flows instantly.</span
+                      >A closed arrowhead points from the Child table
+                      (possessing the Foreign Key) to the Parent table (One
+                      side). This establishes relationship flows instantly.</span
                     >
                   </div>
                 </div>
