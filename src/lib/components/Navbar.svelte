@@ -144,16 +144,24 @@
       <div class="h-3 w-px bg-base-300"></div>
       <div class="flex items-center gap-1.5">
         <div
-          class="w-1.5 h-1.5 rounded-full {!schemaState.isValid
+          class="w-1.5 h-1.5 rounded-full {!schemaState.filePath
+            ? 'bg-warning'
+            : !schemaState.isValid
             ? 'bg-error animate-ping'
-            : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.isValid
+            : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.filePath
+            ? 'text-warning'
+            : !schemaState.isValid
             ? 'text-error'
             : 'text-success'}"
         ></div>
         <span
           class="text-[9px] font-mono uppercase font-bold text-base-content/60"
         >
-          {!schemaState.isValid ? "Sync Error" : "Live Mirror Active"}
+          {!schemaState.filePath
+            ? "No Schema Loaded"
+            : !schemaState.isValid
+            ? "Sync Error"
+            : "Live Mirror Active"}
         </span>
       </div>
 

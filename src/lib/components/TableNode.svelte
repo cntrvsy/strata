@@ -75,17 +75,37 @@
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"],
   );
 
-  const activeNodeId = $derived(schemaState.hoveredNodeId || schemaState.nodes.find(n => n.selected)?.id || null);
-  const isRelated = $derived(!activeNodeId || data.label === activeNodeId || schemaState.edges.some(e => (e.source === data.label && e.target === activeNodeId) || (e.source === activeNodeId && e.target === data.label)));
-
-  const opacityClass = $derived(
-    !isMatch 
-      ? 'opacity-30 pointer-events-none' 
-      : (isRelated ? 'opacity-100 scale-100' : 'opacity-20 scale-98')
+  const activeNodeId = $derived(
+    schemaState.hoveredNodeId ||
+      schemaState.nodes.find((n) => n.selected)?.id ||
+      null,
+  );
+  const isRelated = $derived(
+    !activeNodeId ||
+      data.label === activeNodeId ||
+      schemaState.edges.some(
+        (e) =>
+          (e.source === data.label && e.target === activeNodeId) ||
+          (e.source === activeNodeId && e.target === data.label),
+      ),
   );
 
-  const columnsToDisplay = $derived(schemaState.compactMode ? data.columns.filter((c: any) => c.isPk || c.isReferences) : data.columns);
-  const hiddenColumnsCount = $derived(data.columns.length - columnsToDisplay.length);
+  const opacityClass = $derived(
+    !isMatch
+      ? "opacity-30 pointer-events-none"
+      : isRelated
+        ? "opacity-100 scale-100"
+        : "opacity-20 scale-98",
+  );
+
+  const columnsToDisplay = $derived(
+    schemaState.compactMode
+      ? data.columns.filter((c: any) => c.isPk || c.isReferences)
+      : data.columns,
+  );
+  const hiddenColumnsCount = $derived(
+    data.columns.length - columnsToDisplay.length,
+  );
 </script>
 
 <div
@@ -95,7 +115,10 @@
   role="button"
   tabindex="0"
   onmouseenter={() => (schemaState.hoveredNodeId = data.label)}
-  onmouseleave={() => { if (schemaState.hoveredNodeId === data.label) schemaState.hoveredNodeId = null; }}
+  onmouseleave={() => {
+    if (schemaState.hoveredNodeId === data.label)
+      schemaState.hoveredNodeId = null;
+  }}
   ondblclick={() => {
     schemaState.activeInspectorNodeId = data.label;
   }}
@@ -106,7 +129,11 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected ? `border-${config.color} ring-2 ring-${config.color}/30` : `border-base-300 ${config.border}`} {dragging ? 'shadow-2xl scale-[1.02]' : 'shadow-md'}"
+    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected
+      ? `border-${config.color} ring-2 ring-${config.color}/30`
+      : `border-base-300 ${config.border}`} {dragging
+      ? 'shadow-2xl scale-[1.02]'
+      : 'shadow-md'}"
   >
     <!-- Header -->
     <div
@@ -146,7 +173,7 @@
               type="target"
               position={Position.Left}
               isConnectable={true}
-              class="!absolute !left-[-12px] !top-1/2 -translate-y-1/2 !w-2 !h-2 !transition-transform hover:!scale-135 duration-150 cursor-crosshair z-20"
+              class="absolute! left-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
               style="background: var(--color-accent); border: 1.5px solid var(--color-base-100);"
             />
           {/if}
@@ -156,7 +183,7 @@
               type="source"
               position={Position.Right}
               isConnectable={true}
-              class="!absolute !right-[-12px] !top-1/2 -translate-y-1/2 !w-2 !h-2 !transition-transform hover:!scale-135 duration-150 cursor-crosshair z-20"
+              class="absolute! right-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
               style="background: var(--color-secondary); border: 1.5px solid var(--color-base-100);"
             />
           {/if}
@@ -208,9 +235,11 @@
           </div>
         </div>
       {/each}
-      
+
       {#if schemaState.compactMode && hiddenColumnsCount > 0}
-        <div class="px-3 py-2 text-[10px] opacity-40 font-mono text-center bg-base-200/20 rounded-lg">
+        <div
+          class="px-3 py-2 text-[10px] opacity-40 font-mono text-center bg-base-200/20 rounded-lg"
+        >
           + {hiddenColumnsCount} fields hidden
         </div>
       {/if}
@@ -223,7 +252,7 @@
     type="target"
     position={Position.Left}
     isConnectable={true}
-    class="!transition-transform hover:!scale-130 duration-150 cursor-crosshair"
+    class="transition-transform! hover:scale-130! duration-150 cursor-crosshair"
     style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
   <Handle
@@ -231,7 +260,7 @@
     type="source"
     position={Position.Right}
     isConnectable={true}
-    class="!transition-transform hover:!scale-130 duration-150 cursor-crosshair"
+    class="transition-transform! hover:scale-130! duration-150 cursor-crosshair"
     style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
 </div>

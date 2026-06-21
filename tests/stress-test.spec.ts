@@ -50,7 +50,7 @@ test.describe('Performance Stress Test', () => {
       state.edges = edges;
       state.filePath = '/mock/large_schema.ts';
       state.machine.send("OPEN");
-      state.machine.send("LOAD_SUCCESS");
+      state.machine.send("SUCCESS");
     });
 
     // 2. Check if all nodes are rendered

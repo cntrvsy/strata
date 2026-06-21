@@ -5,7 +5,7 @@ test.describe('Code Mirror Component', () => {
     // 1. Navigate to the app
     await page.goto('/');
 
-    // 2. Directly inject the state and wait for it to take effect
+    // 2. Directly inject the state and transition FSM to IDLE
     await page.evaluate(async () => {
       while (!(window as any).schemaState) {
         await new Promise(r => setTimeout(r, 50));
@@ -15,62 +15,52 @@ test.describe('Code Mirror Component', () => {
       state.rawCode = 'export const users = sqliteTable("users", { id: integer("id") });';
       state.isValid = true;
       state.nodes = [{ id: 'users', type: 'table', position: { x: 0, y: 0 }, data: { label: 'users', columns: [] } }];
+      state.machine.send("OPEN");
+      state.machine.send("SUCCESS");
     });
 
-    // 3. Wait for the toggle to appear in the UI
-    await page.waitForSelector('[data-testid="code-mode-button"]');
+    // 3. Wait for the editor to render in the UI
+    await page.waitForSelector('.cm-content');
   });
 
-  test('should switch to code view and show schema mirror', async ({ page }) => {
-    // 1. Click the "Code" toggle
-    await page.getByTestId('code-mode-button').click();
-
-    // 2. Verify CodeEditor toolbar elements
+  test('should render code view and show schema mirror', async ({ page }) => {
+    // 1. Verify CodeEditor toolbar elements
     await expect(page.getByText('Schema Mirror')).toBeVisible();
-    // Scope search to main to avoid Navbar conflict
     await expect(page.locator('main').getByText('schema.ts')).toBeVisible();
-    await expect(page.getByText('Read Only Mode')).toBeVisible();
 
-    // 3. Verify CodeMirror content exists
+    // 2. Verify CodeMirror content exists
     const editor = page.locator('.cm-content');
     await expect(editor).toContainText('export const users');
   });
 
   test('should update code mirror when diagram is modified', async ({ page }) => {
-    // 1. Go to code view
-    await page.getByTestId('code-mode-button').click();
     const editor = page.locator('.cm-content');
     await expect(editor).not.toContainText('posts');
 
-    // 2. Switch back to diagram
-    await page.getByTestId('diagram-mode-button').click();
-
-    // 3. Update the state directly to simulate a successful re-parse/sync
+    // 1. Update the state directly to simulate a successful re-parse/sync
     await page.evaluate(async () => {
       const state = (window as any).schemaState;
       state.rawCode = 'export const users = sqliteTable("users", { id: integer("id") });\nexport const posts = sqliteTable("posts", { id: integer("id") });';
       state.isValid = true;
     });
 
-    // 4. Switch back to code and check for update
-    await page.getByTestId('code-mode-button').click();
+    // 2. Check for update in CodeMirror content
     await expect(editor).toContainText('export const posts');
   });
 
   test('should handle parsing errors gracefully', async ({ page }) => {
-    // 1. Inject a syntax error state directly
+    // 1. Inject a syntax error state directly and transition to ERROR
     await page.evaluate(async () => {
       const state = (window as any).schemaState;
       state.isValid = false;
       state.error = 'Syntax Error: Unexpected token';
-      state.errorLoc = { line: 1, column: 10 };
+      state.errorType = 'parse';
+      state.machine.send("SYNC");
+      state.machine.send("FAIL");
     });
 
-    // 2. Go to code view
-    await page.getByTestId('code-mode-button').click();
-
-    // 3. Check for error indicators in the footer
-    await expect(page.getByText('Parsing Error Detected')).toBeVisible();
-    await expect(page.getByText('To edit this code, use your external IDE')).toBeVisible();
+    // 2. Check for error indicators in the global overlay
+    await expect(page.getByText('Sync Paused: Parse Error')).toBeVisible();
+    await expect(page.getByText('Syntax Error: Unexpected token')).toBeVisible();
   });
 });

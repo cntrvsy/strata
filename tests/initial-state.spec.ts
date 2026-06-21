@@ -3,14 +3,12 @@ import { test, expect } from './fixtures';
 test.describe('Initial State & Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
   });
 
   test('shows empty state when no file is loaded', async ({ page }) => {
     // 1. Check for the "Ready?" heading in the overlay
-    await expect(page.getByText('Ready?')).toBeVisible();
-    await expect(page.getByText('Connect your Drizzle schema.ts')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /ready/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Drag & drop your Drizzle')).toBeVisible();
 
     // 2. Export button should NOT be visible when nodes are empty
     const exportButton = page.getByRole('button', { name: 'Export' });
