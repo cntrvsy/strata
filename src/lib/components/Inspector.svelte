@@ -27,6 +27,8 @@
   /** Whether the user is confirming a destructive deletion */
   let isConfirmingDelete = $state(false);
 
+  let activeTab = $state<'fields' | 'relations'>('fields');
+
   let editingTableName = $state<string | null>(null);
   let newTableName = $state("");
 
@@ -110,6 +112,7 @@
       isConfirmingDelete = false;
       editingTableName = null;
       editingColumnName = null;
+      activeTab = 'fields';
     }
   });
 </script>
@@ -201,8 +204,24 @@
       </div>
     </div>
 
+    <!-- Tabs Navigation -->
+    <div class="tabs tabs-boxed rounded-xl bg-base-200/50 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/30">
+      <button 
+        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'fields' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/80'}"
+        onclick={() => (activeTab = 'fields')}
+      >
+        Fields ({data.columns.length})
+      </button>
+      <button 
+        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'relations' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/80'}"
+        onclick={() => (activeTab = 'relations')}
+      >
+        Relationships ({schemaState.edges.filter(e => e.source === selectedNode.id || e.target === selectedNode.id).length})
+      </button>
+    </div>
+
     <!-- Content -->
-    <div class="flex-1 overflow-y-auto min-h-0 p-5 flex flex-col gap-6">
+    <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
       {#if isAddingField}
         <AddFieldForm
           tableName={selectedNode.id}
@@ -213,15 +232,12 @@
           sourceTableName={selectedNode.id}
           onComplete={() => (isForgingRelation = false)}
         />
-      {:else}
+      {:else if activeTab === 'fields'}
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between px-1">
             <span
               class="text-[10px] font-black uppercase opacity-30 tracking-widest"
               >Structure</span
-            >
-            <span class="badge badge-outline badge-xs opacity-40"
-              >{data.columns.length} Fields</span
             >
           </div>
 
@@ -373,6 +389,86 @@
               </button>
             </div>
           </div>
+        </div>
+      {:else if activeTab === 'relations'}
+        {@const tableEdges = schemaState.edges.filter((e: any) => e.source === selectedNode.id || e.target === selectedNode.id)}
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center justify-between px-1">
+            <span
+              class="text-[10px] font-black uppercase opacity-30 tracking-widest"
+              >Defined Connections</span
+            >
+          </div>
+
+          {#if tableEdges.length === 0}
+            <div class="text-center py-8 opacity-40 text-xs text-base-content/50">
+              No relationships defined for this entity.
+            </div>
+          {:else}
+            <div class="flex flex-col gap-2">
+              {#each tableEdges as edge}
+                {@const isSource = edge.source === selectedNode.id}
+                {@const otherNode = isSource ? edge.target : edge.source}
+                {@const isVirtual = edge.data?.isVirtual}
+                {@const card = edge.data?.cardinality || 'unknown'}
+                <div
+                  class="bg-base-200/40 p-3.5 rounded-2xl flex flex-col gap-2 border border-transparent hover:border-base-300 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-mono font-bold {isSource ? 'text-primary' : 'text-secondary'}">
+                        {isSource ? '→' : '←'}
+                      </span>
+                      <span class="font-bold text-xs text-base-content/90">{otherNode}</span>
+                    </div>
+                    
+                    <span class="badge badge-outline badge-xs text-[9px] uppercase font-mono opacity-50 px-1 py-0.5 rounded leading-none">
+                      {card}
+                    </span>
+                  </div>
+
+                  <div class="flex items-center justify-between mt-1 text-[10px] text-base-content/60">
+                    <div class="flex items-center gap-1.5">
+                      <span class="px-1.5 py-0.5 rounded bg-base-300 font-mono text-[9px] font-semibold text-base-content/60">
+                        {isVirtual ? 'Logical' : 'Physical'}
+                      </span>
+                      {#if edge.label}
+                        <span class="font-mono text-xs opacity-75">{edge.label}</span>
+                      {/if}
+                    </div>
+
+                    <button
+                      class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
+                      onclick={() => {
+                        if (confirm(`Delete relationship with ${otherNode}?`)) {
+                          schemaState.deleteRelation(edge.source, edge.target, edge.label);
+                        }
+                      }}
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- footnote banner -->
+          <div class="mt-4 p-3.5 bg-base-200/40 border border-base-300/40 rounded-2xl flex flex-col gap-1.5 text-[10px]">
+            <span class="font-bold text-base-content/85 flex items-center gap-1">
+              💡 Handle Fallbacks
+            </span>
+            <p class="leading-relaxed opacity-65">
+              Physical foreign key references connect directly to the column rows. Logical relations and synthetic references fall back to entity-level handles on the sides of the node cards.
+            </p>
+          </div>
+          
+          <button
+            class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all mt-2"
+            onclick={() => (isForgingRelation = true)}
+          >
+            <span class="text-xs font-bold uppercase">+ Forge Relation</span>
+          </button>
         </div>
       {/if}
     </div>

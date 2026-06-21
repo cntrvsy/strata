@@ -5,11 +5,15 @@
     FolderOpen,
     RefreshCw,
     BadgeQuestionMark,
+    Eye,
+    EyeOff,
+    Workflow,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";
+  import { arrangeLayout } from "$lib/services/layout";
 
   let showHelp = $state(false);
 
@@ -18,6 +22,24 @@
    */
   async function onOpenFile() {
     await schemaState.openNewFile();
+  }
+
+  /**
+   * Automatically arranges all table nodes in the diagram.
+   * Patches the layout and updates the disk schema.ts file in one pass.
+   */
+  async function onAutoLayout() {
+    if (schemaState.nodes.length === 0) return;
+    
+    schemaState.machine.send("EDIT");
+    try {
+      const arranged = await arrangeLayout(schemaState.nodes, schemaState.edges);
+      schemaState.nodes = arranged;
+      await schemaState.saveToFile();
+    } catch (err) {
+      console.error("[Strata] Auto-layout failed:", err);
+      schemaState.machine.send("FAIL");
+    }
   }
 
   /**
@@ -201,6 +223,29 @@
       >
         <Camera class="w-4 h-4" />
         Export
+      </button>
+      <button
+        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
+        title="Toggle Compact View (Keys/References Only)"
+        data-testid="compact-mode-button"
+      >
+        {#if schemaState.compactMode}
+          <EyeOff class="w-4 h-4 text-warning" />
+          <span class="text-warning">Compact Mode</span>
+        {:else}
+          <Eye class="w-4 h-4 text-base-content/70" />
+          <span class="text-base-content/75">Compact Mode</span>
+        {/if}
+      </button>
+      <button
+        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        onclick={onAutoLayout}
+        title="Arrange tables automatically using ELK layout algorithm"
+        data-testid="auto-layout-button"
+      >
+        <Workflow class="w-4 h-4 text-base-content/70" />
+        <span class="text-base-content/75">Auto Layout</span>
       </button>
     {/if}
     <button class="btn btn-ghost btn-sm gap-2 rounded-xl" onclick={onOpenFile}>

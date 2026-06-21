@@ -33,7 +33,7 @@
       {
         ...connection,
         animated: true,
-        style: "stroke: var(--color-primary); stroke-width: 2; opacity: 0.6;",
+        style: "stroke: var(--color-primary); stroke-width: 2.25; opacity: 0.95;",
         type: "smoothstep",
       },
       schemaState.edges,

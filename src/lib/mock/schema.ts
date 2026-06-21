@@ -13,7 +13,7 @@ import { relations } from "drizzle-orm";
 // --- D1 TABLES (Relational Core) ---
 
 /** 
- * @strata {"x":-15,"y":-45} 
+ * @strata {"x":700,"y":265} 
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey(),
@@ -22,7 +22,7 @@ export const users = sqliteTable("users", {
 });
 
 /** 
- * @strata {"x":405,"y":-120} 
+ * @strata {"x":700,"y":515} 
  */
 export const organizations = sqliteTable("organizations", {
   id: integer("id").primaryKey(),
@@ -33,7 +33,7 @@ export const organizations = sqliteTable("organizations", {
 
 /** 
  * Join table for many-to-many relationship between users and organizations
- * @strata {"x":45,"y":420} 
+ * @strata {"x":370,"y":306} 
  */
 export const memberships = sqliteTable("memberships", {
   userId: integer("user_id").notNull().references(() => users.id),
@@ -42,7 +42,7 @@ export const memberships = sqliteTable("memberships", {
 });
 
 /** 
- * @strata {"x":700,"y":350} 
+ * @strata {"x":370,"y":762} 
  */
 export const projects = sqliteTable("projects", {
   id: integer("id").primaryKey(),
@@ -56,7 +56,7 @@ export const projects = sqliteTable("projects", {
 /** 
  * User sessions stored in Cloudflare KV for global performance.
  * We use @strata relations to link this logical entity to our D1 users.
- * @strata {"x":-345,"y":180,"target":"kv","relations":[{"to":"users"}]} 
+ * @strata {"x":370,"y":40,"target":"kv","relations":[{"to":"users"}]} 
  */
 export const userSessions = {
   sessionId: "string",
@@ -67,7 +67,7 @@ export const userSessions = {
 
 /** 
  * Cached billing data to avoid frequent D1 lookups.
- * @strata {"x":375,"y":510,"target":"kv","relations":[{"to":"organizations"}]} 
+ * @strata {"x":370,"y":534,"target":"kv","relations":[{"to":"organizations"}]} 
  */
 export const billingCache = {
   orgId: "number",
@@ -80,7 +80,7 @@ export const billingCache = {
 /** 
  * Real-time collaboration state managed by a Durable Object.
  * DOs are perfect for synchronized state like editor presence.
- * @strata {"x":690,"y":-60,"target":"do","relations":[{"to":"projects"}]} 
+ * @strata {"x":40,"y":781,"target":"do","relations":[{"to":"projects"}]} 
  */
 export const collaborativeEditor = {
   projectId: "string",

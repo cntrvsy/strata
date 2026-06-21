@@ -360,12 +360,24 @@ function extractRelations(tableName: string, decl: VariableDeclaration, edges: E
 			if (call.getExpression().getText().endsWith('.references')) {
 				const args = call.getArguments();
 				if (args.length > 0) {
-					const match = args[0].getText().match(/=>\s*(\w+)\./);
+					const match = args[0].getText().match(/=>\s*(\w+)\.(\w+)/);
 					if (match) {
 						const targetTable = match[1];
+						const targetCol = match[2];
 						physicalRelations.add(targetTable);
 						const colName = call.getAncestors().find(a => a.isKind(SyntaxKind.PropertyAssignment))?.asKind(SyntaxKind.PropertyAssignment)?.getName();
-						addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', colName, '1:N');
+						if (colName) {
+							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', colName, '1:N', colName, targetCol);
+						} else {
+							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
+						}
+					} else {
+						const matchTableOnly = args[0].getText().match(/=>\s*(\w+)\./);
+						if (matchTableOnly) {
+							const targetTable = matchTableOnly[1];
+							physicalRelations.add(targetTable);
+							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
+						}
 					}
 				}
 			}
@@ -427,30 +439,34 @@ function addEdgeIfUnique(
 	isVirtual: boolean, 
 	relType?: string, 
 	name?: string,
-	cardinality: '1:1' | '1:N' | 'N:1' | 'unknown' = 'unknown'
+	cardinality: '1:1' | '1:N' | 'N:1' | 'unknown' = 'unknown',
+	sourceHandle: string = 'source',
+	targetHandle: string = 'target'
 ) {
 	const id = `e-${source}-${target}-${name || (isVirtual ? 'v' : 'p')}`;
 	if (source === target || edges.some(e => e.id === id)) return;
+	
+	const edgeColor = isVirtual ? 'var(--color-secondary)' : 'var(--color-primary)';
 	
 	edges.push({
 		id,
 		source,
 		target,
-		sourceHandle: 'source',
-		targetHandle: 'target',
+		sourceHandle,
+		targetHandle,
 		animated: isVirtual,
 		label: name || (relType !== 'fk' ? relType : undefined),
-		labelStyle: 'font-size: 10px; fill: #475569; font-weight: bold;',
+		labelStyle: 'font-size: 10px; color: var(--color-base-content); font-weight: bold;',
 		style: isVirtual 
-			? 'stroke: var(--color-primary); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.5;'
-			: 'stroke: var(--color-primary); stroke-width: 2; opacity: 0.8;',
+			? `stroke: ${edgeColor}; stroke-width: 1.75; stroke-dasharray: 4 4; opacity: 0.85;`
+			: `stroke: ${edgeColor}; stroke-width: 2.25; opacity: 1.0;`,
 		type: 'relation',
 		data: { isVirtual, cardinality },
 		markerEnd: {
 			type: MarkerType.ArrowClosed,
 			width: 15,
 			height: 15,
-			color: isVirtual ? '#94a3b8' : '#475569',
+			color: edgeColor,
 		}
 	});
 }

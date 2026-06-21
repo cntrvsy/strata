@@ -116,7 +116,7 @@
     fitViewOptions={{ padding: 0.5 }}
     initialViewport={{ x: 0, y: 0, zoom: 0.5 }}
     snapGrid={[15, 15]}
-    colorMode="light"
+    colorMode="dark"
     minZoom={0.1}
     maxZoom={2}
     panOnScroll={true}
@@ -142,7 +142,7 @@
       position="bottom-left"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl! overflow-hidden"
     />
-    <Background patternColor="oklch(var(--p) / 0.1)" gap={24} />
+    <Background patternColor="oklch(var(--bc) / 0.08)" gap={20} />
     <MiniMap
       position="bottom-right"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl!"

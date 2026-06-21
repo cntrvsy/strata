@@ -43,6 +43,10 @@ class SchemaState {
 	activeInspectorNodeId = $state<string | null>(null);
 	/** Selection coordinates of the currently active/dragged node */
 	activeCoordinates = $state<{ x: number; y: number } | null>(null);
+	/** The ID of the node currently hovered */
+	hoveredNodeId = $state<string | null>(null);
+	/** Whether compact mode is currently active (keys only) */
+	compactMode = $state(false);
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */
