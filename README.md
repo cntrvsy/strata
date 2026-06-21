@@ -89,3 +89,18 @@ We take schema integrity seriously. Every mutation is validated against a suite 
   ```bash
   npm run test:e2e
   ```
+
+---
+
+## 🐧 Linux Troubleshooting (Wayland / Bazzite / Fedora)
+
+If the AppImage fails to launch, crashes instantly, or hangs on an infinite loading screen with an `EGL_BAD_PARAMETER` error in the terminal, it is due to an upstream conflict between WebKitGTK and your system's Wayland display server.
+
+You can launch the application by forcing it to use your system's native Wayland client and disabling the DMA-BUF renderer:
+
+```bash
+LD_PRELOAD=/usr/lib64/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./strata_2.0.0_amd64.AppImage
+```
+
+> [!NOTE]
+> For Ubuntu/Debian-based users: The library path might be `/usr/lib/x86_64-linux-gnu/libwayland-client.so.0` instead.

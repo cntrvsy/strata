@@ -59,6 +59,14 @@ async fn close_splashscreen(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Check if running on Linux and dynamically force the fix safely at runtime
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     tauri::Builder::default()
         .manage(WatcherState(Mutex::new(None)))
         .plugin(tauri_plugin_opener::init())
