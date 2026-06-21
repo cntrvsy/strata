@@ -50,7 +50,7 @@ test.describe('Performance Stress Test', () => {
       state.edges = edges;
       state.filePath = '/mock/large_schema.ts';
       state.machine.send("OPEN");
-      state.machine.send("LOAD_SUCCESS");
+      state.machine.send("SUCCESS");
     });
 
     // 2. Check if all nodes are rendered
@@ -61,9 +61,9 @@ test.describe('Performance Stress Test', () => {
     await expect(page.getByText('table_0')).toBeVisible();
     await expect(page.getByText('table_99')).toBeVisible();
 
-    // 3. Measure interaction (e.g. clicking a node)
+    // 3. Measure interaction (e.g. double clicking a node)
     const startTime = Date.now();
-    await page.getByText('table_50').click();
+    await page.getByText('table_50').dblclick();
     const endTime = Date.now();
 
     console.log(`Click interaction took ${endTime - startTime}ms`);

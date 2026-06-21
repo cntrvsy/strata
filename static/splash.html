@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Strata</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-light: #18181b;
+      --bg-dark: #09090b;
+      --text-main: #fafafa;
+      --text-muted: #71717a;
+      --primary: #3b82f6;
+      --accent: #8b5cf6;
+      --glow: rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(circle at center, var(--bg-light) 0%, var(--bg-dark) 100%);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      z-index: 10;
+      gap: 2rem;
+    }
+
+    .logo-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Ambient background glow behind the logo */
+    .ambient-glow {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--glow) 0%, rgba(139, 92, 246, 0.05) 60%, transparent 100%);
+      filter: blur(25px);
+      z-index: 1;
+      pointer-events: none;
+      animation: pulse-glow 4s infinite ease-in-out;
+    }
+
+    .logo {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      z-index: 2;
+      animation: float-logo 3.5s infinite ease-in-out;
+    }
+
+    .info-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: linear-gradient(180deg, var(--text-main) 0%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-right: -0.15em; /* Compensate for letter-spacing on last char */
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      font-weight: 200;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Sleek Indeterminate Progress Bar */
+    .progress-container {
+      width: 160px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+      margin-top: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 45%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      border-radius: 999px;
+      position: absolute;
+      left: -45%;
+      animation: loading-slide 1.6s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes loading-slide {
+      0% {
+        left: -45%;
+      }
+      100% {
+        left: 100%;
+      }
+    }
+
+    @keyframes float-logo {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-4px);
+      }
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% {
+        opacity: 0.8;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-wrapper">
+      <div class="ambient-glow"></div>
+      <img src="strata_logo.png" alt="Strata Logo" class="logo">
+    </div>
+    <div class="info-group">
+      <h1 class="title">Strata</h1>
+      <p class="subtitle">Initializing visual editor</p>
+    </div>
+    <div class="progress-container">
+      <div class="progress-bar"></div>
+    </div>
+  </div>
+</body>
+</html>

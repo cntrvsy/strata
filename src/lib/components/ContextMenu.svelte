@@ -1,23 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { 
-    Plus, 
-    Trash2, 
-    Maximize, 
-    Sparkles, 
-    FileEdit,
-    Focus
-  } from "lucide-svelte";
+  import { Plus, Trash2, FilePen, Focus } from "lucide-svelte";
   import { schemaState } from "../state.svelte";
 
-  const { 
-    x, 
-    y, 
-    type, 
-    targetId, 
-    onClose,
-    onAction 
-  } = $props<{
+  const { x, y, type, targetId, onClose, onAction } = $props<{
     x: number;
     y: number;
     type: "canvas" | "node";
@@ -37,11 +23,17 @@
   onMount(() => {
     // Add click listener to close context menu
     window.addEventListener("click", handleClickOutside, { capture: true });
-    window.addEventListener("contextmenu", handleClickOutside, { capture: true });
-    
+    window.addEventListener("contextmenu", handleClickOutside, {
+      capture: true,
+    });
+
     return () => {
-      window.removeEventListener("click", handleClickOutside, { capture: true });
-      window.removeEventListener("contextmenu", handleClickOutside, { capture: true });
+      window.removeEventListener("click", handleClickOutside, {
+        capture: true,
+      });
+      window.removeEventListener("contextmenu", handleClickOutside, {
+        capture: true,
+      });
     };
   });
 </script>
@@ -52,7 +44,9 @@
   class="fixed z-200 w-52 bg-base-100 border border-base-300 rounded-lg shadow-xl py-1 flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100"
 >
   {#if type === "node" && targetId}
-    <div class="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider opacity-40 border-b border-base-300/50 mb-1 leading-none">
+    <div
+      class="px-3 py-1.5 text-[9px] font-black uppercase tracking-wider opacity-40 border-b border-base-300/50 mb-1 leading-none"
+    >
       {targetId}
     </div>
     <button
@@ -72,7 +66,7 @@
         onClose();
       }}
     >
-      <FileEdit class="w-3.5 h-3.5 opacity-60" />
+      <FilePen class="w-3.5 h-3.5 opacity-60" />
       Rename Entity
     </button>
     <div class="h-px bg-base-300/50 my-1"></div>

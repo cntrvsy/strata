@@ -18,8 +18,9 @@ test.describe('Persistence Loop (Mocked Tauri)', () => {
         data: { label: 'users', target: 'd1', columns: [] },
         selected: true
       }];
+      state.activeInspectorNodeId = 'users';
       state.machine.send("OPEN");
-      state.machine.send("LOAD_SUCCESS");
+      state.machine.send("SUCCESS");
     });
 
     // 2. The Inspector panel should now be visible

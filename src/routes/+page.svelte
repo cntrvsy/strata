@@ -9,7 +9,7 @@
   import { addEdge, SvelteFlowProvider } from "@xyflow/svelte";
   import type { Connection } from "@xyflow/svelte";
   import { onMount } from "svelte";
-  import { Splitpanes, Pane } from "svelte-splitpanes";
+  import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { schemaState } from "$lib/state.svelte";
   import { PlatformService } from "$lib/services/platform";
 
@@ -33,7 +33,7 @@
       {
         ...connection,
         animated: true,
-        style: "stroke: var(--color-primary); stroke-width: 2; opacity: 0.6;",
+        style: "stroke: var(--color-primary); stroke-width: 2.25; opacity: 0.95;",
         type: "smoothstep",
       },
       schemaState.edges,
@@ -48,8 +48,9 @@
   $effect(() => {
     if (schemaState.filePath) {
       import("@tauri-apps/api/core").then(({ invoke }) => {
-        invoke("watch_file", { path: schemaState.filePath })
-          .catch((err) => console.warn("[Strata] Watcher path register failed:", err));
+        invoke("watch_file", { path: schemaState.filePath }).catch((err) =>
+          console.warn("[Strata] Watcher path register failed:", err),
+        );
       });
     }
   });
@@ -57,7 +58,7 @@
   async function onnodedragstop() {
     schemaState.nodes = [...schemaState.nodes];
     schemaState.machine.send("EDIT");
-    
+
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
       schemaState.saveToFile();
@@ -96,6 +97,10 @@
           async () => {
             if (schemaState.ignoreNextWatch) {
               schemaState.ignoreNextWatch = false;
+              return;
+            }
+            if (Date.now() - schemaState.lastWriteTime < 800) {
+              console.log("[Strata] Ignoring file watch event: recently written by UI");
               return;
             }
             if (
@@ -149,27 +154,35 @@
   {#if !schemaState.filePath}
     <Overlays />
   {:else}
-    <Splitpanes theme="modern" class="w-full h-full">
-      <Pane minSize={20} size={45}>
-        <CodeEditor />
+    <PaneGroup direction="horizontal" class="w-full h-full">
+      <Pane minSize={20} defaultSize={45} order={0}>
+        <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+          <CodeEditor />
+        </div>
       </Pane>
-      <Pane minSize={20} size={55}>
-        <Splitpanes horizontal={false}>
-          {#if schemaState.nodes.some((n) => n.selected)}
-            <Pane minSize={15} size={25}>
-              <Inspector />
+      <PaneResizer class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" />
+      <Pane minSize={20} defaultSize={55} order={1}>
+        <PaneGroup direction="horizontal" class="w-full h-full">
+          {#if schemaState.activeInspectorNodeId}
+            <Pane minSize={15} defaultSize={25} order={0}>
+              <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+                <Inspector />
+              </div>
             </Pane>
+            <PaneResizer class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" />
           {/if}
-          <Pane>
-            <SvelteFlowProvider>
-              <DiagramCanvas {onconnect} {onnodedragstop} />
-              <Overlays />
-              <SchemaStats />
-            </SvelteFlowProvider>
+          <Pane order={1}>
+            <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+              <SvelteFlowProvider>
+                <DiagramCanvas {onconnect} {onnodedragstop} />
+                <Overlays />
+                <SchemaStats />
+              </SvelteFlowProvider>
+            </div>
           </Pane>
-        </Splitpanes>
+        </PaneGroup>
       </Pane>
-    </Splitpanes>
+    </PaneGroup>
   {/if}
 </div>
 

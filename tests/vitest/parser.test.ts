@@ -10,6 +10,7 @@ import {
   renameColumnInSchema,
   removeColumnFromSchema,
   updateColumnModifiersInSchema,
+  removeEdgeFromSchema,
   wrapCode
 } from '../../src/lib/parser';
 
@@ -103,6 +104,106 @@ describe('Parser Core', () => {
     const postNode = result.nodes.find(n => n.id === 'posts');
     const authorCol = (postNode?.data as any).columns.find((c: any) => c.name === 'authorId');
     expect(authorCol.isReferences).toBe(true);
+  });
+
+  it('should attach closed arrowhead markers (markerEnd) to relation edges', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { relations } from "drizzle-orm";
+      export const users = sqliteTable("users", { id: integer("id") });
+      export const posts = sqliteTable("posts", { id: integer("id") });
+      export const usersRelations = relations(users, ({ many }) => ({
+        posts: many(posts)
+      }));
+    `;
+    const result = parseSchema(code);
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].markerEnd).toBeDefined();
+    expect((result.edges[0].markerEnd as any)?.type).toBe('arrowclosed');
+  });
+
+  it('should parse relation cardinality (1:1 vs 1:N vs N:1)', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { relations } from "drizzle-orm";
+      export const users = sqliteTable("users", { id: integer("id") });
+      export const posts = sqliteTable("posts", { id: integer("id") });
+      export const profiles = sqliteTable("profiles", { id: integer("id") });
+      
+      export const usersRelations = relations(users, ({ many, one }) => ({
+        posts: many(posts),
+        profile: one(profiles)
+      }));
+      export const profilesRelations = relations(profiles, ({ one }) => ({
+        user: one(users)
+      }));
+    `;
+    const result = parseSchema(code);
+    const usersToPosts = result.edges.find(e => e.source === 'users' && e.target === 'posts');
+    const usersToProfiles = result.edges.find(e => e.source === 'users' && e.target === 'profiles');
+    
+    expect(usersToPosts?.data?.cardinality).toBe('1:N');
+    expect(usersToProfiles?.data?.cardinality).toBe('1:1');
+  });
+
+  it('should detect relative imports and expose them in externalImports', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const result = parseSchema(code);
+    expect(result.success).toBe(true);
+    expect(result.externalImports).toBeDefined();
+    expect(result.externalImports).toHaveLength(1);
+    expect(result.externalImports?.[0].filePath).toBe('./auth.schema');
+    expect(result.externalImports?.[0].importNames).toContain('user');
+  });
+
+  it('should parse external tables from externalFilesMap safely', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const externalFilesMap = new Map<string, string>();
+    externalFilesMap.set('./auth.schema', `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const user = sqliteTable("user", {
+        id: text("id").primaryKey(),
+        name: text("name")
+      });
+    `);
+
+    const result = parseSchema(code, externalFilesMap);
+    console.log("DEBUG TEST RESULT:", JSON.stringify(result, null, 2));
+    expect(result.success).toBe(true);
+    expect(result.nodes).toHaveLength(2);
+
+    const userNode = result.nodes.find(n => n.id === 'user');
+    expect(userNode).toBeDefined();
+    expect(userNode?.data.isExternal).toBe(true);
+    expect((userNode?.data as any).columns).toHaveLength(2);
+    expect((userNode?.data as any).columns[0].name).toBe('id');
+  });
+
+  it('should handle missing external file values gracefully without failing the parse', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const externalFilesMap = new Map<string, string>(); // Empty map, simulate missing file
+    const result = parseSchema(code, externalFilesMap);
+    
+    expect(result.success).toBe(true);
+    expect(result.nodes).toHaveLength(1); // Only sessions table parsed
   });
 });
 
@@ -301,6 +402,71 @@ describe('Mutation Logic', () => {
       expect(code).not.toContain('.primaryKey()');
       expect(code).not.toContain('.notNull()');
       expect(code).not.toContain('.default(');
+    });
+
+    it('should remove a table and clean up references/relations from other tables', () => {
+      const code = `
+        import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+        import { relations } from "drizzle-orm";
+        export const users = sqliteTable("users", {
+          id: integer("id").primaryKey()
+        });
+        export const posts = sqliteTable("posts", {
+          id: integer("id").primaryKey(),
+          authorId: integer("author_id").references(() => users.id)
+        });
+        export const postsRelations = relations(posts, ({ one }) => ({
+          author: one(users, {
+            fields: [posts.authorId],
+            references: [users.id]
+          })
+        }));
+      `;
+      const newCode = removeTableFromSchema(code, 'users');
+      expect(newCode).not.toContain('export const users');
+      expect(newCode).toContain('export const posts');
+      expect(newCode).not.toContain('.references(');
+      expect(newCode).not.toContain('postsRelations');
+    });
+
+    it('should remove a physical foreign key edge/relationship', () => {
+      const code = `
+        import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+        export const users = sqliteTable("users", { id: integer("id") });
+        export const posts = sqliteTable("posts", {
+          id: integer("id"),
+          authorId: integer("author_id").references(() => users.id)
+        });
+      `;
+      const newCode = removeEdgeFromSchema(code, 'posts', 'users');
+      expect(newCode).not.toContain('.references(() => users.id)');
+      expect(newCode).toContain('authorId: integer("author_id")');
+    });
+
+    it('should remove a logical Drizzle relations edge', () => {
+      const code = `
+        import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+        import { relations } from "drizzle-orm";
+        export const users = sqliteTable("users", { id: integer("id") });
+        export const posts = sqliteTable("posts", { id: integer("id") });
+        export const usersRelations = relations(users, ({ many }) => ({
+          posts: many(posts)
+        }));
+      `;
+      const newCode = removeEdgeFromSchema(code, 'users', 'posts', 'posts');
+      expect(newCode).not.toContain('posts: many(posts)');
+      expect(newCode).not.toContain('usersRelations');
+    });
+
+    it('should remove a synthetic JSDoc connection edge', () => {
+      const code = `
+        /** @strata {"target":"kv","relations":[{"to":"users"}]} */
+        export const sessions = { id: "string" };
+        export const users = { id: "string" };
+      `;
+      const newCode = removeEdgeFromSchema(code, 'sessions', 'users');
+      expect(newCode).not.toContain('"relations"');
+      expect(newCode).toContain('"target":"kv"');
     });
   });
 });

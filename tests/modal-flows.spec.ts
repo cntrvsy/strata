@@ -1,11 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Modal Flows', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    // Clear localStorage to ensure a clean state
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
   });
 
   test('can open and close the New Table modal', async ({ page }) => {
@@ -14,21 +11,44 @@ test.describe('Modal Flows', () => {
     const newTableButton = page.getByTestId('new-table-button');
     await expect(newTableButton).not.toBeVisible();
 
-    // 2. We need to mock a file path to see the button
-    // This is hard without real tauri, but we can mock the state via evaluate
-    await page.evaluate(() => {
-       // Accessing the singleton might be hard, but we can set the localStorage 
-       // if the app was still using it, but we removed that!
-       // However, we can simulate the 'OPEN' event if we had access to schemaState.
+    // 2. We mock a file path and transition state to IDLE to see the button
+    await page.evaluate(async () => {
+      while (!(window as any).schemaState) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+      const state = (window as any).schemaState;
+      state.filePath = '/mock/schema.ts';
+      state.machine.send("OPEN");
+      state.machine.send("SUCCESS");
     });
 
-    // Let's focus on the Help Modal which is always accessible
+    // 3. The New Table button should now be visible
+    await expect(newTableButton).toBeVisible();
+
+    // 4. Click it to open the New Table Modal
+    await newTableButton.click();
+
+    // 5. The modal should be visible
+    const newTableModal = page.getByTestId('new-table-modal');
+    await expect(newTableModal).toBeVisible();
+
+    // 6. Close the modal by clicking the X button in its header
+    await newTableModal.locator('button.btn-circle').click();
+
+    // 7. Modal should be hidden
+    await expect(newTableModal).not.toBeVisible();
+  });
+
+  test('can open and close the Help Modal', async ({ page }) => {
+    // 1. Help Modal is always accessible from the help button
     const helpButton = page.getByTestId('help-button');
+    await expect(helpButton).toBeVisible();
+
     await helpButton.click();
-    
+
     const helpModal = page.getByTestId('help-modal');
     await expect(helpModal).toBeVisible();
-    
+
     await page.getByText('Acknowledge & Close').click();
     await expect(helpModal).not.toBeVisible();
   });

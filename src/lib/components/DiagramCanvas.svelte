@@ -65,6 +65,7 @@
     } else if (action === "fit_view") {
       fitView();
     } else if (action === "add_field" && targetId) {
+      schemaState.activeInspectorNodeId = targetId;
       schemaState.nodes = schemaState.nodes.map(n => ({
         ...n,
         selected: n.id === targetId
@@ -82,7 +83,7 @@
   }
 </script>
 
-<div class="w-full h-full bg-base-200/30">
+<div class="w-full h-full bg-base-200/30 relative overflow-hidden">
   <SvelteFlow
     bind:nodes={schemaState.nodes}
     bind:edges={schemaState.edges}
@@ -91,6 +92,14 @@
     onreconnect={() => {}}
     {onnodedragstop}
     {onconnect}
+    ondelete={({ nodes, edges }) => {
+      for (const node of nodes) {
+        schemaState.deleteTable(node.id);
+      }
+      for (const edge of edges) {
+        schemaState.deleteRelation(edge.source, edge.target, edge.label);
+      }
+    }}
     onnodecontextmenu={(e) => {
       e.event.preventDefault();
       handleNodeContextMenu(e.event, e.node);
@@ -99,20 +108,41 @@
       e.event.preventDefault();
       handlePaneContextMenu(e.event);
     }}
+    onpaneclick={() => {
+      schemaState.activeInspectorNodeId = null;
+    }}
     connectionMode={ConnectionMode.Loose}
     fitView
     fitViewOptions={{ padding: 0.5 }}
     initialViewport={{ x: 0, y: 0, zoom: 0.5 }}
     snapGrid={[15, 15]}
-    colorMode="light"
+    colorMode="dark"
     minZoom={0.1}
     maxZoom={2}
+    panOnScroll={true}
+    zoomOnScroll={false}
+    zoomOnPinch={true}
+    panOnDrag={[1, 2]}
+    zoomActivationKey="Control"
+    onnodedrag={({ targetNode }) => {
+      if (targetNode) {
+        schemaState.activeCoordinates = { x: Math.round(targetNode.position.x), y: Math.round(targetNode.position.y) };
+      }
+    }}
+    onselectionchange={({ nodes }: { nodes: any[] }) => {
+      const selected = nodes.find(n => n.selected);
+      if (selected) {
+        schemaState.activeCoordinates = { x: Math.round(selected.position.x), y: Math.round(selected.position.y) };
+      } else {
+        schemaState.activeCoordinates = null;
+      }
+    }}
   >
     <Controls
       position="bottom-left"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl! overflow-hidden"
     />
-    <Background patternColor="oklch(var(--p) / 0.1)" gap={24} />
+    <Background bgColor="#282c34" patternColor="oklch(var(--bc) / 0.08)" gap={20} />
     <MiniMap
       position="bottom-right"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl!"

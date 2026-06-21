@@ -24,12 +24,12 @@ test.describe('Diagram PNG Export', () => {
       ];
       // Properly transition state machine: EMPTY -> LOADING -> IDLE
       state.machine.send("OPEN");
-      state.machine.send("LOAD_SUCCESS");
+      state.machine.send("SUCCESS");
     });
 
     // 3. Wait for the Export button to become visible and click it
-    const exportBtn = page.getByRole('button', { name: /export/i });
-    await expect(exportBtn).toBeVisible();
+    const exportBtn = page.getByRole('button', { name: 'Export', exact: true });
+    await expect(exportBtn).toBeVisible({ timeout: 15000 });
     
     // 4. Click the export button
     await exportBtn.click();

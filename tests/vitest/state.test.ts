@@ -14,12 +14,44 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('SchemaState FSM & Reactivity', () => {
   beforeEach(() => {
     schemaState.reset();
+    schemaState.recentFiles = [];
     vi.resetAllMocks();
   });
+
+  // ==========================================
+  // 1. General FSM & File Initialization
+  // ==========================================
 
   it('should initialize in EMPTY state', () => {
     expect(schemaState.machine.current).toBe('EMPTY');
   });
+
+  it('should track DIRTY state when editing', () => {
+    schemaState.machine.send("SYNC"); // Put in BUSY
+    schemaState.machine.send("SUCCESS"); // Put in IDLE
+    
+    schemaState.machine.send("EDIT");
+    expect(schemaState.machine.current).toBe('DIRTY');
+    expect(schemaState.hasUnsavedChanges).toBe(true);
+  });
+
+  it('should open a new file via dialog', async () => {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    vi.mocked(open).mockResolvedValue('/new/path.ts');
+    
+    // Mock syncWithFile to avoid actual FS calls
+    const syncSpy = vi.spyOn(schemaState, 'syncWithFile').mockResolvedValue(undefined);
+    
+    await schemaState.openNewFile();
+    
+    expect(schemaState.filePath).toBe('/new/path.ts');
+    expect(syncSpy).toHaveBeenCalled();
+    syncSpy.mockRestore();
+  });
+
+  // ==========================================
+  // 2. Syncing & General File Save Flows
+  // ==========================================
 
   it('should transition to IDLE after successful sync', async () => {
     vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", { id: integer("id") });');
@@ -41,15 +73,6 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.machine.current).toBe('ERROR');
     expect(schemaState.isValid).toBe(false);
     expect(schemaState.error).toBeDefined();
-  });
-
-  it('should track DIRTY state when editing', () => {
-    schemaState.machine.send("SYNC"); // Put in BUSY
-    schemaState.machine.send("SUCCESS"); // Put in IDLE
-    
-    schemaState.machine.send("EDIT");
-    expect(schemaState.machine.current).toBe('DIRTY');
-    expect(schemaState.hasUnsavedChanges).toBe(true);
   });
 
   it('should handle SAVE flow correctly', async () => {
@@ -77,18 +100,6 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.nodes).toHaveLength(1);
   });
 
-  it('should delete a column and sync', async () => {
-    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
-    schemaState.filePath = '/mock/schema.ts';
-    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
-    schemaState.machine.send("SYNC");
-    schemaState.machine.send("SUCCESS");
-
-    await schemaState.deleteColumn('t', 'id');
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
-    expect(schemaState.machine.current).toBe('IDLE');
-  });
-
   it('should handle sync failures gracefully', async () => {
     vi.mocked(invoke).mockRejectedValue(new Error('Read error'));
     
@@ -99,37 +110,11 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.error).toBe('Read error');
   });
 
-  it('should open a new file via dialog', async () => {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    vi.mocked(open).mockResolvedValue('/new/path.ts');
-    
-    // Mock syncWithFile to avoid actual FS calls
-    const syncSpy = vi.spyOn(schemaState, 'syncWithFile').mockResolvedValue(undefined);
-    
-    await schemaState.openNewFile();
-    
-    expect(schemaState.filePath).toBe('/new/path.ts');
-    expect(syncSpy).toHaveBeenCalled();
-    syncSpy.mockRestore();
-  });
-
   it('should call async_syncWithFile', async () => {
     const syncSpy = vi.spyOn(schemaState, 'syncWithFile').mockResolvedValue(undefined);
     await schemaState.async_syncWithFile();
     expect(syncSpy).toHaveBeenCalled();
     syncSpy.mockRestore();
-  });
-
-  it('should rename a table and sync', async () => {
-    vi.mocked(invoke).mockResolvedValue('export const customers = sqliteTable("customers", { id: integer("id") });');
-    schemaState.filePath = '/mock/schema.ts';
-    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
-    schemaState.machine.send("SYNC");
-    schemaState.machine.send("SUCCESS");
-
-    await schemaState.renameTable('t', 'customers');
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
-    expect(schemaState.machine.current).toBe('IDLE');
   });
 
   it('should set errorType to disk when saveToFile fails', async () => {
@@ -162,6 +147,97 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.errorType).toBe('parse');
   });
 
+  it('should track lastWriteTime and hasUnsavedChanges correctly', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", {});';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS"); // Transition to IDLE
+
+    expect(schemaState.hasUnsavedChanges).toBe(false);
+
+    schemaState.machine.send("EDIT"); // Transition to DIRTY
+    expect(schemaState.hasUnsavedChanges).toBe(true);
+
+    const oldWriteTime = schemaState.lastWriteTime;
+    await schemaState.saveToFile();
+
+    expect(schemaState.lastWriteTime).toBeGreaterThanOrEqual(oldWriteTime);
+    expect(schemaState.hasUnsavedChanges).toBe(false);
+  });
+
+  // ==========================================
+  // 3. Mutation Operations (Inspector.svelte Actions)
+  // ==========================================
+
+  // --- Table Operations ---
+
+  it('should add a table and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});\nexport const t2 = sqliteTable("t2", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", {});';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.addTable('t2', 'd1');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  it('should rename a table and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const customers = sqliteTable("customers", { id: integer("id") });');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.activeInspectorNodeId = 't';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.renameTable('t', 'customers');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+    expect(schemaState.activeInspectorNodeId).toBe('customers');
+  });
+
+  it('should delete a table and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const another = sqliteTable("another", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", {});\nexport const another = sqliteTable("another", {});';
+    schemaState.activeInspectorNodeId = 't';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.deleteTable('t');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+    expect(schemaState.activeInspectorNodeId).toBeNull();
+  });
+
+  // --- Column Operations ---
+
+  it('should add a column and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", { id: integer("id"), name: text("name") });');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.addColumn('t', 'name', 'text');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  it('should rename a column and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", { new_id: integer("new_id") });');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.renameColumn('t', 'id', 'new_id');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
   it('should update column modifiers and sync', async () => {
     vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", { id: integer("id").primaryKey().notNull() });');
     schemaState.filePath = '/mock/schema.ts';
@@ -174,4 +250,151 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.machine.current).toBe('IDLE');
   });
 
+  it('should delete a column and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", { id: integer("id") });';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.deleteColumn('t', 'id');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  // --- Relationship / Connection Operations ---
+
+  it('should add a relation and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});\nexport const t_relations = relations(t, ({ one }) => ({}));');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", {});';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.addRelation('t', 't2');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  it('should delete a relation and sync', async () => {
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.rawCode = 'export const t = sqliteTable("t", {});\nexport const t_relations = relations(t, ({ one }) => ({}));';
+    schemaState.machine.send("SYNC");
+    schemaState.machine.send("SUCCESS");
+
+    await schemaState.deleteRelation('t', 't2');
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('write_schema_file', expect.any(Object));
+    expect(schemaState.machine.current).toBe('IDLE');
+  });
+
+  // ==========================================
+  // 4. External Imports & Read-Only Tables
+  // ==========================================
+
+  it('should sync schema with external imports and load their contents asynchronously', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd, args: any) => {
+      if (cmd === 'read_schema_file') {
+        if (args.path === '/mock/schema.ts') {
+          return 'import { user } from "./auth.schema";\nexport const sessions = sqliteTable("sessions", { userId: integer("user_id").references(() => user.id) });';
+        }
+        if (args.path === '/mock/auth.schema.ts') {
+          return 'export const user = sqliteTable("user", { id: text("id").primaryKey() });';
+        }
+      }
+      return '';
+    });
+
+    schemaState.filePath = '/mock/schema.ts';
+    await schemaState.syncWithFile();
+
+    expect(schemaState.nodes).toHaveLength(2);
+    const userNode = schemaState.nodes.find(n => n.id === 'user');
+    expect(userNode).toBeDefined();
+    expect(userNode?.data.isExternal).toBe(true);
+  });
+
+  it('should persist external node positions to localStorage and not update schema file for them', async () => {
+    const mockStorage: Record<string, string> = {};
+    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
+    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
+
+    vi.mocked(invoke).mockImplementation(async (cmd, args: any) => {
+      if (cmd === 'read_schema_file') {
+        if (args.path === '/mock/schema.ts') {
+          return 'import { user } from "./auth.schema";\nexport const sessions = sqliteTable("sessions", { userId: integer("user_id").references(() => user.id) });';
+        }
+        if (args.path === '/mock/auth.schema.ts') {
+          return 'export const user = sqliteTable("user", { id: text("id").primaryKey() });';
+        }
+      }
+      return '';
+    });
+
+    schemaState.filePath = '/mock/schema.ts';
+    await schemaState.syncWithFile();
+
+    // Now update position of the external node
+    schemaState.nodes = schemaState.nodes.map(n => {
+      if (n.id === 'user') {
+        return { ...n, position: { x: 500, y: 600 } };
+      }
+      return n;
+    });
+
+    // Save to file
+    await schemaState.saveToFile();
+
+    // Verify localStorage has the position saved
+    const key = `strata_ext_pos_/mock/schema.ts_user`;
+    expect(mockStorage[key]).toBe(JSON.stringify({ x: 500, y: 600 }));
+
+    // Cleanup spies
+    storageSpyGet.mockRestore();
+    storageSpySet.mockRestore();
+  });
+
+  // ==========================================
+  // 5. Recent Files & Native Loading Experience
+  // ==========================================
+
+  it('should append a schema path to recent files list on successful sync', async () => {
+    const mockStorage: Record<string, string> = {};
+    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
+    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
+
+    vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
+    schemaState.filePath = '/mock/schema.ts';
+    await schemaState.syncWithFile();
+
+    expect(schemaState.recentFiles).toContain('/mock/schema.ts');
+    expect(mockStorage['strata_recent_files']).toBe(JSON.stringify(['/mock/schema.ts']));
+
+    storageSpyGet.mockRestore();
+    storageSpySet.mockRestore();
+  });
+
+  it('should handle missing file read failure by removing it from recent files and resetting', async () => {
+    const mockStorage: Record<string, string> = {
+      'strata_recent_files': JSON.stringify(['/mock/missing.ts'])
+    };
+    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
+    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
+
+    vi.mocked(invoke).mockRejectedValue(new Error('Read error'));
+
+    schemaState.filePath = '/mock/missing.ts';
+    schemaState.recentFiles = ['/mock/missing.ts'];
+    
+    await schemaState.syncWithFile();
+
+    expect(schemaState.recentFiles).not.toContain('/mock/missing.ts');
+    expect(schemaState.filePath).toBeNull();
+    expect(schemaState.machine.current).toBe('EMPTY');
+
+    storageSpyGet.mockRestore();
+    storageSpySet.mockRestore();
+  });
+
 });
+

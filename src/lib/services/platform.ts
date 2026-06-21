@@ -16,11 +16,12 @@ export class PlatformService {
 		return invoke("write_schema_file", { path, content });
 	}
 
-	static async selectFile(extensions: string[]): Promise<string | null> {
+	static async selectFile(extensions: string[], defaultPath?: string): Promise<string | null> {
 		const { open } = await import("@tauri-apps/plugin-dialog");
 		const selected = await open({
 			multiple: false,
 			filters: [{ name: "TypeScript", extensions }],
+			defaultPath
 		});
 		return typeof selected === "string" ? selected : null;
 	}

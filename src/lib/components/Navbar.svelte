@@ -1,15 +1,20 @@
 <script lang="ts">
   import {
-    Share2,
     Camera,
     FolderOpen,
     RefreshCw,
     BadgeQuestionMark,
+    Eye,
+    EyeOff,
+    Workflow,
+    Save,
+    Undo,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state.svelte";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";
+  import { arrangeLayout } from "$lib/services/layout";
 
   let showHelp = $state(false);
 
@@ -21,17 +26,32 @@
   }
 
   /**
+   * Automatically arranges all table nodes in the diagram.
+   * Patches the layout and updates the disk schema.ts file in one pass.
+   */
+  async function onAutoLayout() {
+    if (schemaState.nodes.length === 0) return;
+
+    schemaState.machine.send("EDIT");
+    try {
+      const arranged = await arrangeLayout(
+        schemaState.nodes,
+        schemaState.edges,
+      );
+      schemaState.nodes = arranged;
+    } catch (err) {
+      console.error("[Strata] Auto-layout failed:", err);
+      schemaState.machine.send("FAIL");
+    }
+  }
+
+  /**
    * Captures the current diagram state as a high-resolution PNG.
    * Automatically calculates bounds and viewport to ensure a perfect framing.
    */
   async function exportToImage() {
-    const el = document.querySelector(".svelte-flow") as HTMLElement;
+    const el = document.querySelector(".svelte-flow__viewport") as HTMLElement;
     if (!el || !schemaState.nodes.length) return;
-
-    const viewportEl = el.querySelector(
-      ".svelte-flow__viewport",
-    ) as HTMLElement;
-    const originalTransform = viewportEl ? viewportEl.style.transform : "";
 
     schemaState.machine.send("SAVE");
     try {
@@ -49,18 +69,14 @@
         0.1,
       );
 
-      // Temporarily override the live viewport transform so that html-to-image captures all tables perfectly in view
-      if (viewportEl) {
-        viewportEl.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
-      }
-
       const dataUrl = await toPng(el, {
-        backgroundColor: "#ffffff",
+        backgroundColor: "#282c34",
         width: imageWidth,
         height: imageHeight,
         style: {
           width: `${imageWidth}px`,
           height: `${imageHeight}px`,
+          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
         },
         filter: (node) => {
           const cl = (node as HTMLElement).classList;
@@ -89,11 +105,6 @@
     } catch (err: any) {
       console.error("[Strata] Capture failed:", err);
       schemaState.machine.send("FAIL");
-    } finally {
-      // Cleanly restore the viewport's original user zoom and pan transformation
-      if (viewportEl) {
-        viewportEl.style.transform = originalTransform;
-      }
     }
   }
 </script>
@@ -122,16 +133,30 @@
       <div class="h-3 w-px bg-base-300"></div>
       <div class="flex items-center gap-1.5">
         <div
-          class="w-1.5 h-1.5 rounded-full {!schemaState.isValid
-            ? 'bg-error animate-ping'
-            : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.isValid
-            ? 'text-error'
-            : 'text-success'}"
+          class="w-1.5 h-1.5 rounded-full {!schemaState.filePath
+            ? 'bg-warning'
+            : !schemaState.isValid
+              ? 'bg-error animate-ping'
+              : schemaState.hasUnsavedChanges
+                ? 'bg-warning animate-pulse'
+                : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.filePath
+            ? 'text-warning'
+            : !schemaState.isValid
+              ? 'text-error'
+              : schemaState.hasUnsavedChanges
+                ? 'text-warning'
+                : 'text-success'}"
         ></div>
         <span
           class="text-[9px] font-mono uppercase font-bold text-base-content/60"
         >
-          {!schemaState.isValid ? "Sync Error" : "Live Mirror Active"}
+          {!schemaState.filePath
+            ? "No Schema Loaded"
+            : !schemaState.isValid
+              ? "Sync Error"
+              : schemaState.hasUnsavedChanges
+                ? "Unsaved Layout Changes"
+                : "Live Mirror Active"}
         </span>
       </div>
 
@@ -175,7 +200,8 @@
         <div
           class="flex items-center justify-between text-[9px] font-mono text-base-content/40"
         >
-          <span>AST engine: ts-morph</span>
+          <span>Drizzle ORM: v0.45.2</span>
+          <span>AST: ts-morph</span>
           <span>Watcher: notify (Rust)</span>
         </div>
       </div>
@@ -193,6 +219,26 @@
         New Table
       </button>
     {/if}
+    {#if schemaState.hasUnsavedChanges}
+      <button
+        class="btn btn-warning btn-sm gap-2 rounded-xl shadow-lg shadow-warning/20 animate-pulse hover:animate-none"
+        onclick={() => schemaState.saveToFile()}
+        data-testid="save-layout-button"
+        title="Save current layout changes to disk"
+      >
+        <Save class="w-4 h-4" />
+        Save Layout
+      </button>
+      <button
+        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        onclick={() => schemaState.syncWithFile()}
+        data-testid="discard-layout-button"
+        title="Discard unsaved layout changes and revert to disk schema"
+      >
+        <Undo class="w-4 h-4 text-base-content/70" />
+        <span class="text-base-content/75">Discard</span>
+      </button>
+    {/if}
     {#if schemaState.nodes.length > 0}
       <button
         class="btn btn-ghost btn-sm gap-2 rounded-xl text-primary hover:bg-primary/5"
@@ -201,6 +247,29 @@
       >
         <Camera class="w-4 h-4" />
         Export
+      </button>
+      <button
+        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
+        title="Toggle Compact View (Keys/References Only)"
+        data-testid="compact-mode-button"
+      >
+        {#if schemaState.compactMode}
+          <EyeOff class="w-4 h-4 text-warning" />
+          <span class="text-warning">Compact Mode</span>
+        {:else}
+          <Eye class="w-4 h-4 text-base-content/70" />
+          <span class="text-base-content/75">Compact Mode</span>
+        {/if}
+      </button>
+      <button
+        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        onclick={onAutoLayout}
+        title="Arrange tables automatically using ELK layout algorithm"
+        data-testid="auto-layout-button"
+      >
+        <Workflow class="w-4 h-4 text-base-content/70" />
+        <span class="text-base-content/75">Auto Layout</span>
       </button>
     {/if}
     <button class="btn btn-ghost btn-sm gap-2 rounded-xl" onclick={onOpenFile}>

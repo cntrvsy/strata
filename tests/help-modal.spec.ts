@@ -3,8 +3,6 @@ import { test, expect } from '@playwright/test';
 test.describe('Help Modal', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
   });
 
   test('can open and close the help modal', async ({ page }) => {

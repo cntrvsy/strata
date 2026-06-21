@@ -13,7 +13,7 @@
   import { schemaState } from "$lib/state.svelte";
   import { Database, Key, Zap, Cpu, Trash2 } from "lucide-svelte";
 
-  const { data } = $props<{
+  const { data, selected, dragging } = $props<{
     data: {
       label: string;
       columns: Array<{
@@ -23,7 +23,10 @@
         isReferences?: boolean;
       }>;
       target?: "d1" | "do" | "kv";
+      isExternal?: boolean;
     };
+    selected?: boolean;
+    dragging?: boolean;
   }>();
 
   const isD1 = $derived(data.target === "d1" || !data.target);
@@ -72,17 +75,66 @@
   const config = $derived(
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"],
   );
+
+  const activeNodeId = $derived(
+    schemaState.hoveredNodeId ||
+      schemaState.nodes.find((n) => n.selected)?.id ||
+      null,
+  );
+  const isRelated = $derived(
+    !activeNodeId ||
+      data.label === activeNodeId ||
+      schemaState.edges.some(
+        (e) =>
+          (e.source === data.label && e.target === activeNodeId) ||
+          (e.source === activeNodeId && e.target === data.label),
+      ),
+  );
+
+  const opacityClass = $derived(
+    !isMatch
+      ? "opacity-30 pointer-events-none"
+      : isRelated
+        ? "opacity-100 scale-100"
+        : "opacity-20 scale-98",
+  );
+
+  const columnsToDisplay = $derived(
+    schemaState.compactMode
+      ? data.columns.filter((c: any) => c.isPk || c.isReferences)
+      : data.columns,
+  );
+  const hiddenColumnsCount = $derived(
+    data.columns.length - columnsToDisplay.length,
+  );
 </script>
 
 <div
-  class="relative group/node min-w-[220px] transition-opacity duration-300 {isMatch
-    ? 'opacity-100'
-    : 'opacity-30 pointer-events-none'}"
+  class="relative group/node min-w-[220px] transition-all duration-300 {opacityClass}"
   data-testid="table-node"
   data-table-name={data.label}
+  role="button"
+  tabindex="0"
+  onmouseenter={() => (schemaState.hoveredNodeId = data.label)}
+  onmouseleave={() => {
+    if (schemaState.hoveredNodeId === data.label)
+      schemaState.hoveredNodeId = null;
+  }}
+  ondblclick={() => {
+    schemaState.activeInspectorNodeId = data.label;
+  }}
+  onkeydown={(e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      schemaState.activeInspectorNodeId = data.label;
+    }
+  }}
 >
   <div
-    class="bg-base-100 border border-base-400 rounded-xl overflow-hidden transition-all {config.border} border-t-4 {config.borderTop}"
+    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {data.isExternal ? 'border-t-neutral-400 opacity-80' : config.borderTop} {data.isExternal ? 'border-dashed border-base-300' : selected
+      ? `border-${config.color} ring-2 ring-${config.color}/30`
+      : `border-base-300 ${config.border}`} {dragging
+      ? 'shadow-2xl scale-[1.02]'
+      : 'shadow-md'}"
   >
     <!-- Header -->
     <div
@@ -90,13 +142,16 @@
     >
       <div class="flex items-center gap-2">
         <div
-          class="p-1.5 {config.bg} rounded-lg {config.bgHover} transition-colors"
+          class="p-1.5 {data.isExternal ? 'bg-base-300' : config.bg} rounded-lg {data.isExternal ? '' : config.bgHover} transition-colors"
         >
-          <config.icon class="w-4 h-4 {config.text}" />
+          <config.icon class="w-4 h-4 {data.isExternal ? 'text-base-content/50' : config.text}" />
         </div>
-        <span class="font-bold text-xs tracking-wide uppercase"
+        <span class="font-bold text-xs tracking-wide uppercase {data.isExternal ? 'text-base-content/60' : ''}"
           >{data.label}</span
         >
+        {#if data.isExternal}
+          <span class="badge badge-neutral badge-xs font-semibold uppercase text-[8px] opacity-75">External</span>
+        {/if}
       </div>
       <div
         class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
@@ -107,7 +162,7 @@
 
     <!-- Columns -->
     <div class="p-1.5 flex flex-col gap-0.5 bg-base-100">
-      {#each data.columns as col (col.name)}
+      {#each columnsToDisplay as col (col.name)}
         {@const isPk = col.isPk}
         {@const isFk = col.isReferences}
         <div
@@ -115,6 +170,28 @@
             ? 'bg-amber-500/5'
             : ''} {isFk ? 'bg-secondary/5' : ''}"
         >
+          <!-- Row Handles -->
+          {#if isPk}
+            <Handle
+              id={col.name}
+              type="target"
+              position={Position.Left}
+              isConnectable={true}
+              class="absolute! left-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
+              style="background: var(--color-accent); border: 1.5px solid var(--color-base-100);"
+            />
+          {/if}
+          {#if isFk}
+            <Handle
+              id={col.name}
+              type="source"
+              position={Position.Right}
+              isConnectable={true}
+              class="absolute! right-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
+              style="background: var(--color-secondary); border: 1.5px solid var(--color-base-100);"
+            />
+          {/if}
+
           <div class="flex items-center gap-3">
             <div class="w-4 flex justify-center">
               {#if isPk}
@@ -131,7 +208,7 @@
             </div>
             <span
               class="text-[13px] font-medium tracking-tight transition-colors {isPk
-                ? 'text-amber-700'
+                ? 'text-amber-400'
                 : ''} {isFk ? 'text-secondary' : ''} {!isPk && !isFk
                 ? 'text-base-content/80'
                 : ''}"
@@ -149,35 +226,47 @@
                 .replace("text", "txt")
                 .replace("integer", "int")}
             </span>
-            <button
-              class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-              onclick={(e) => {
-                e.stopPropagation();
-                schemaState.deleteColumn(data.label, col.name);
-              }}
-              title="Delete Field"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
+            {#if !data.isExternal}
+              <button
+                class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  schemaState.deleteColumn(data.label, col.name);
+                }}
+                title="Delete Field"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            {/if}
           </div>
         </div>
       {/each}
+
+      {#if schemaState.compactMode && hiddenColumnsCount > 0}
+        <div
+          class="px-3 py-2 text-[10px] opacity-40 font-mono text-center bg-base-200/20 rounded-lg"
+        >
+          + {hiddenColumnsCount} fields hidden
+        </div>
+      {/if}
     </div>
   </div>
 
-  <!-- Handles -->
+  <!-- Fallback Handles -->
   <Handle
     id="target"
     type="target"
     position={Position.Left}
     isConnectable={true}
-    style="width: 12px; height: 12px; background: var(--color-primary); border: 2px solid var(--color-base-100);"
+    class="transition-transform! hover:scale-130! duration-150 cursor-crosshair"
+    style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
   <Handle
     id="source"
     type="source"
     position={Position.Right}
     isConnectable={true}
-    style="width: 12px; height: 12px; background: var(--color-primary); border: 2px solid var(--color-base-100);"
+    class="transition-transform! hover:scale-130! duration-150 cursor-crosshair"
+    style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
 </div>

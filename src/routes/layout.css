@@ -60,6 +60,22 @@ body {
 
 body {
   font-family: var(--font-sans);
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.cm-editor,
+.cm-content,
+.selectable {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 @layer base {
@@ -71,6 +87,12 @@ body {
 
   .svelte-flow__handle {
     border-color: var(--color-base-100) !important;
+  }
+
+  /* Override Svelte Flow's edge label container style to remove default padding/bg */
+  .svelte-flow__edge-label {
+    background: transparent !important;
+    padding: 0 !important;
   }
 
   /* Override Svelte Flow's GPU compositing behavior which causes WebKit (Tauri/Safari) to render blurry nodes on zoom */
