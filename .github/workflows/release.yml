@@ -54,6 +54,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: true
           APPIMAGE_EXTRACT_AND_RUN: 1
+          # FIX: Prevent the bundler from capturing host-breaking graphics/Wayland drivers
+          EXCLUDE_APPIMAGE_DSO: "libwayland-client.so.0;libEGL.so.1;libGL.so.1"
         with:
           tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
           releaseName: "Strata v__VERSION__"
