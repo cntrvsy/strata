@@ -1,13 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    Plus,
-    Trash2,
-    Maximize,
-    Sparkles,
-    FileEdit,
-    Focus,
-  } from "lucide-svelte";
+  import { Plus, Trash2, FilePen, Focus } from "lucide-svelte";
   import { schemaState } from "../state.svelte";
 
   const { x, y, type, targetId, onClose, onAction } = $props<{
@@ -73,7 +66,7 @@
         onClose();
       }}
     >
-      <FileEdit class="w-3.5 h-3.5 opacity-60" />
+      <FilePen class="w-3.5 h-3.5 opacity-60" />
       Rename Entity
     </button>
     <div class="h-px bg-base-300/50 my-1"></div>

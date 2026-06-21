@@ -3,6 +3,74 @@ import { FiniteStateMachine } from "runed";
 import { PlatformService } from "./services/platform";
 
 /**
+ * Helper to resolve relative path from base file path.
+ */
+function resolveRelativePath(base: string, rel: string): string {
+	const parts = base.split('/');
+	parts.pop(); // Remove filename
+	const relParts = rel.split('/');
+	for (const part of relParts) {
+		if (part === '.') continue;
+		if (part === '..') {
+			parts.pop();
+		} else {
+			parts.push(part);
+		}
+	}
+	let resolved = parts.join('/');
+	if (!resolved.endsWith('.ts')) {
+		resolved += '.ts';
+	}
+	return resolved;
+}
+
+/**
+ * Loads external schemas asynchronously based on import path declarations.
+ */
+async function loadExternalSchemas(basePath: string, externalImports: { filePath: string }[]): Promise<Map<string, string>> {
+	const externalFilesMap = new Map<string, string>();
+	for (const imp of externalImports) {
+		const resolvedPath = resolveRelativePath(basePath, imp.filePath);
+		try {
+			const extRaw = await PlatformService.readText(resolvedPath);
+			externalFilesMap.set(imp.filePath, extRaw);
+		} catch (err) {
+			console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
+		}
+	}
+	return externalFilesMap;
+}
+
+/**
+ * Preserves selection state and restores positions of external nodes from localStorage.
+ */
+function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selectedNodeIds: Set<string>, existingNodes: Node[]): Node[] {
+	return nodes.map(n => {
+		let position = { x: n.position.x, y: n.position.y };
+		if (n.data?.isExternal) {
+			const existing = existingNodes.find(ex => ex.id === n.id);
+			if (existing) {
+				position = { x: existing.position.x, y: existing.position.y };
+			} else if (typeof window !== 'undefined' && window.localStorage) {
+				const key = `strata_ext_pos_${filePath}_${n.id}`;
+				const saved = window.localStorage.getItem(key);
+				if (saved) {
+					try {
+						const pos = JSON.parse(saved);
+						position = { x: pos.x, y: pos.y };
+					} catch (e) {}
+				}
+			}
+		}
+		return {
+			...n,
+			position,
+			selected: selectedNodeIds.has(n.id)
+		};
+	});
+}
+
+/**
  * Valid states for the SchemaState machine.
  */
 type States = "EMPTY" | "BUSY" | "IDLE" | "DIRTY" | "ERROR";
@@ -53,6 +121,10 @@ class SchemaState {
 	filePath = $state<string | null>(null);
 	/** HTML-wrapped code preview of the schema.ts file */
 	rawCode = $state('');
+	/** Reactive list of recently opened files */
+	recentFiles = $state<string[]>([]);
+	/** Timestamp of the last local disk write to prevent watcher feedback loops */
+	lastWriteTime = 0;
 	
 	// --- Sequential Task Queue ---
 	private operationQueue = Promise.resolve();
@@ -160,16 +232,21 @@ class SchemaState {
 					return;
 				}
 				
-				const result = parseSchema(raw);
+				// Initial parse to find external imports
+				const initialResult = parseSchema(raw);
+				let externalFilesMap = new Map<string, string>();
+				
+				if (initialResult.externalImports && initialResult.externalImports.length > 0) {
+					externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports);
+				}
+
+				// Final parse with external file contents mapped
+				const result = parseSchema(raw, externalFilesMap);
 				
 				if (result.success) {
 					// Preserve selection state
 					const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-					
-					this.nodes = result.nodes.map(n => ({
-						...n,
-						selected: selectedNodeIds.has(n.id)
-					}));
+					this.nodes = mapNodesWithExternalPositions(result.nodes, this.filePath, selectedNodeIds, this.nodes);
 					
 					this.edges = result.edges;
 					this.rawCode = raw;
@@ -177,6 +254,16 @@ class SchemaState {
 					this.error = null;
 					this.errorLoc = null;
 					this.errorType = null;
+					
+					// Update recent files list
+					if (typeof window !== 'undefined' && window.localStorage && this.filePath) {
+						let recent = [...this.recentFiles];
+						recent = recent.filter(p => p !== this.filePath);
+						recent.unshift(this.filePath);
+						recent = recent.slice(0, 5);
+						this.recentFiles = recent;
+						window.localStorage.setItem('strata_recent_files', JSON.stringify(recent));
+					}
 					
 					this.machine.send("SUCCESS");
 				} else {
@@ -191,8 +278,42 @@ class SchemaState {
 				this.error = e.message;
 				this.errorType = 'parse';
 				this.machine.send("FAIL");
+				
+				// If a file read/load fails on a recent file, clean up from history
+				if (this.filePath && typeof window !== 'undefined' && window.localStorage) {
+					const isReadError = e.message?.toLowerCase().includes('read') || e.message?.toLowerCase().includes('failed to read') || e.message?.toLowerCase().includes('no such file');
+					if (isReadError && this.recentFiles.includes(this.filePath)) {
+						const lastFile = this.filePath;
+						this.recentFiles = this.recentFiles.filter(f => f !== lastFile);
+						window.localStorage.setItem('strata_recent_files', JSON.stringify(this.recentFiles));
+						this.reset();
+					}
+				}
 			}
 		});
+	}
+
+	/**
+	 * Resolves the parent directory of the currently open or last worked on schema file.
+	 * Returns undefined if no path history is available.
+	 */
+	private getDefaultDialogPath(): string | undefined {
+		const activePath = this.filePath || (this.recentFiles.length > 0 ? this.recentFiles[0] : null);
+		if (activePath) {
+			const parts = activePath.split('/');
+			parts.pop(); // Remove filename
+			return parts.join('/');
+		}
+		return undefined;
+	}
+
+	/**
+	 * Opens a schema file directly from recent history.
+	 */
+	async openFileDirectly(path: string) {
+		this.filePath = path;
+		this.machine.send("OPEN");
+		await this.syncWithFile();
 	}
 
 	/**
@@ -200,7 +321,8 @@ class SchemaState {
 	 */
 	async openNewFile() {
 		try {
-			const selected = await PlatformService.selectFile(["ts"]);
+			const defaultPath = this.getDefaultDialogPath();
+			const selected = await PlatformService.selectFile(["ts"], defaultPath);
 			if (selected) {
 				this.filePath = selected;
 				this.machine.send("OPEN");
@@ -224,17 +346,25 @@ class SchemaState {
 			try {
 				const newCode = await mutateFn(this.rawCode);
 				this.ignoreNextWatch = true;
+				this.lastWriteTime = Date.now();
 				await PlatformService.writeText(this.filePath, newCode);
 				
 				const { parseSchema } = await import("./parser");
-				const result = parseSchema(newCode);
+				
+				// Initial parse to find external imports
+				const initialResult = parseSchema(newCode);
+				let externalFilesMap = new Map<string, string>();
+				
+				if (initialResult.externalImports && initialResult.externalImports.length > 0) {
+					externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports);
+				}
+
+				// Final parse with external file contents mapped
+				const result = parseSchema(newCode, externalFilesMap);
 				
 				if (result.success) {
 					const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-					this.nodes = result.nodes.map(n => ({
-						...n,
-						selected: selectedNodeIds.has(n.id)
-					}));
+					this.nodes = mapNodesWithExternalPositions(result.nodes, this.filePath, selectedNodeIds, this.nodes);
 					this.edges = result.edges;
 					this.rawCode = newCode;
 					this.isValid = true;
@@ -320,6 +450,16 @@ class SchemaState {
 			return currentCode;
 		});
 
+		// Save external node positions to localStorage
+		if (typeof window !== 'undefined' && window.localStorage) {
+			for (const node of this.nodes) {
+				if (node.data?.isExternal) {
+					const key = `strata_ext_pos_${this.filePath}_${node.id}`;
+					window.localStorage.setItem(key, JSON.stringify({ x: Math.round(node.position.x), y: Math.round(node.position.y) }));
+				}
+			}
+		}
+
 		this.isRecentlySaved = true;
 		setTimeout(() => (this.isRecentlySaved = false), 1500);
 	}
@@ -399,7 +539,25 @@ class SchemaState {
 	}
 
 	constructor() {
-		// Initialization logic if needed
+		if (typeof window !== 'undefined' && window.localStorage) {
+			try {
+				const recentStr = window.localStorage.getItem('strata_recent_files');
+				this.recentFiles = recentStr ? JSON.parse(recentStr) : [];
+				
+				const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
+				if (this.recentFiles.length > 0 && !isTest) {
+					const lastFile = this.recentFiles[0];
+					this.filePath = lastFile;
+					this.machine.send("OPEN");
+					this.syncWithFile().catch(err => {
+						console.error("[Strata] Auto-open failed:", err);
+						this.recentFiles = this.recentFiles.filter(f => f !== lastFile);
+						window.localStorage.setItem('strata_recent_files', JSON.stringify(this.recentFiles));
+						this.reset();
+					});
+				}
+			} catch (e) {}
+		}
 	}
 }
 

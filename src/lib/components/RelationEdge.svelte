@@ -76,10 +76,3 @@
     </div>
   </EdgeLabel>
 {/if}
-
-<style>
-  :global(.svelte-flow__edge-label) {
-    background: transparent !important;
-    padding: 0 !important;
-  }
-</style>

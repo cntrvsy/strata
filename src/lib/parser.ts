@@ -8,7 +8,7 @@
  * surgically inject, rename, and remove code while preserving user formatting and comments.
  */
 
-import { Project, VariableDeclaration, SyntaxKind, SourceFile, ImportSpecifier, Node as ASTNode } from 'ts-morph';
+import { Project, VariableDeclaration, SyntaxKind, SourceFile, Node as ASTNode } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
 
 /**
@@ -25,6 +25,7 @@ interface ParseResult {
 	edges: Edge[];
 	error?: string;
 	errorLoc?: { line: number, column: number } | null;
+	externalImports?: { filePath: string; importNames: string[] }[];
 }
 
 /**
@@ -93,16 +94,33 @@ export function wrapCode(code: string) {
 
 /**
  * Parses a Drizzle schema file into Svelte Flow nodes and edges.
- * Handles D1 (sqliteTable), KV (plain objects), and relations.
+ * Handles D1 (sqliteTable), KV (plain objects), relations, and relative external imports.
  */
-export function parseSchema(code: string): ParseResult {
+export function parseSchema(code: string, externalFilesMap?: Map<string, string>): ParseResult {
+	const tempSourceFiles: SourceFile[] = [];
 	try {
 		const sf = syncSourceFile(code);
 		
 		const nodes: Node[] = [];
 		const edges: Edge[] = [];
 		
-		// Find all exported declarations
+		// Find all relative import declarations
+		const externalImports: { filePath: string; importNames: string[] }[] = [];
+		const importDecls = sf.getImportDeclarations();
+		for (const imp of importDecls) {
+			const specifier = imp.getModuleSpecifierValue();
+			if (specifier.startsWith('.') || specifier.startsWith('..')) {
+				const names = imp.getNamedImports().map(ni => ni.getName());
+				if (names.length > 0) {
+					externalImports.push({
+						filePath: specifier,
+						importNames: names
+					});
+				}
+			}
+		}
+
+		// Find all exported declarations in main schema file
 		const variableStatements = sf.getVariableStatements();
 		const tableDeclarations = new Map<string, VariableDeclaration>();
 		
@@ -161,6 +179,65 @@ export function parseSchema(code: string): ParseResult {
 				}
 			}
 		}
+
+		// Process external files if provided
+		if (externalFilesMap) {
+			for (const extImp of externalImports) {
+				const externalContent = externalFilesMap.get(extImp.filePath);
+				if (externalContent) {
+					try {
+						// Create a temporary source file for the external schema
+						const extSf = project.createSourceFile(`temp_${extImp.filePath.replace(/[\/.]/g, '_')}.ts`, externalContent, { overwrite: true });
+						tempSourceFiles.push(extSf);
+						for (const name of extImp.importNames) {
+							const decl = extSf.getVariableDeclaration(name);
+							if (decl && isDrizzleTableDeclaration(decl)) {
+								const statement = decl.getVariableStatement();
+								const jsDocs = statement?.getJsDocs() || [];
+								let strataData: any = {
+									x: Math.round(Math.random() * 200),
+									y: Math.round(Math.random() * 200),
+									target: 'd1'
+								};
+								
+								for (const doc of jsDocs) {
+									const fullText = doc.getText();
+									const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+									if (match) {
+										try {
+											const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
+											const parsed = JSON.parse(jsonStr);
+											strataData = { ...strataData, ...parsed };
+										} catch (e) {
+											console.warn('Failed to parse external @strata JSON:', match[1], e);
+										}
+									}
+								}
+
+								// Register external node (marked with isExternal: true)
+								nodes.push({
+									id: name,
+									type: 'table',
+									data: {
+										label: name,
+										columns: extractColumns(decl),
+										target: strataData.target || 'd1',
+										strata: strataData,
+										isExternal: true
+									},
+									position: { x: strataData.x, y: strataData.y }
+								});
+								
+								// Register declaration so we can scan relationships from main schema pointing here
+								tableDeclarations.set(name, decl);
+							}
+						}
+					} catch (err) {
+						console.warn(`Failed to parse external file ${extImp.filePath} safely:`, err);
+					}
+				}
+			}
+		}
 		
 		// Extract Drizzle-native relations
 		for (const [tableName, decl] of tableDeclarations) {
@@ -175,10 +252,10 @@ export function parseSchema(code: string): ParseResult {
 		const validEdges = edges.filter(e => tableNames.has(e.source) && tableNames.has(e.target));
 		
 		if (nodes.length === 0 && code.trim().length > 0) {
-			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [] };
+			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports };
 		}
 
-		return { success: true, nodes, edges: validEdges };
+		return { success: true, nodes, edges: validEdges, externalImports };
 	} catch (e: any) {
 		console.error("[Strata] Parse critical failure:", e);
 		
@@ -198,6 +275,14 @@ export function parseSchema(code: string): ParseResult {
 			nodes: [],
 			edges: []
 		};
+	} finally {
+		for (const sf of tempSourceFiles) {
+			try {
+				project.removeSourceFile(sf);
+			} catch (err) {
+				console.warn('Failed to cleanup temporary source file:', err);
+			}
+		}
 	}
 }
 

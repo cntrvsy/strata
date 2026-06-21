@@ -154,15 +154,17 @@
               <h3 class="font-bold text-sm tracking-tight leading-none">
                 {selectedNode.id}
               </h3>
-              <button
-                class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5"
-                onclick={() => {
-                  editingTableName = selectedNode.id;
-                  newTableName = selectedNode.id;
-                }}
-              >
-                <Pencil class="w-3 h-3" />
-              </button>
+              {#if !data.isExternal}
+                <button
+                  class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5"
+                  onclick={() => {
+                    editingTableName = selectedNode.id;
+                    newTableName = selectedNode.id;
+                  }}
+                >
+                  <Pencil class="w-3 h-3" />
+                </button>
+              {/if}
             </div>
           {/if}
           <span
@@ -172,28 +174,30 @@
         </div>
       </div>
       <div class="flex items-center gap-1">
-        {#if !isConfirmingDelete}
-          <button
-            class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
-            onclick={() => (isConfirmingDelete = true)}
-            title="Delete Entity"
-            data-testid="delete-entity-button"
-          >
-            <Trash2 class="w-3.5 h-3.5" />
-          </button>
-        {:else}
-          <div
-            class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
-          >
+        {#if !data.isExternal}
+          {#if !isConfirmingDelete}
             <button
-              class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
-              onclick={() => deleteTable(selectedNode.id)}>Confirm</button
+              class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
+              onclick={() => (isConfirmingDelete = true)}
+              title="Delete Entity"
+              data-testid="delete-entity-button"
             >
-            <button
-              class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px]"
-              onclick={() => (isConfirmingDelete = false)}>Cancel</button
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          {:else}
+            <div
+              class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
             >
-          </div>
+              <button
+                class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
+                onclick={() => deleteTable(selectedNode.id)}>Confirm</button
+              >
+              <button
+                class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px]"
+                onclick={() => (isConfirmingDelete = false)}>Cancel</button
+              >
+            </div>
+          {/if}
         {/if}
         <button
           class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
@@ -222,6 +226,13 @@
 
     <!-- Content -->
     <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
+      {#if data.isExternal}
+        <div class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-xl flex items-start gap-2 border border-info/10 p-3 leading-relaxed">
+          <span>ℹ️</span>
+          <span>This table is imported from an external file and is read-only. Modifying its fields is disabled.</span>
+        </div>
+      {/if}
+
       {#if isAddingField}
         <AddFieldForm
           tableName={selectedNode.id}
@@ -274,15 +285,17 @@
                         >
                           {col.name}
                         </span>
-                        <button
-                          class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4 w-4"
-                          onclick={() => {
-                            editingColumnName = col.name;
-                            newColumnName = col.name;
-                          }}
-                        >
-                          <Pencil class="w-2.5 h-2.5" />
-                        </button>
+                        {#if !data.isExternal}
+                          <button
+                            class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4 w-4"
+                            onclick={() => {
+                              editingColumnName = col.name;
+                              newColumnName = col.name;
+                            }}
+                          >
+                            <Pencil class="w-2.5 h-2.5" />
+                          </button>
+                        {/if}
                       </div>
                     {/if}
                   </div>
@@ -291,12 +304,14 @@
                       class="text-[9px] font-mono opacity-40 uppercase bg-base-300/50 px-1.5 py-0.5 rounded"
                       >{col.definition.split("(")[0]}</span
                     >
-                    <button
-                      class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
-                      onclick={() => deleteColumn(selectedNode.id, col.name)}
-                    >
-                      <Trash2 class="w-3 h-3" />
-                    </button>
+                    {#if !data.isExternal}
+                      <button
+                        class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
+                        onclick={() => deleteColumn(selectedNode.id, col.name)}
+                      >
+                        <Trash2 class="w-3 h-3" />
+                      </button>
+                    {/if}
                   </div>
                 </div>
 
@@ -320,7 +335,8 @@
                       <input
                         type="checkbox"
                         checked={col.isPk}
-                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        disabled={data.isExternal}
+                        class="checkbox checkbox-xs checkbox-primary rounded disabled:opacity-50"
                         onchange={(e) =>
                           schemaState.updateColumnModifiers(
                             selectedNode.id,
@@ -337,7 +353,8 @@
                       <input
                         type="checkbox"
                         checked={col.notNull}
-                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        disabled={data.isExternal}
+                        class="checkbox checkbox-xs checkbox-primary rounded disabled:opacity-50"
                         onchange={(e) =>
                           schemaState.updateColumnModifiers(
                             selectedNode.id,
@@ -358,7 +375,8 @@
                       type="text"
                       placeholder="None"
                       value={col.defaultVal || ""}
-                      class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all"
+                      disabled={data.isExternal}
+                      class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all disabled:opacity-50"
                       onchange={(e) => {
                         schemaState.updateColumnModifiers(
                           selectedNode.id,
@@ -372,22 +390,24 @@
               </div>
             {/each}
 
-            <div class="grid grid-cols-2 gap-2 mt-2">
-              <button
-                class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
-                onclick={() => (isAddingField = true)}
-                data-testid="add-field-button"
-              >
-                <span class="text-xs font-bold uppercase">+ Field</span>
-              </button>
-              <button
-                class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all"
-                onclick={() => (isForgingRelation = true)}
-                data-testid="add-relation-button"
-              >
-                <span class="text-xs font-bold uppercase">+ Relation</span>
-              </button>
-            </div>
+            {#if !data.isExternal}
+              <div class="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
+                  onclick={() => (isAddingField = true)}
+                  data-testid="add-field-button"
+                >
+                  <span class="text-xs font-bold uppercase">+ Field</span>
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all"
+                  onclick={() => (isForgingRelation = true)}
+                  data-testid="add-relation-button"
+                >
+                  <span class="text-xs font-bold uppercase">+ Relation</span>
+                </button>
+              </div>
+            {/if}
           </div>
         </div>
       {:else if activeTab === 'relations'}
@@ -437,16 +457,18 @@
                       {/if}
                     </div>
 
-                    <button
-                      class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
-                      onclick={() => {
-                        if (confirm(`Delete relationship with ${otherNode}?`)) {
-                          schemaState.deleteRelation(edge.source, edge.target, edge.label);
-                        }
-                      }}
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </button>
+                    {#if !data.isExternal}
+                      <button
+                        class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
+                        onclick={() => {
+                          if (confirm(`Delete relationship with ${otherNode}?`)) {
+                            schemaState.deleteRelation(edge.source, edge.target, edge.label);
+                          }
+                        }}
+                      >
+                        <Trash2 class="w-3.5 h-3.5" />
+                      </button>
+                    {/if}
                   </div>
                 </div>
               {/each}
@@ -463,12 +485,14 @@
             </p>
           </div>
           
-          <button
-            class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all mt-2"
-            onclick={() => (isForgingRelation = true)}
-          >
-            <span class="text-xs font-bold uppercase">+ Forge Relation</span>
-          </button>
+          {#if !data.isExternal}
+            <button
+              class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all mt-2"
+              onclick={() => (isForgingRelation = true)}
+            >
+              <span class="text-xs font-bold uppercase">+ Forge Relation</span>
+            </button>
+          {/if}
         </div>
       {/if}
     </div>

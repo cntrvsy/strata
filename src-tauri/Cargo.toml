@@ -1,6 +1,6 @@
 [package]
 name = "strata"
-version = "1.2.0"
+version = "2.0.0"
 description = "Making it easier to visualize your cloudflare applications"
 authors = ["cntrvsy"]
 edition = "2021"

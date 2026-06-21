@@ -3,7 +3,7 @@
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";
   import { schemaState } from "$lib/state.svelte";
-  import { FileCode, Activity } from "lucide-svelte";
+  import { FileCode } from "lucide-svelte";
   import { parseSchema } from "$lib/parser";
 
   let debounceTimer: any;

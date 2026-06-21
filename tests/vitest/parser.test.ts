@@ -145,6 +145,66 @@ describe('Parser Core', () => {
     expect(usersToPosts?.data?.cardinality).toBe('1:N');
     expect(usersToProfiles?.data?.cardinality).toBe('1:1');
   });
+
+  it('should detect relative imports and expose them in externalImports', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const result = parseSchema(code);
+    expect(result.success).toBe(true);
+    expect(result.externalImports).toBeDefined();
+    expect(result.externalImports).toHaveLength(1);
+    expect(result.externalImports?.[0].filePath).toBe('./auth.schema');
+    expect(result.externalImports?.[0].importNames).toContain('user');
+  });
+
+  it('should parse external tables from externalFilesMap safely', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const externalFilesMap = new Map<string, string>();
+    externalFilesMap.set('./auth.schema', `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const user = sqliteTable("user", {
+        id: text("id").primaryKey(),
+        name: text("name")
+      });
+    `);
+
+    const result = parseSchema(code, externalFilesMap);
+    console.log("DEBUG TEST RESULT:", JSON.stringify(result, null, 2));
+    expect(result.success).toBe(true);
+    expect(result.nodes).toHaveLength(2);
+
+    const userNode = result.nodes.find(n => n.id === 'user');
+    expect(userNode).toBeDefined();
+    expect(userNode?.data.isExternal).toBe(true);
+    expect((userNode?.data as any).columns).toHaveLength(2);
+    expect((userNode?.data as any).columns[0].name).toBe('id');
+  });
+
+  it('should handle missing external file values gracefully without failing the parse', () => {
+    const code = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      import { user } from "./auth.schema";
+      export const sessions = sqliteTable("sessions", {
+        userId: integer("user_id").references(() => user.id)
+      });
+    `;
+    const externalFilesMap = new Map<string, string>(); // Empty map, simulate missing file
+    const result = parseSchema(code, externalFilesMap);
+    
+    expect(result.success).toBe(true);
+    expect(result.nodes).toHaveLength(1); // Only sessions table parsed
+  });
 });
 
 describe('Mutation Logic', () => {

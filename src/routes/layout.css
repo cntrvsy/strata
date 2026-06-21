@@ -89,6 +89,12 @@ textarea,
     border-color: var(--color-base-100) !important;
   }
 
+  /* Override Svelte Flow's edge label container style to remove default padding/bg */
+  .svelte-flow__edge-label {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
   /* Override Svelte Flow's GPU compositing behavior which causes WebKit (Tauri/Safari) to render blurry nodes on zoom */
   .svelte-flow__viewport,
   .svelte-flow__node,

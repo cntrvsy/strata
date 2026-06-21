@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     X,
-    Info,
     Share2,
     Sparkles,
     RefreshCw,
@@ -9,7 +8,8 @@
     Cpu,
     Zap,
     BookOpen,
-    CodeXml,
+    Check,
+    FingerprintPattern,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
 
@@ -20,14 +20,47 @@
     { id: "sync", label: "Sync Engine", icon: RefreshCw },
     { id: "targets", label: "Storage Targets", icon: Database },
     { id: "relations", label: "Smart Relations", icon: Share2 },
+    { id: "imports", label: "External Schemas", icon: FingerprintPattern },
     { id: "ai", label: "AI Integration", icon: Sparkles },
   ];
+
+  let copied = $state(false);
+
+  const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare D1 (SQLite dialect).
+We are using Strata, an interactive ERD tool that parses our \`schema.ts\` file.
+
+You MUST follow these design & layout rules when writing or modifying Drizzle schema code for me:
+
+1. AESTHETICS & METADATA: Every table or collection declaration MUST be preceded by a standard JSDoc comment containing Strata visual coordinates. Do NOT strip or omit these:
+   /**
+    * @strata { "target": "d1" | "do" | "kv", "x": number, "y": number }
+    */
+
+2. GRID LAYOUT: Pre-calculate visual layout positions (x, y coordinates) for new tables. Space them out logically (e.g. 400px apart horizontally, 300px apart vertically) to avoid overlaps.
+
+3. DATATYPES (Cloudflare D1 / SQLite):
+   - SQLite does not have a native Date type. Always map dates using:
+     integer("column_name", { mode: "timestamp" }) or integer("column_name", { mode: "timestamp_ms" })
+   - Ensure all column constraints match Drizzle core SQLite capabilities.
+
+4. RELATIONSHIPS:
+   - Physical foreign keys: Use inline \`.references()\` declarations (renders as solid lines on diagram).
+     Example: authorId: integer("author_id").references(() => users.id, { onDelete: "cascade" })
+   - Logical relations: Use Drizzle's \`relations()\` query-builder api (renders as dashed lines on diagram). Ensure they follow the naming standard \`\${tableName}Relations\`.
+     Example: export const postsRelations = relations(posts, ({ one }) => ({ author: one(users, { fields: [posts.authorId], references: [users.id] }) }))`;
+
+  function copyPrompt() {
+    navigator.clipboard.writeText(aiPrompt).then(() => {
+      copied = true;
+      setTimeout(() => (copied = false), 2000);
+    });
+  }
 </script>
 
 {#if show}
   <!-- Backdrop Overlay -->
   <div
-    class="fixed inset-0 z-100 bg-base-900/60 backdrop-blur-md transition-all duration-300"
+    class="fixed inset-0 z-100 bg-base-900/60 backdrop-blur-[2px] transition-all duration-300"
     role="button"
     tabindex="0"
     onclick={() => (show = false)}
@@ -85,7 +118,7 @@
             class="text-[9px] uppercase tracking-widest font-black opacity-30 px-3 mb-2"
             >Documentation</span
           >
-          {#each tabs as tab}
+          {#each tabs as tab (tab.id)}
             <button
               class="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-left font-bold text-xs group relative {activeTab ===
               tab.id
@@ -455,6 +488,93 @@
             </div>
           {/if}
 
+          {#if activeTab === "imports"}
+            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
+                  <FingerprintPattern class="w-4 h-4" />
+                </div>
+                <h3 class="font-bold text-sm text-base-content">
+                  Better Auth & External Schema Imports
+                </h3>
+              </div>
+              <p class="text-xs leading-relaxed text-base-content/70">
+                Modern architectures often decouple schemas. For instance,
+                **Better Auth** automatically generates its own authentication
+                schema (e.g. <code
+                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
+                  >auth.schema.ts</code
+                >) containing the
+                <code
+                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
+                  >user</code
+                >,
+                <code
+                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
+                  >session</code
+                >, or
+                <code
+                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
+                  >account</code
+                > tables.
+              </p>
+
+              <div
+                class="bg-base-200/50 rounded-2xl p-4 border border-base-300 flex flex-col gap-2"
+              >
+                <span
+                  class="text-[9px] font-black uppercase tracking-widest opacity-40"
+                  >Visualizing Decoupled Tables</span
+                >
+                <p class="text-[11px] opacity-70 leading-relaxed">
+                  Strata dynamically resolves external schema imports declared
+                  in your main schema file:
+                </p>
+                <pre
+                  class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5">
+<span class="text-secondary">import</span> &#123; user &#125; <span
+                    class="text-secondary">from</span
+                  > <span class="text-warning">"./auth.schema"</span>;
+
+<span class="text-primary">export const</span> profile = sqliteTable(<span
+                    class="text-warning">"profile"</span
+                  >, &#123;
+  userId: text(<span class="text-warning">"user_id"</span
+                  >).references(() => user.id),
+&#125;);</pre>
+              </div>
+
+              <div
+                class="text-xs leading-relaxed text-base-content/70 flex flex-col gap-2"
+              >
+                <div class="flex gap-2">
+                  <span class="text-primary font-bold">●</span>
+                  <span
+                    ><strong>Automatic Resolution:</strong> Strata parses imported
+                    variables using `ts-morph` to traverse files and render external
+                    tables as read-only nodes in your diagram.</span
+                  >
+                </div>
+                <div class="flex gap-2">
+                  <span class="text-primary font-bold">●</span>
+                  <span
+                    ><strong>Seamless Relationships:</strong> Draw or visualize foreign
+                    keys referencing imported tables (like drawing a link from `profile`
+                    to Better Auth's `user`). They render beautifully on the canvas.</span
+                  >
+                </div>
+                <div class="flex gap-2">
+                  <span class="text-primary font-bold">●</span>
+                  <span
+                    ><strong>Zero Mismatch:</strong> Coordinates for imported tables
+                    are stored safely in local storage, preserving your visual layout
+                    without altering external third-party files.</span
+                  >
+                </div>
+              </div>
+            </div>
+          {/if}
+
           {#if activeTab === "ai"}
             <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
               <div class="flex items-center gap-2">
@@ -472,6 +592,29 @@
                 tables visually!
               </p>
 
+              <!-- Copy Prompt Panel -->
+              <div
+                class="flex items-center justify-between bg-base-200/50 p-4 rounded-2xl border border-base-300"
+              >
+                <div class="flex flex-col gap-0.5">
+                  <span class="font-bold text-xs">AI System Prompt</span>
+                  <span class="text-[10px] opacity-60"
+                    >Copy the fully optimized prompt for your LLM context</span
+                  >
+                </div>
+                <button
+                  class="btn btn-primary btn-sm rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-primary/10 transition-all active:scale-95"
+                  onclick={copyPrompt}
+                >
+                  {#if copied}
+                    <Check class="w-3.5 h-3.5" />
+                    Copied!
+                  {:else}
+                    <span class="text-xs">Copy Prompt</span>
+                  {/if}
+                </button>
+              </div>
+
               <!-- Instruction cards -->
               <div class="flex flex-col gap-3.5">
                 <div class="flex gap-3">
@@ -485,11 +628,8 @@
                       >Feed the AI the Blueprint</span
                     >
                     <span class="text-[11px] opacity-65 leading-relaxed"
-                      >Copy the text from your project's <code
-                        class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-                        >STRATA_FORGE_AI.md</code
-                      > blueprint and paste it straight into your AI system prompt
-                      or chat context.</span
+                      >Copy the prompt and paste it straight into your AI system
+                      prompt or chat context.</span
                     >
                   </div>
                 </div>
@@ -533,22 +673,6 @@
                   </div>
                 </div>
               </div>
-
-              <!-- AI System Prompt Highlight -->
-              <div
-                class="alert alert-info/10 bg-primary/5 rounded-2xl border border-primary/10 p-3.5 flex items-start gap-3 mt-1"
-              >
-                <CodeXml class="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <p class="text-[11px] leading-relaxed text-base-content/85">
-                  <strong>Learn more:</strong> Inspect the
-                  <a
-                    href="https://github.com/cntrvsy/strata/blob/main/STRATA_FORGE_AI.md"
-                    class="text-primary underline underline-offset-2"
-                    >STRATA_FORGE_AI.md</a
-                  > file in your workspace for standard system prompts and concrete
-                  visual design pattern models!
-                </p>
-              </div>
             </div>
           {/if}
         </div>
@@ -559,7 +683,7 @@
         class="px-8 py-5 bg-base-200/50 flex items-center justify-between border-t border-base-200"
       >
         <p class="text-[10px] font-bold opacity-30 tracking-wider font-mono">
-          FORGED FOR CLOUDFLARE D1 + DRIZZLE ORM
+          FORGED FOR CLOUDFLARE D1 + DRIZZLE ORM v0.45.2
         </p>
         <button
           class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold"

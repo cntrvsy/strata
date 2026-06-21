@@ -142,7 +142,7 @@
       position="bottom-left"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl! overflow-hidden"
     />
-    <Background patternColor="oklch(var(--bc) / 0.08)" gap={20} />
+    <Background bgColor="#282c34" patternColor="oklch(var(--bc) / 0.08)" gap={20} />
     <MiniMap
       position="bottom-right"
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl!"

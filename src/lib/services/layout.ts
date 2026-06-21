@@ -6,7 +6,7 @@ const elk = new ELK();
 
 /**
  * Computes an organized, overlap-free layout for schema tables using the ELK layered algorithm.
- * Adapts node heights dynamically depending on Compact Mode.
+ * Adapts node heights and widths dynamically depending on table names, columns, and Compact Mode.
  */
 export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[]> {
   if (nodes.length === 0) return [];
@@ -14,15 +14,43 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
   const isCompact = schemaState.compactMode;
   const children = nodes.map(node => {
     const columns = (node.data?.columns as any[]) || [];
-    const colCount = isCompact 
-      ? columns.filter(c => c.isPk || c.isReferences).length
-      : columns.length;
+    const isExternal = node.data?.isExternal || false;
     
+    // 1. Calculate estimated header width:
+    // Base padding/icon/badge width is ~110px. If external, add another 40px for "External" badge.
+    const headerBaseWidth = 110 + (isExternal ? 40 : 0);
+    const headerTextWidth = node.id.length * 8.5; // Increased to 8.5px per character
+    let maxEstimatedWidth = headerBaseWidth + headerTextWidth;
+
+    // 2. Calculate estimated width for each column row:
+    const columnsToDisplay = isCompact
+      ? columns.filter((c: any) => c.isPk || c.isReferences)
+      : columns;
+
+    for (const col of columnsToDisplay) {
+      const typeStr = (col.definition || '')
+        .split('(')[0]
+        .replace('text', 'txt')
+        .replace('integer', 'int');
+      
+      const rowBaseWidth = 100; // Increased base row padding width buffer
+      const nameWidth = (col.name?.length || 0) * 8.0; // Increased char width to 8.0px
+      const typeWidth = typeStr.length * 6;
+      const rowWidth = rowBaseWidth + nameWidth + typeWidth;
+      
+      if (rowWidth > maxEstimatedWidth) {
+        maxEstimatedWidth = rowWidth;
+      }
+    }
+    
+    // Base width is 220px. Add a 20px general safety margin.
+    const width = Math.max(220, Math.round(maxEstimatedWidth) + 20);
+
     // Header (approx 44px) + column padding + fields + collapse indicator
-    const height = Math.max(100, 44 + colCount * 38 + (isCompact ? 36 : 0));
+    const height = Math.max(100, 44 + columnsToDisplay.length * 38 + (isCompact ? 36 : 0));
     return {
       id: node.id,
-      width: 240,
+      width,
       height
     };
   });
@@ -38,9 +66,12 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': 'RIGHT',
-      'elk.spacing.nodeNode': '70',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '90',
-      'elk.padding': '[top=40,left=40,bottom=40,right=40]'
+      'org.eclipse.elk.separateConnectedComponents': 'true', // Pack disconnected components separately
+      'elk.spacing.componentSpacing': '80', // Space between separate layout components
+      'elk.spacing.nodeNode': '105', // Vertically space nodes in the same layer
+      'elk.layered.spacing.nodeNodeBetweenLayers': '160', // Horizontally space nodes between layers
+      'elk.padding': '[top=50,left=50,bottom=50,right=50]',
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF' // High-quality alignment strategy
     },
     children,
     edges: elkEdges

@@ -23,6 +23,7 @@
         isReferences?: boolean;
       }>;
       target?: "d1" | "do" | "kv";
+      isExternal?: boolean;
     };
     selected?: boolean;
     dragging?: boolean;
@@ -129,7 +130,7 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected
+    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {data.isExternal ? 'border-t-neutral-400 opacity-80' : config.borderTop} {data.isExternal ? 'border-dashed border-base-300' : selected
       ? `border-${config.color} ring-2 ring-${config.color}/30`
       : `border-base-300 ${config.border}`} {dragging
       ? 'shadow-2xl scale-[1.02]'
@@ -141,13 +142,16 @@
     >
       <div class="flex items-center gap-2">
         <div
-          class="p-1.5 {config.bg} rounded-lg {config.bgHover} transition-colors"
+          class="p-1.5 {data.isExternal ? 'bg-base-300' : config.bg} rounded-lg {data.isExternal ? '' : config.bgHover} transition-colors"
         >
-          <config.icon class="w-4 h-4 {config.text}" />
+          <config.icon class="w-4 h-4 {data.isExternal ? 'text-base-content/50' : config.text}" />
         </div>
-        <span class="font-bold text-xs tracking-wide uppercase"
+        <span class="font-bold text-xs tracking-wide uppercase {data.isExternal ? 'text-base-content/60' : ''}"
           >{data.label}</span
         >
+        {#if data.isExternal}
+          <span class="badge badge-neutral badge-xs font-semibold uppercase text-[8px] opacity-75">External</span>
+        {/if}
       </div>
       <div
         class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
@@ -222,16 +226,18 @@
                 .replace("text", "txt")
                 .replace("integer", "int")}
             </span>
-            <button
-              class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-              onclick={(e) => {
-                e.stopPropagation();
-                schemaState.deleteColumn(data.label, col.name);
-              }}
-              title="Delete Field"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
+            {#if !data.isExternal}
+              <button
+                class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  schemaState.deleteColumn(data.label, col.name);
+                }}
+                title="Delete Field"
+              >
+                <Trash2 class="w-3 h-3" />
+              </button>
+            {/if}
           </div>
         </div>
       {/each}
