@@ -15,8 +15,8 @@ jobs:
         include:
           - platform: "macos-latest" # for Silicon and Intel
             args: "--target universal-apple-darwin"
-          - platform: "ubuntu-22.04" # for AppImage
-            args: ""
+          - platform: "ubuntu-22.04" # for tar.gz
+            args: "--no-bundle"
           - platform: "windows-latest" # for .exe
             args: ""
 
@@ -50,6 +50,7 @@ jobs:
         run: npm ci
 
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: true
@@ -63,6 +64,14 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Package and upload tar.gz
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tar -czf strata-linux-x86_64.tar.gz -C src-tauri/target/release strata
+          gh release upload "v${{ steps.tauri.outputs.appVersion }}" strata-linux-x86_64.tar.gz --clobber --repo "${{ github.repository }}"
 
   checksums:
     name: Generate Checksums
