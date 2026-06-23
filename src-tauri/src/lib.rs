@@ -171,15 +171,17 @@ mod tests {
         std::fs::write(&f1, "").unwrap();
         std::fs::write(&f2, "").unwrap();
 
+        let f1_str = f1.to_str().unwrap().to_string();
+        let f2_str = f2.to_str().unwrap().to_string();
         let handle = app.handle().clone();
         tauri::async_runtime::block_on(async move {
             let state: State<'_, WatcherState> = handle.state();
             
             // Watch first file
-            watch_file(handle.clone(), state.clone(), f1.to_str().unwrap().to_string()).await.unwrap();
+            watch_file(handle.clone(), state.clone(), f1_str).await.unwrap();
             
             // Watch second file (should replace first)
-            watch_file(handle.clone(), state, f2.to_str().unwrap().to_string()).await.unwrap();
+            watch_file(handle.clone(), state, f2_str).await.unwrap();
         });
 
         let _ = std::fs::remove_file(f1);
