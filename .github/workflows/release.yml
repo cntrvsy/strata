@@ -64,6 +64,7 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
 
       - name: Package and upload tar.gz
         if: matrix.platform == 'ubuntu-22.04'
