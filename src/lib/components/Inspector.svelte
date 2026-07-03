@@ -1,9 +1,11 @@
+<!--
+  Inspector.svelte
+
+  Summary: Sidebar inspector displaying selected table/entity details (fields, types, relations) and modification actions.
+  Expects: None (shares global schemaState).
+  Output: Triggers field additions, deletions, renames, and constraints updates.
+-->
 <script lang="ts">
-  /**
-   * Inspector Component
-   * Displays details for the selected node (Table, KV, DO) and
-   * provides forms for structural modifications (Adding fields/relations).
-   */
   import {
     Database,
     Cpu,
@@ -14,8 +16,9 @@
     Check,
     Pencil,
     Heart,
+    HardDrive,
   } from "lucide-svelte";
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "../state";
   import AddFieldForm from "$lib/components/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/AddRelationForm.svelte";
 
@@ -88,6 +91,12 @@
       bg: "bg-accent/10",
       text: "text-accent",
     },
+    r2: {
+      icon: HardDrive,
+      label: "R2 Storage",
+      bg: "bg-info/10",
+      text: "text-info",
+    },
   };
 
   /**
@@ -115,6 +124,15 @@
       activeTab = 'fields';
     }
   });
+
+  const selectedNode = $derived(schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId));
+  const isReadOnly = $derived(
+    !!selectedNode && (
+      (selectedNode.data as any)?.isExternal || 
+      ((selectedNode.data as any)?.target === "do" && (selectedNode.data as any)?.strata?.path) || 
+      ((selectedNode.data as any)?.target === "kv" && (selectedNode.data as any)?.strata?.binding && !(selectedNode.data as any)?.strata?.schema)
+    )
+  );
 </script>
 
 {#if schemaState.activeInspectorNodeId}
@@ -154,7 +172,7 @@
               <h3 class="font-bold text-sm tracking-tight leading-none">
                 {selectedNode.id}
               </h3>
-              {#if !data.isExternal}
+              {#if !isReadOnly}
                 <button
                   class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5"
                   onclick={() => {
@@ -174,7 +192,7 @@
         </div>
       </div>
       <div class="flex items-center gap-1">
-        {#if !data.isExternal}
+        {#if !isReadOnly}
           {#if !isConfirmingDelete}
             <button
               class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
@@ -226,10 +244,10 @@
 
     <!-- Content -->
     <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
-      {#if data.isExternal}
+      {#if isReadOnly}
         <div class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-xl flex items-start gap-2 border border-info/10 p-3 leading-relaxed">
           <span>ℹ️</span>
-          <span>This table is imported from an external file and is read-only. Modifying its fields is disabled.</span>
+          <span>This entity's structure is read-only (parsed dynamically from external source code or wrangler.toml configuration). Modifying its fields is disabled.</span>
         </div>
       {/if}
 
@@ -285,7 +303,7 @@
                         >
                           {col.name}
                         </span>
-                        {#if !data.isExternal}
+                        {#if !isReadOnly}
                           <button
                             class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4 w-4"
                             onclick={() => {
@@ -304,7 +322,7 @@
                       class="text-[9px] font-mono opacity-40 uppercase bg-base-300/50 px-1.5 py-0.5 rounded"
                       >{col.definition.split("(")[0]}</span
                     >
-                    {#if !data.isExternal}
+                    {#if !isReadOnly}
                       <button
                         class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
                         onclick={() => deleteColumn(selectedNode.id, col.name)}
@@ -325,7 +343,7 @@
                   </div>
                 {/if}
 
-                {#if data.target === "d1"}
+                {#if data.target === "d1" || !data.target}
                   <div
                     class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/30 text-[10px]"
                   >
@@ -335,7 +353,7 @@
                       <input
                         type="checkbox"
                         checked={col.isPk}
-                        disabled={data.isExternal}
+                        disabled={isReadOnly}
                         class="checkbox checkbox-xs checkbox-primary rounded disabled:opacity-50"
                         onchange={(e) =>
                           schemaState.updateColumnModifiers(
@@ -353,7 +371,7 @@
                       <input
                         type="checkbox"
                         checked={col.notNull}
-                        disabled={data.isExternal}
+                        disabled={isReadOnly}
                         class="checkbox checkbox-xs checkbox-primary rounded disabled:opacity-50"
                         onchange={(e) =>
                           schemaState.updateColumnModifiers(
@@ -375,7 +393,7 @@
                       type="text"
                       placeholder="None"
                       value={col.defaultVal || ""}
-                      disabled={data.isExternal}
+                      disabled={isReadOnly}
                       class="input input-xs input-bordered w-full rounded-md font-mono text-[10px] bg-base-100 focus:border-primary transition-all disabled:opacity-50"
                       onchange={(e) => {
                         schemaState.updateColumnModifiers(
@@ -390,7 +408,7 @@
               </div>
             {/each}
 
-            {#if !data.isExternal}
+            {#if !isReadOnly}
               <div class="grid grid-cols-2 gap-2 mt-2">
                 <button
                   class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
@@ -457,7 +475,7 @@
                       {/if}
                     </div>
 
-                    {#if !data.isExternal}
+                    {#if !isReadOnly}
                       <button
                         class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
                         onclick={() => {
@@ -485,7 +503,7 @@
             </p>
           </div>
           
-          {#if !data.isExternal}
+          {#if !isReadOnly}
             <button
               class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all mt-2"
               onclick={() => (isForgingRelation = true)}

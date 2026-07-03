@@ -322,7 +322,7 @@ describe('Mutation Logic', () => {
     it('should add a column to a KV object', () => {
       const code = `export const sessions = { id: "string" };`;
       const newCode = addColumnToSchema(code, 'sessions', 'ttl', 'number');
-      expect(newCode).toContain('ttl: "string"'); // Current implementation defaults to "string" for KV
+      expect(newCode).toContain('ttl: "number"');
     });
 
     it('should remove a column from a KV object', () => {
@@ -467,6 +467,176 @@ describe('Mutation Logic', () => {
       const newCode = removeEdgeFromSchema(code, 'sessions', 'users');
       expect(newCode).not.toContain('"relations"');
       expect(newCode).toContain('"target":"kv"');
+    });
+  });
+
+  describe('Cloudflare Storage Targets & Schema Pointers', () => {
+    it('should parse R2 target with folders mapping', () => {
+      const code = `
+        /**
+         * @strata {
+         *   "target": "r2",
+         *   "folders": {
+         *     "avatars": "image/*",
+         *     "backups": "application/zip"
+         *   }
+         * }
+         */
+        export const myBucket = {};
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      expect(result.nodes).toHaveLength(1);
+      const node = result.nodes[0];
+      const data = node.data as any;
+      expect(data.target).toBe('r2');
+      expect(data.columns).toHaveLength(2);
+      expect(data.columns[0]).toEqual({
+        name: 'avatars/',
+        definition: 'image/*',
+        isPk: false,
+        isReferences: false
+      });
+    });
+
+    it('should parse KV target with JSDoc schema field mappings', () => {
+      const code = `
+        /**
+         * @strata {
+         *   "target": "kv",
+         *   "schema": {
+         *     "sessionToken": "string",
+         *     "userId": "string",
+         *     "expires": "number"
+         *   }
+         * }
+         */
+        export const myKv = {};
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      expect(result.nodes).toHaveLength(1);
+      const node = result.nodes[0];
+      const data = node.data as any;
+      expect(data.target).toBe('kv');
+      expect(data.columns).toHaveLength(3);
+      expect(data.columns[0].name).toBe('sessionToken');
+      expect(data.columns[0].definition).toBe('string');
+    });
+
+    it('should parse DO target and load class methods from external file contents', () => {
+      const code = `
+        /**
+         * @strata {
+         *   "target": "do",
+         *   "class": "Counter",
+         *   "path": "./src/Counter.ts"
+         * }
+         */
+      	export const counterDO = {};
+      `;
+      const externalFiles = new Map<string, string>();
+      externalFiles.set('./src/Counter.ts', `
+        export class Counter {
+          public async increment(amount: number): Promise<void> {}
+          public async getValue(): Promise<number> { return 0; }
+          private internalHelper() {}
+        }
+      `);
+      const result = parseSchema(code, externalFiles);
+      expect(result.success).toBe(true);
+      expect(result.nodes).toHaveLength(1);
+      const node = result.nodes[0];
+      const data = node.data as any;
+      expect(data.target).toBe('do');
+      // Should extract public methods increment and getValue, but not private internalHelper
+      expect(data.columns).toHaveLength(2);
+      expect(data.columns[0].name).toBe('increment(amount: number)');
+      expect(data.columns[0].definition).toBe('Promise<void>');
+      expect(data.columns[1].name).toBe('getValue()');
+      expect(data.columns[1].definition).toBe('Promise<number>');
+    });
+
+    it('should collect schema pointers in externalPaths during first pass', () => {
+      const code = `
+        /** @strata { "target": "schema", "path": "./auth.ts" } */
+        export const authSchema = {};
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(false); // No nodes defined in the main file
+      expect(result.externalPaths).toContain('./auth.ts');
+    });
+
+    it('should parse variables from custom schema pointer files on second pass', () => {
+      const code = `
+        /** @strata { "target": "schema", "path": "./auth.ts" } */
+        export const authSchema = {};
+      `;
+      const externalFiles = new Map<string, string>();
+      externalFiles.set('./auth.ts', `
+        import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+        export const users = sqliteTable("users", {
+          id: text("id").primaryKey()
+        });
+      `);
+      const result = parseSchema(code, externalFiles);
+      expect(result.success).toBe(true);
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0].id).toBe('users');
+      expect(result.nodes[0].data.target).toBe('d1');
+    });
+  });
+
+  describe('Target-Specific Schema CRUD Operations', () => {
+    it('should correctly mutate D1 table columns', () => {
+      const code = `export const users = sqliteTable("users", { id: integer("id") });`;
+      let mutated = addColumnToSchema(code, 'users', 'email', 'text');
+      expect(mutated).toContain('email: text("email")');
+      
+      mutated = renameColumnInSchema(mutated, 'users', 'email', 'userEmail');
+      expect(mutated).toContain('userEmail: text("userEmail")');
+      expect(mutated).not.toContain('email: text("email")');
+      
+      mutated = removeColumnFromSchema(mutated, 'users', 'userEmail');
+      expect(mutated).not.toContain('userEmail');
+    });
+
+    it('should correctly mutate KV object fields in inline definitions and JSDoc schemas', () => {
+      // Inline literal mutation
+      const inlineCode = `export const kv = { val: "string" };`;
+      let mutated = addColumnToSchema(inlineCode, 'kv', 'expires', 'number');
+      expect(mutated).toContain('expires: "number"');
+      
+      mutated = renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
+      expect(mutated).toContain('expiresAt: "number"');
+      
+      mutated = removeColumnFromSchema(mutated, 'kv', 'expiresAt');
+      expect(mutated).not.toContain('expiresAt');
+
+      // JSDoc schema metadata mutation
+      const jsdocCode = `/** @strata { "target": "kv", "schema": { "val": "string" } } */\nexport const kv = {};`;
+      mutated = addColumnToSchema(jsdocCode, 'kv', 'expires', 'number');
+      expect(mutated).toContain('"expires":"number"');
+      
+      mutated = renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
+      expect(mutated).toContain('"expiresAt":"number"');
+      expect(mutated).not.toContain('"expires":');
+      
+      mutated = removeColumnFromSchema(mutated, 'kv', 'expiresAt');
+      expect(mutated).not.toContain('expiresAt');
+    });
+
+    it('should correctly mutate R2 folder structures in JSDoc', () => {
+      const code = `/** @strata { "target": "r2", "folders": { "avatars": "image/*" } } */\nexport const bucket = {};`;
+      let mutated = addColumnToSchema(code, 'bucket', 'backups', 'application/zip');
+      expect(mutated).toContain('"backups":"application/zip"');
+      
+      mutated = renameColumnInSchema(mutated, 'bucket', 'backups', 'archives');
+      expect(mutated).toContain('"archives":"application/zip"');
+      expect(mutated).not.toContain('backups');
+      
+      mutated = removeColumnFromSchema(mutated, 'bucket', 'archives');
+      expect(mutated).not.toContain('archives');
     });
   });
 });

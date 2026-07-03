@@ -1,134 +1,139 @@
-# Strata Technical Debt & Code Consolidation Report
+# Strata Architectural Proposal: Cloudflare Storage & Code Modularization
 
-This report analyzes redundancies, code duplication, and coupling patterns inside Strata, proposing concrete refactoring blueprints to make future changes systematic, robust, and predictable.
-
----
-
-## 1. Executive Summary
-
-As Strata has grown from a proof of concept to a highly responsive visual workspace, multiple edits have introduced structural duplication. The key targets for technical debt reduction are:
-* **AST Parsing Duplication:** Replicated patterns for locating `sqliteTable` declarations.
-* **Transactional State Boilerplate:** Replicated FSM `SAVE` and `writeTextFile` transition logic.
-* **Platform Coupling:** Direct dependencies on Tauri plugins (`plugin-fs`, `plugin-dialog`) spread throughout UI components, complicating headless testing.
-* **Form Modularity:** Redundant validation schemas and layouts in Svelte form inputs.
+This document outlines the design suggestions for elevating Cloudflare KV, Durable Objects (DO), and Storage Buckets (R2) to first-class citizens in Strata, alongside a concrete modularization blueprint to split the AST parser and state files.
 
 ---
 
-## 2. Identified Tech Debt & Modularity Issues
+## 1. Cloudflare KV, DO & R2 as First-Class Citizens
 
-### Issue A: AST Parsing Logic Duplication (`parser.ts`)
-In [parser.ts](file:///run/media/system/2tbsata/projects/tauri/strata/src/lib/parser.ts), the logic to identify the `sqliteTable` call expression within a variable declaration is duplicated across 5 functions: `extractColumns`, `addColumnToSchema`, `removeColumnFromSchema`, `renameColumnInSchema`, and `updateColumnModifiersInSchema`.
+To make Strata a "no-brainer" visual design workspace for Cloudflare developers, we must treat non-relational storage products (KV, Durable Objects, R2) with the same visual and structural richness as D1 SQL tables.
 
-**Current Pattern (Duplicated):**
-```typescript
-const tableCall = initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable'
-    ? initializer
-    : initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
-```
+### Key Visual & Schema Enhancements
 
-### Issue B: State Mutation Boilerplate (`state.svelte.ts`)
-In [state.svelte.ts](file:///run/media/system/2tbsata/projects/tauri/strata/src/lib/state.svelte.ts), every visual schema mutation (`deleteColumn`, `deleteTable`, `renameTable`, `updateColumnModifiers`) repeats a boilerplate sequence:
-1. Transition FSM state to `SAVE`.
-2. Dynamically import `@tauri-apps/plugin-fs`.
-3. Execute parser mutation function on `this.rawCode`.
-4. Write changes to disk and call `this.syncWithFile()`.
-5. Transition FSM to `SAVE_SUCCESS` or `SAVE_ERROR`.
-
-This creates over 80 lines of identical structural boilerplate, increasing the risk of inconsistent error handling or state machine leaks.
-
-### Issue C: UI Forms Redundancy
-[AddFieldForm.svelte](file:///run/media/system/2tbsata/projects/tauri/strata/src/lib/components/AddFieldForm.svelte) and [NewTableForm.svelte](file:///run/media/system/2tbsata/projects/tauri/strata/src/lib/components/NewTableForm.svelte) define distinct Svelte components but repeat identical DaisyUI input structure, layout structures, and Valibot-based form action wiring.
+| Storage Target | Visual Theme | Icon | Core "Schema" Concept |
+| :--- | :--- | :--- | :--- |
+| **D1 Database** | Primary (Blue/Indigo) | `Database` | SQL Columns (types, primary keys, foreign keys) |
+| **KV Namespace** | Accent (Orange/Amber) | `Zap` | Key-Value schemas represented by TS Type/Interface fields |
+| **Durable Objects**| Secondary (Purple) | `Cpu` | Stateful class APIs represented by public methods & storage state |
+| **R2 Bucket** | Info (Teal/Cyan) | `Folder` | Bucket folder hierarchies, allowed MIME types, and rules |
 
 ---
 
-## 3. Recommended Refactoring Blueprints
+## 2. Robust Path Resolution via JSDoc Metadata
 
-### Blueprint 1: Unified AST Node Resolver (`parser.ts`)
-Extract the `sqliteTable` call expression resolution into a shared helper function.
+Instead of forcing users to define all KV schemas, DO classes, and R2 structures in a single `schema.ts`, Strata will use JSDoc annotations to register external entities and point the parser to custom files. 
+
+This approach is **non-intrusive**, works natively with typescript imports, and keeps the code compile-safe.
+
+### Pointer Schema Configuration
+
+We can represent bindings or definitions in the main `schema.ts` file as typed placeholders decorated with JSDoc metadata:
 
 ```typescript
 /**
- * Resolves the underlying drizzle sqliteTable CallExpression node from an initializer.
+ * @strata {
+ *   "target": "do",
+ *   "name": "UserSessionDO",
+ *   "class": "UserSession",
+ *   "path": "./src/objects/UserSession.ts"
+ * }
  */
-function findSqliteTableCall(initializer: ASTNode): CallExpression | undefined {
-  if (initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
-    return initializer;
-  }
-  return initializer.getDescendantsOfKind(SyntaxKind.CallExpression)
-    .find(c => c.getExpression().getText() === 'sqliteTable');
-}
-```
-**Impact:** Eliminates 20 lines of redundant AST search code, making Drizzle symbol resolution modifications centralized in a single node helper.
+export const userSessionDO = {};
 
----
-
-### Blueprint 2: Transactional Write Wrapper (`state.svelte.ts`)
-Consolidate state persistence boilerplate into a single generalized runner function.
-
-```typescript
 /**
- * Safely executes a schema-changing write operation with unified FSM state management and file writing.
+ * @strata {
+ *   "target": "r2",
+ *   "bucket": "avatars-bucket",
+ *   "folders": {
+ *     "avatars": "image/*",
+ *     "thumbnails": "image/png"
+ *   }
+ * }
  */
-private async executeSchemaMutation(
-  operationName: string,
-  mutateFn: (code: string) => string
-): Promise<void> {
-  if (!this.filePath) return;
-  this.machine.send("SAVE");
-  try {
-    const { writeTextFile } = await import("@tauri-apps/plugin-fs");
-    const newCode = mutateFn(this.rawCode);
-    
-    await writeTextFile(this.filePath, newCode);
-    await this.syncWithFile();
-    this.machine.send("SAVE_SUCCESS");
-  } catch (e: any) {
-    console.error(`[Strata] ${operationName} failed:`, e);
-    this.error = e.message;
-    this.errorType = 'disk';
-    this.machine.send("SAVE_ERROR");
-  }
-}
+export const avatarsBucket = {};
 ```
 
-**Refactored State Methods:**
-```typescript
-async deleteColumn(tableName: string, colName: string) {
-  const { removeColumnFromSchema } = await import("./parser");
-  await this.executeSchemaMutation("Delete Column", (code) => 
-    removeColumnFromSchema(code, tableName, colName)
-  );
-}
+### Parsing Pipeline for Custom Pointers
 
-async renameTable(oldName: string, newName: string) {
-  const { renameTableInSchema } = await import("./parser");
-  await this.executeSchemaMutation("Rename Table", (code) => 
-    renameTableInSchema(code, oldName, newName)
-  );
-}
-```
-**Impact:** Drops code size in `state.svelte.ts` by roughly 60 lines. Unifies all writes under a single transactional pipeline, making it trivial to add new visual operations safely.
+When `parseSchema()` encounters a node with a defined `path` key:
+1. **Resolve Absolute Path:** Resolve the path relative to the schema file using `PlatformService`.
+2. **AST Reading:** Load the external file content into a temporary `ts-morph` SourceFile.
+3. **Symbol Extraction:**
+   - **For Durable Objects (`class`):** Parse the target class and extract its public methods. These methods will be rendered in the ERD as the "API interface" of that DO.
+   - **For KV/R2 (`interface` / `type`):** Resolve the matching TS type/interface and extract its properties as the KV fields.
 
 ---
 
-### Blueprint 3: Platform Service Adapter Pattern
-Currently, imports like `import { open } from "@tauri-apps/plugin-dialog"` are coupled inside components. Creating a simple `PlatformService` class isolates Tauri specifics:
+## 3. Parser Modularization Blueprint (`src/lib/parser/`)
 
+To prevent `parser.ts` from ballooning further and to support new features (such as DO method scanning and R2 parsing), we propose splitting the parser into a dedicated module folder:
+
+```
+src/lib/parser/
+├── index.ts           # Unified public API exports
+├── types.ts           # Shared interfaces (ParseResult, etc.)
+├── project.ts         # Singleton ts-morph Project & SourceFile sync
+├── helpers.ts         # Pure AST traversal & matching utilities
+├── core.ts            # Parser engine (parseSchema, extractColumns, extractRelations)
+└── mutators.ts        # AST writer methods (addTable, addColumn, renameTable, etc.)
+```
+
+### Component Breakdown
+
+#### A. `project.ts` (AST Lifecycle)
+Manages the shared `ts-morph` project and files context, keeping incremental updates fast and memory footprint low.
 ```typescript
-// src/lib/services/platform.ts
-export class PlatformService {
-  static async readText(path: string): Promise<string> {
-    const { readTextFile } = await import("@tauri-apps/plugin-fs");
-    return readTextFile(path);
+import { Project } from 'ts-morph';
+
+export const project = new Project({ useInMemoryFileSystem: true });
+export let sourceFile = project.createSourceFile('schema.ts', '');
+
+export function syncSourceFile(code: string) {
+  if (sourceFile.getFullText() !== code) {
+    sourceFile.replaceWithText(code);
   }
-  static async selectFile(extensions: string[]): Promise<string | null> {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "Files", extensions }],
-    });
-    return typeof selected === "string" ? selected : null;
-  }
+  return sourceFile;
 }
 ```
-**Impact:** Allows mocks for browser and test runs to be injected instantly, enabling the visual and code workspaces to run in a standard web browser (with local storage / mock FS fallback) without requiring Tauri mock wrappers.
+
+#### B. `helpers.ts` (AST Traverser)
+Houses pure functions that query AST nodes without mutating them:
+* `findSqliteTableCall(initializer)`
+* `isDrizzleTableDeclaration(decl)`
+* `parseColumnChain(node)`
+
+#### C. `core.ts` (AST Reader)
+Orchestrates reading schemas, mapping imports, and converting TS syntax into visual Svelte Flow nodes/edges.
+
+#### D. `mutators.ts` (AST Writers)
+Contains functions that perform mutations on the code. Splitting this allows developer workflows to expand (e.g. adding specialized mutators for KV namespace additions or Durable Object binding updates) without cluttering the parse engine.
+
+---
+
+## 4. State Management Modularization (`src/lib/state/`)
+
+Similarly, `state.svelte.ts` can be split into a cleaner directory structure to decouple state representation, transitions, and the async filesystem operations:
+
+```
+src/lib/state/
+├── index.ts           # Exports the global schemaState singleton
+├── store.ts           # The reactive SchemaState class
+├── fsm.ts             # Finite State Machine configuration (runed FSM)
+└── queue.ts           # Operation queue utilities for sequence locking
+```
+
+---
+
+## 5. UI Component Refactoring (`src/lib/components/`)
+
+### Inspector Decoupling
+`Inspector.svelte` currently handles visual fields, relation maps, and input validation schemas for all types. We suggest refactoring it by delegating layout to sub-inspectors:
+* `src/lib/components/inspector/D1Inspector.svelte`
+* `src/lib/components/inspector/KVInspector.svelte`
+* `src/lib/components/inspector/DOInspector.svelte`
+* `src/lib/components/inspector/R2Inspector.svelte`
+
+### Form Isolation
+Extract Valibot validations and DaisyUI forms into dedicated files:
+* `src/lib/components/forms/NewEntityForm.svelte` (unifies add table, DO, KV, and R2)
+* `src/lib/components/forms/AddFieldForm.svelte`

@@ -1,3 +1,10 @@
+<!--
+  Navbar.svelte
+
+  Summary: Top navigation bar rendering filters, view mode selectors, export controls, and file persistence triggers.
+  Expects: None (shares global schemaState).
+  Output: Triggers file opens, layout resets, PNG exports, help modals, and code vs diagram view toggles.
+-->
 <script lang="ts">
   import {
     Camera,
@@ -10,7 +17,7 @@
     Save,
     Undo,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";

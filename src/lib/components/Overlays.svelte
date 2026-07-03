@@ -1,14 +1,13 @@
+<!--
+  Overlays.svelte
+
+  Summary: Global UI overlays showing empty/landing view, loading spinner overlay, and reactive Sonner toasts.
+  Expects: None (shares global schemaState).
+  Output: Interactive file loading buttons and toast notifications.
+-->
 <script lang="ts">
-  /**
-   * Overlays.svelte
-   *
-   * Manages global UI layers including:
-   * - Empty state (Select File prompt)
-   * - Loading state (Busy/Syncing spinner)
-   * - Reactive Sonner toasts for file sync, saves, and errors
-   */
   import { FileCode, FolderOpen } from "lucide-svelte";
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "../state";
   import { toast } from "svelte-sonner";
 
   // Watch for save / syncing states

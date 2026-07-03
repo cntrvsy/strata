@@ -1,17 +1,14 @@
+<!--
+  TableNode.svelte
+
+  Summary: Svelte Flow custom node rendering a single table, KV namespace, R2 bucket, or DO card with column handles.
+  Expects: Svelte Flow node props (id, data, position, selected, etc.).
+  Output: Visual card component with draggable connection handles.
+-->
 <script lang="ts">
-  /**
-   * TableNode.svelte
-   *
-   * The primary visual entity in Strata.
-   * Renders a table/object with its columns/fields.
-   * Dynamically adapts its styling (icons, colors, badges) based on the storage target:
-   * - D1: Standard SQLite relational tables.
-   * - DO: Durable Object storage representations.
-   * - KV: Cloudflare KV namespace representations.
-   */
   import { Handle, Position } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state.svelte";
-  import { Database, Key, Zap, Cpu, Trash2 } from "lucide-svelte";
+  import { schemaState } from "$lib/state";
+  import { Database, Key, Zap, Cpu, Trash2, HardDrive } from "lucide-svelte";
 
   const { data, selected, dragging } = $props<{
     data: {
@@ -22,7 +19,7 @@
         isPk?: boolean;
         isReferences?: boolean;
       }>;
-      target?: "d1" | "do" | "kv";
+      target?: "d1" | "do" | "kv" | "r2";
       isExternal?: boolean;
     };
     selected?: boolean;
@@ -69,6 +66,17 @@
       border: "hover:border-accent/50",
       borderTop: "border-t-accent",
       badge: "badge-accent",
+    },
+    r2: {
+      icon: HardDrive,
+      label: "R2",
+      color: "info",
+      bg: "bg-info/10",
+      bgHover: "group-hover/node:bg-info/20",
+      text: "text-info",
+      border: "hover:border-info/50",
+      borderTop: "border-t-info",
+      badge: "badge-info",
     },
   };
 

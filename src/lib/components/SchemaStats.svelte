@@ -1,5 +1,12 @@
+<!--
+  SchemaStats.svelte
+
+  Summary: Bottom statistics overlay showing counts of D1 tables, KVs, DOs, and relations in the active schema.
+  Expects: None (shares global schemaState).
+  Output: Visual stats panel with toggleable details view.
+-->
 <script lang="ts">
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "../state";
   import { Database, Cpu, Zap, Layers, ChevronDown, ChevronUp } from "lucide-svelte";
   import { slide } from "svelte/transition";
 

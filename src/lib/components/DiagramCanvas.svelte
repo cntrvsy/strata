@@ -1,3 +1,10 @@
+<!--
+  DiagramCanvas.svelte
+
+  Summary: Main Svelte Flow diagram editor canvas rendering tables, columns, relations, minimap, and controls.
+  Expects: None (shares global schemaState).
+  Output: Interactivity triggers for dragging, connection forging, and context menus.
+-->
 <script lang="ts">
   import {
     SvelteFlow,
@@ -7,7 +14,7 @@
     ConnectionMode,
     useSvelteFlow,
   } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import TableNode from "$lib/components/TableNode.svelte";
   import RelationEdge from "$lib/components/RelationEdge.svelte";
   import ContextMenu from "$lib/components/ContextMenu.svelte";

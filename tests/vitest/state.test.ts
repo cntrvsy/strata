@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { schemaState } from '$lib/state.svelte';
+import { schemaState } from '$lib/state';
 import { invoke } from '@tauri-apps/api/core';
+
+// Mock localStorage globally to prevent Node 22+ Experimental Warning/Error conflicts in jsdom
+const mockStorage: Record<string, string> = {};
+Object.defineProperty(window, 'localStorage', {
+  value: {
+    getItem: vi.fn((key: string) => mockStorage[key] || null),
+    setItem: vi.fn((key: string, val: string) => { mockStorage[key] = val; }),
+    removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
+    clear: vi.fn(() => { for (const k in mockStorage) delete mockStorage[k]; }),
+    length: 0,
+    key: vi.fn(() => null),
+  },
+  writable: true,
+  configurable: true,
+});
+
 
 // Mock Tauri Plugins
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -16,6 +32,9 @@ describe('SchemaState FSM & Reactivity', () => {
     schemaState.reset();
     schemaState.recentFiles = [];
     vi.resetAllMocks();
+    for (const key in mockStorage) {
+      delete mockStorage[key];
+    }
   });
 
   // ==========================================
@@ -315,10 +334,6 @@ describe('SchemaState FSM & Reactivity', () => {
   });
 
   it('should persist external node positions to localStorage and not update schema file for them', async () => {
-    const mockStorage: Record<string, string> = {};
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
-
     vi.mocked(invoke).mockImplementation(async (cmd, args: any) => {
       if (cmd === 'read_schema_file') {
         if (args.path === '/mock/schema.ts') {
@@ -348,10 +363,6 @@ describe('SchemaState FSM & Reactivity', () => {
     // Verify localStorage has the position saved
     const key = `strata_ext_pos_/mock/schema.ts_user`;
     expect(mockStorage[key]).toBe(JSON.stringify({ x: 500, y: 600 }));
-
-    // Cleanup spies
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
   // ==========================================
@@ -359,27 +370,16 @@ describe('SchemaState FSM & Reactivity', () => {
   // ==========================================
 
   it('should append a schema path to recent files list on successful sync', async () => {
-    const mockStorage: Record<string, string> = {};
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
-
     vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
     schemaState.filePath = '/mock/schema.ts';
     await schemaState.syncWithFile();
 
     expect(schemaState.recentFiles).toContain('/mock/schema.ts');
     expect(mockStorage['strata_recent_files']).toBe(JSON.stringify(['/mock/schema.ts']));
-
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
   it('should handle missing file read failure by removing it from recent files and resetting', async () => {
-    const mockStorage: Record<string, string> = {
-      'strata_recent_files': JSON.stringify(['/mock/missing.ts'])
-    };
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
+    mockStorage['strata_recent_files'] = JSON.stringify(['/mock/missing.ts']);
 
     vi.mocked(invoke).mockRejectedValue(new Error('Read error'));
 
@@ -391,9 +391,6 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.recentFiles).not.toContain('/mock/missing.ts');
     expect(schemaState.filePath).toBeNull();
     expect(schemaState.machine.current).toBe('EMPTY');
-
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
 });

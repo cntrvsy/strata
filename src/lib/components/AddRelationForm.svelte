@@ -1,14 +1,16 @@
+<!--
+  AddRelationForm.svelte
+
+  Summary: Form to forge physical SQLite relationships or logical/synthetic relations.
+  Expects: sourceTableName prop and onComplete callback.
+  Output: Dispatches relationship additions to the state engine.
+-->
 <script lang="ts">
-  /**
-   * AddRelationForm Component
-   * Forges relationships between entities.
-   * Logic intelligently switches between Drizzle relations() and Synthetic JSDoc.
-   */
   import * as Form from "formsnap";
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { relationSchema } from "$lib/schemas";
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "../state";
   import { Link, X } from "lucide-svelte";
 
   const { sourceTableName, onComplete } = $props<{

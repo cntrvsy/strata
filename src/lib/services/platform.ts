@@ -1,8 +1,9 @@
 /**
  * platform.ts
- * 
- * Platform Service Adapter Pattern.
- * Isolates Tauri-specific APIs to enable easier unit testing and headless environments.
+ *
+ * Summary: Platform Service Adapter Pattern. Isolates Tauri-specific filesystem and dialog APIs.
+ * Expects: File paths or write content.
+ * Output: Raw file text or Tauri shell trigger actions.
  */
 
 export class PlatformService {

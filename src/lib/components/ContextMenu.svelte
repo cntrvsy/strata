@@ -1,7 +1,13 @@
+<!--
+  ContextMenu.svelte
+
+  Summary: Context menu popup containing actions for canvas background and diagram table nodes.
+  Expects: x, y coordinate props, menu type, targetId, onClose and onAction callbacks.
+  Output: Triggers entity additions, renaming, deletion, or focus operations.
+-->
 <script lang="ts">
   import { onMount } from "svelte";
   import { Plus, Trash2, FilePen, Focus } from "lucide-svelte";
-  import { schemaState } from "../state.svelte";
 
   const { x, y, type, targetId, onClose, onAction } = $props<{
     x: number;

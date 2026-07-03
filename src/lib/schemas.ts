@@ -1,3 +1,10 @@
+/**
+ * schemas.ts
+ *
+ * Summary: Validation schemas for user input (table and column creation).
+ * Expects: User configurations from forms (names, types).
+ * Output: Valibot validation results.
+ */
 import * as v from "valibot";
 
 /**
@@ -9,7 +16,7 @@ export const tableSchema = v.object({
     v.minLength(1, "Table name is required"),
     v.regex(/^[a-z_][a-z0-9_]*$/, "Use snake_case (lowercase, numbers, underscores)")
   ),
-  target: v.optional(v.picklist(["d1", "do", "kv"]), "d1"),
+  target: v.optional(v.picklist(["d1", "do", "kv", "r2"]), "d1"),
 });
 
 /**
@@ -21,7 +28,7 @@ export const columnSchema = v.object({
     v.minLength(1, "Column name is required"),
     v.regex(/^[a-z_][a-z0-9_]*$/, "Use snake_case")
   ),
-  type: v.optional(v.picklist(["text", "integer", "blob", "real"]), "text"),
+  type: v.optional(v.picklist(["text", "integer", "blob", "real", "string", "number", "boolean", "any"]), "text"),
   isPk: v.optional(v.boolean(), false),
   notNull: v.optional(v.boolean(), true),
   referencesTable: v.optional(v.string()),

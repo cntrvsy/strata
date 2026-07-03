@@ -1,3 +1,10 @@
+<!--
+  HelpModal.svelte
+
+  Summary: Help and documentation modal explaining sync mechanics, storage targets, relations, and AI prompts.
+  Expects: show bindable prop.
+  Output: Interative help overlay rendering helper copy prompts and workflows.
+-->
 <script lang="ts">
   import {
     X,
@@ -570,6 +577,36 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
                     are stored safely in local storage, preserving your visual layout
                     without altering external third-party files.</span
                   >
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2 border-t border-base-200 pt-4 mt-2">
+                <span class="text-[9px] font-black uppercase opacity-40 tracking-widest">Cloudflare Storage & Auto-Discovery</span>
+                
+                <div class="flex flex-col gap-3.5 mt-2">
+                  <div class="flex flex-col gap-1">
+                    <span class="font-bold text-xs">Wrangler Auto-Discovery</span>
+                    <span class="text-[11px] opacity-70 leading-relaxed">
+                      Strata dynamically searches for and parses <code>wrangler.toml</code> inside the workspace directories. Discovered KV namespaces, Durable Objects, and R2 buckets are rendered automatically in the diagram. When dragged or modified, they write matching stubs and coordinate JSDoc metadata to <code>schema.ts</code> to preserve file-based synchronization.
+                    </span>
+                  </div>
+
+                  <div class="flex flex-col gap-1">
+                    <span class="font-bold text-xs">Schema Pointer Registry</span>
+                    <span class="text-[11px] opacity-70 leading-relaxed font-medium">
+                      Developers can define schema pointers to scan external database structures without direct TypeScript import requirements:
+                    </span>
+                    <pre class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 mt-1">
+<span class="text-success">/** @strata &#123; "target": "schema", "path": "./src/db/auth.ts" &#125; */</span>
+<span class="text-primary">export const</span> authSchema = &#123;&#125;;</pre>
+                  </div>
+
+                  <div class="flex flex-col gap-1">
+                    <span class="font-bold text-xs">Durable Object Method Extraction</span>
+                    <span class="text-[11px] opacity-70 leading-relaxed">
+                      Durable Objects pointing to external typescript class files are parsed using a two-pass parser model. Svelte Flow renders public class methods (methods and their parameters) visually inside the DO card as storage interfaces.
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -1,15 +1,17 @@
+<!--
+  NewTableForm.svelte
+
+  Summary: Form modal to create a new storage target (D1 table, KV, DO, or R2).
+  Expects: None (triggered by active modal state).
+  Output: Dispatches the new table declaration code to the schemaState engine.
+-->
 <script lang="ts">
-  /**
-   * NewTableForm Component
-   * Handles the creation of new storage entities (D1 Tables, KV, DO).
-   * Implements the Disk-First save pattern.
-   */
   import * as Form from "formsnap";
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
-  import { schemaState } from "../state.svelte";
-  import { Database, Cpu, Zap, X } from "lucide-svelte";
+  import { schemaState } from "../state";
+  import { Database, Cpu, Zap, X, HardDrive } from "lucide-svelte";
 
   const form = superForm(defaults(valibot(tableSchema)), {
     SPA: true,
@@ -75,8 +77,8 @@
               class="text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 block"
               >Storage Target</Form.Label
             >
-            <div class="grid grid-cols-3 gap-3">
-              {#each ["d1", "do", "kv"] as t}
+            <div class="grid grid-cols-4 gap-3">
+              {#each ["d1", "do", "kv", "r2"] as t}
                 <label class="cursor-pointer">
                   <input
                     type="radio"
@@ -86,7 +88,7 @@
                     class="sr-only"
                   />
                   <div
-                    class="flex flex-col items-center p-4 rounded-lg border-2 transition-all {$formData.target ===
+                    class="flex flex-col items-center p-3 rounded-lg border-2 transition-all {$formData.target ===
                     t
                       ? 'border-primary bg-primary/5'
                       : 'border-base-300 bg-base-200/30 opacity-50 hover:opacity-100'}"
@@ -104,6 +106,11 @@
                     {#if t === "kv"}<Zap
                         class="w-5 h-5 mb-2 {$formData.target === t
                           ? 'text-accent'
+                          : ''}"
+                      />{/if}
+                    {#if t === "r2"}<HardDrive
+                        class="w-5 h-5 mb-2 {$formData.target === t
+                          ? 'text-info'
                           : ''}"
                       />{/if}
                     <span

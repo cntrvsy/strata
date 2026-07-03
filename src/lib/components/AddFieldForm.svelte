@@ -1,14 +1,16 @@
+<!--
+  AddFieldForm.svelte
+
+  Summary: Form to append new columns/fields to D1 tables, KV schemas, or Durable Object models.
+  Expects: tableName prop and onComplete callback.
+  Output: Dispatches column additions to the state engine.
+-->
 <script lang="ts">
-  /**
-   * AddFieldForm Component
-   * Appends new columns to D1 tables or fields to KV/DO objects.
-   * Supports Foreign Key selection.
-   */
   import * as Form from "formsnap";
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "../state";
   import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{

@@ -1,6 +1,16 @@
+/**
+ * store.svelte.ts
+ *
+ * Summary: Reactive global state store using Svelte 5 Runes ($state, $derived) to manage nodes, edges, file sync, and mutation operations.
+ * Expects: User events (drag, save, add column) and filesystem state changes.
+ * Output: Synchronized database schema file state and Svelte Flow configurations.
+ */
 import { type Node, type Edge } from '@xyflow/svelte';
-import { FiniteStateMachine } from "runed";
-import { PlatformService } from "./services/platform";
+import { PlatformService } from "../services/platform";
+import type { States, Events } from "./types";
+import { createStateMachine } from "./fsm";
+import { OperationQueue } from "./queue";
+import { toast } from "svelte-sonner";
 
 /**
  * Helper to resolve relative path from base file path.
@@ -27,18 +37,110 @@ function resolveRelativePath(base: string, rel: string): string {
 /**
  * Loads external schemas asynchronously based on import path declarations.
  */
-async function loadExternalSchemas(basePath: string, externalImports: { filePath: string }[]): Promise<Map<string, string>> {
+async function loadExternalSchemas(
+	basePath: string, 
+	externalImports: { filePath: string }[] = [], 
+	externalPaths: string[] = []
+): Promise<Map<string, string>> {
 	const externalFilesMap = new Map<string, string>();
 	for (const imp of externalImports) {
 		const resolvedPath = resolveRelativePath(basePath, imp.filePath);
 		try {
 			const extRaw = await PlatformService.readText(resolvedPath);
 			externalFilesMap.set(imp.filePath, extRaw);
-		} catch (err) {
+		} catch (err: any) {
 			console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
+			toast.error(`Failed to read import: ${imp.filePath}`, {
+				description: err?.message || "File not found or unreadable."
+			});
+		}
+	}
+	for (const p of externalPaths) {
+		if (externalFilesMap.has(p)) continue;
+		const resolvedPath = resolveRelativePath(basePath, p);
+		try {
+			const extRaw = await PlatformService.readText(resolvedPath);
+			externalFilesMap.set(p, extRaw);
+		} catch (err: any) {
+			console.warn(`[Strata] Failed to read external path at ${resolvedPath}:`, err);
+			toast.error(`Failed to read path: ${p}`, {
+				description: err?.message || "File not found or unreadable."
+			});
 		}
 	}
 	return externalFilesMap;
+}
+
+function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
+	const blocks = tomlContent.split(/\[\[/);
+	
+	for (const block of blocks) {
+		const lines = block.split('\n');
+		const headerLine = lines[0].trim();
+		
+		if (headerLine.startsWith('kv_namespaces')) {
+			let name = '';
+			for (const line of lines) {
+				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
+				if (match) {
+					name = match[1];
+					break;
+				}
+			}
+			if (name) {
+				bindings.push({ type: 'kv', name, extra: {} });
+			}
+		} else if (headerLine.startsWith('durable_objects.bindings')) {
+			let name = '';
+			let className = '';
+			for (const line of lines) {
+				const nameMatch = line.match(/^\s*name\s*=\s*["']([^"']+)["']/);
+				if (nameMatch) {
+					name = nameMatch[1];
+				}
+				const classMatch = line.match(/^\s*class_name\s*=\s*["']([^"']+)["']/);
+				if (classMatch) {
+					className = classMatch[1];
+				}
+			}
+			if (name) {
+				bindings.push({ type: 'do', name, extra: { class: className } });
+			}
+		} else if (headerLine.startsWith('r2_buckets')) {
+			let name = '';
+			for (const line of lines) {
+				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
+				if (match) {
+					name = match[1];
+					break;
+				}
+			}
+			if (name) {
+				bindings.push({ type: 'r2', name, extra: {} });
+			}
+		}
+	}
+	return bindings;
+}
+
+async function discoverWranglerBindings(filePath: string): Promise<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]> {
+	if (!filePath) return [];
+	let dir = filePath.substring(0, filePath.lastIndexOf('/'));
+	const candidatePaths = [
+		dir + '/wrangler.toml',
+		dir + '/../wrangler.toml',
+		dir + '/../../wrangler.toml'
+	];
+	for (const candidate of candidatePaths) {
+		try {
+			const toml = await PlatformService.readText(candidate);
+			if (toml) {
+				return parseWranglerBindings(toml);
+			}
+		} catch (e) {}
+	}
+	return [];
 }
 
 /**
@@ -71,27 +173,10 @@ function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selected
 }
 
 /**
- * Valid states for the SchemaState machine.
- */
-type States = "EMPTY" | "BUSY" | "IDLE" | "DIRTY" | "ERROR";
-
-/**
- * Valid events that trigger state transitions.
- */
-type Events = 
-	| "SYNC" 
-	| "OPEN" 
-	| "EDIT" 
-	| "SAVE" 
-	| "SUCCESS" 
-	| "FAIL"
-	| "RESET";
-
-/**
  * Global application state for Strata.
  * Manages schema synchronization, file persistence, and UI modes.
  */
-class SchemaState {
+export class SchemaState {
 	// --- Visual State ---
 	/** The current set of Svelte Flow nodes (tables/entities) */
 	nodes = $state.raw([] as Node[]);
@@ -127,62 +212,14 @@ class SchemaState {
 	lastWriteTime = 0;
 	
 	// --- Sequential Task Queue ---
-	private operationQueue = Promise.resolve();
-	private async enqueue(op: () => Promise<void>): Promise<void> {
-		this.operationQueue = this.operationQueue.then(op).catch(err => {
-			console.error("[Strata] Queue operation failed:", err);
-		});
-		return this.operationQueue;
-	}
+	private queue = new OperationQueue();
 
 	// --- FSM State ---
 	/** 
 	 * Formalized Finite State Machine for Strata.
 	 * Prevents "Impossible States" and ensures logical transitions.
 	 */
-	machine = new FiniteStateMachine<States, Events>(
-		this.filePath ? "BUSY" : "EMPTY", 
-		{
-			EMPTY: {
-				SYNC: "BUSY",
-				OPEN: "BUSY",
-				RESET: "EMPTY",
-			},
-			BUSY: {
-				SYNC: "BUSY",
-				EDIT: "BUSY",
-				SAVE: "BUSY",
-				SUCCESS: "IDLE",
-				FAIL: "ERROR",
-				RESET: "EMPTY",
-			},
-			IDLE: {
-				SYNC: "BUSY",
-				OPEN: "BUSY",
-				EDIT: "DIRTY",
-				SAVE: "BUSY",
-				SUCCESS: "IDLE",
-				RESET: "EMPTY",
-			},
-			DIRTY: {
-				SYNC: "BUSY",
-				OPEN: "BUSY",
-				EDIT: "DIRTY",
-				SAVE: "BUSY",
-				SUCCESS: "IDLE",
-				RESET: "EMPTY",
-			},
-			ERROR: {
-				SYNC: "BUSY",
-				OPEN: "BUSY",
-				EDIT: "DIRTY",
-				SAVE: "BUSY",
-				SUCCESS: "IDLE",
-				FAIL: "ERROR",
-				RESET: "EMPTY"
-			}
-		}
-	);
+	machine = createStateMachine(this.filePath ? "BUSY" : "EMPTY");
 
 	// --- Derived IO States (Legacy Support) ---
 	/** True if a write operation to disk is currently in progress */
@@ -197,9 +234,8 @@ class SchemaState {
 	/** Whether the 'Export Successful' toast is visible */
 	showExportToast = $state(false);
 
-	// --- UI State ---
-	/** Active filter for storage target (d1, do, kv) */
-	activeFilter = $state<'d1' | 'do' | 'kv' | null>(null);
+	/** Active filter for storage target (d1, do, kv, r2) */
+	activeFilter = $state<'d1' | 'do' | 'kv' | 'r2' | null>(null);
 	/** Whether the 'New Table' modal is currently visible */
 	showNewTableModal = $state(false);
 	/** The current UI view mode: diagram canvas or code editor */
@@ -213,8 +249,79 @@ class SchemaState {
 		await this.syncWithFile();
 	}
 
+	private async parseAndApply(code: string): Promise<boolean> {
+		const { parseSchema } = await import("../parser");
+		
+		// 1. Initial parse to find external imports & paths
+		const initialResult = parseSchema(code);
+		let externalFilesMap = new Map<string, string>();
+		
+		if ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0)) {
+			externalFilesMap = await loadExternalSchemas(this.filePath!, initialResult.externalImports, initialResult.externalPaths);
+		}
+
+		// 2. Final parse with external file contents mapped
+		const result = parseSchema(code, externalFilesMap);
+		
+		if (result.success) {
+			// Display any warnings
+			if (result.warnings && result.warnings.length > 0) {
+				for (const warning of result.warnings) {
+					toast.warning("Schema Parser Warning", {
+						description: warning,
+						duration: 5000
+					});
+				}
+			}
+			
+			// Discover wrangler.toml bindings
+			const wranglerBindings = await discoverWranglerBindings(this.filePath!);
+			const finalNodes = [...result.nodes];
+			
+			for (const binding of wranglerBindings) {
+				if (!finalNodes.some(n => n.id === binding.name)) {
+					finalNodes.push({
+						id: binding.name,
+						type: 'table',
+						data: {
+							label: binding.name,
+							columns: binding.type === 'kv' ? [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }] : [],
+							target: binding.type,
+							strata: {
+								target: binding.type,
+								x: Math.round(Math.random() * 200),
+								y: Math.round(Math.random() * 200),
+								binding: binding.name,
+								class: binding.extra.class
+							},
+							isExternal: true
+						},
+						position: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) }
+					});
+				}
+			}
+
+			// Preserve selection state
+			const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
+			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath!, selectedNodeIds, this.nodes);
+			this.edges = result.edges;
+			this.rawCode = code;
+			this.isValid = true;
+			this.error = null;
+			this.errorLoc = null;
+			this.errorType = null;
+			return true;
+		} else {
+			this.isValid = false;
+			this.error = result.error || "Parse Error";
+			this.errorLoc = result.errorLoc || null;
+			this.errorType = 'parse';
+			return false;
+		}
+	}
+
 	async syncWithFile() {
-		await this.enqueue(async () => {
+		await this.queue.enqueue(async () => {
 			if (!this.filePath) return;
 			
 			this.machine.send("SYNC");
@@ -222,9 +329,6 @@ class SchemaState {
 			this.errorType = null;
 			
 			try {
-				// Dynamic imports to avoid SSR issues or circular dependencies
-				const { parseSchema } = await import("./parser");
-				
 				const raw = await PlatformService.readText(this.filePath);
 				if (raw === this.rawCode && this.isValid) {
 					// Prevent duplicate syncing/parsing if code matches local rawCode
@@ -232,29 +336,8 @@ class SchemaState {
 					return;
 				}
 				
-				// Initial parse to find external imports
-				const initialResult = parseSchema(raw);
-				let externalFilesMap = new Map<string, string>();
-				
-				if (initialResult.externalImports && initialResult.externalImports.length > 0) {
-					externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports);
-				}
-
-				// Final parse with external file contents mapped
-				const result = parseSchema(raw, externalFilesMap);
-				
-				if (result.success) {
-					// Preserve selection state
-					const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-					this.nodes = mapNodesWithExternalPositions(result.nodes, this.filePath, selectedNodeIds, this.nodes);
-					
-					this.edges = result.edges;
-					this.rawCode = raw;
-					this.isValid = true;
-					this.error = null;
-					this.errorLoc = null;
-					this.errorType = null;
-					
+				const success = await this.parseAndApply(raw);
+				if (success) {
 					// Update recent files list
 					if (typeof window !== 'undefined' && window.localStorage && this.filePath) {
 						let recent = [...this.recentFiles];
@@ -264,13 +347,8 @@ class SchemaState {
 						this.recentFiles = recent;
 						window.localStorage.setItem('strata_recent_files', JSON.stringify(recent));
 					}
-					
 					this.machine.send("SUCCESS");
 				} else {
-					this.isValid = false;
-					this.error = result.error || "Parse Error";
-					this.errorLoc = result.errorLoc || null;
-					this.errorType = 'parse';
 					this.machine.send("FAIL");
 				}
 			} catch (e: any) {
@@ -340,7 +418,7 @@ class SchemaState {
 		operationName: string,
 		mutateFn: (code: string) => string | Promise<string>
 	): Promise<void> {
-		await this.enqueue(async () => {
+		await this.queue.enqueue(async () => {
 			if (!this.filePath) return;
 			this.machine.send("SAVE");
 			try {
@@ -349,34 +427,10 @@ class SchemaState {
 				this.lastWriteTime = Date.now();
 				await PlatformService.writeText(this.filePath, newCode);
 				
-				const { parseSchema } = await import("./parser");
-				
-				// Initial parse to find external imports
-				const initialResult = parseSchema(newCode);
-				let externalFilesMap = new Map<string, string>();
-				
-				if (initialResult.externalImports && initialResult.externalImports.length > 0) {
-					externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports);
-				}
-
-				// Final parse with external file contents mapped
-				const result = parseSchema(newCode, externalFilesMap);
-				
-				if (result.success) {
-					const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-					this.nodes = mapNodesWithExternalPositions(result.nodes, this.filePath, selectedNodeIds, this.nodes);
-					this.edges = result.edges;
-					this.rawCode = newCode;
-					this.isValid = true;
-					this.error = null;
-					this.errorLoc = null;
-					this.errorType = null;
+				const success = await this.parseAndApply(newCode);
+				if (success) {
 					this.machine.send("SUCCESS");
 				} else {
-					this.isValid = false;
-					this.error = result.error || "Parse Error";
-					this.errorLoc = result.errorLoc || null;
-					this.errorType = 'parse';
 					this.machine.send("FAIL");
 				}
 			} catch (e: any) {
@@ -396,7 +450,7 @@ class SchemaState {
 		columnName: string,
 		modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null }
 	) {
-		const { updateColumnModifiersInSchema } = await import("./parser");
+		const { updateColumnModifiersInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column modifier update", (code) => 
 			updateColumnModifiersInSchema(code, tableName, columnName, modifiers)
 		);
@@ -406,7 +460,7 @@ class SchemaState {
 	 * Deletes a column from a table in the schema and syncs to disk.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
-		const { removeColumnFromSchema } = await import("./parser");
+		const { removeColumnFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column delete", (code) => 
 			removeColumnFromSchema(code, tableName, colName)
 		);
@@ -416,7 +470,7 @@ class SchemaState {
 	 * Deletes an entire table/entity from the schema and syncs to disk.
 	 */
 	async deleteTable(tableName: string) {
-		const { removeTableFromSchema } = await import("./parser");
+		const { removeTableFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table delete", (code) => 
 			removeTableFromSchema(code, tableName)
 		);
@@ -429,7 +483,7 @@ class SchemaState {
 	 * Deletes a relationship/edge from the schema and syncs to disk.
 	 */
 	async deleteRelation(source: string, target: string, name?: string) {
-		const { removeEdgeFromSchema } = await import("./parser");
+		const { removeEdgeFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Relation delete", (code) => 
 			removeEdgeFromSchema(code, source, target, name)
 		);
@@ -444,7 +498,7 @@ class SchemaState {
 		await this.executeSchemaMutation("Save", async (code) => {
 			let currentCode = code;
 			if (this.viewMode === 'diagram') {
-				const { updateAllNodePositionsInSchema } = await import("./parser");
+				const { updateAllNodePositionsInSchema } = await import("../parser");
 				currentCode = updateAllNodePositionsInSchema(currentCode, this.nodes);
 			}
 			return currentCode;
@@ -468,7 +522,7 @@ class SchemaState {
 	 * Renames a table in the schema and syncs to disk.
 	 */
 	async renameTable(oldName: string, newName: string) {
-		const { renameTableInSchema } = await import("./parser");
+		const { renameTableInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table rename", (code) => 
 			renameTableInSchema(code, oldName, newName)
 		);
@@ -478,22 +532,22 @@ class SchemaState {
 	}
 
 	/**
-	 * Renames a specific column in the schema and syncs to disk.
+	 * Renames a column in a table in the schema and syncs to disk.
 	 */
 	async renameColumn(tableName: string, oldColName: string, newColName: string) {
-		const { renameColumnInSchema } = await import("./parser");
+		const { renameColumnInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column rename", (code) => 
 			renameColumnInSchema(code, tableName, oldColName, newColName)
 		);
 	}
 
 	/**
-	 * Adds a new table to the schema and syncs to disk.
+	 * Adds a new table or plain entity to the schema and syncs to disk.
 	 */
-	async addTable(name: string, target: 'd1' | 'do' | 'kv') {
-		const { addTableToSchema } = await import("./parser");
+	async addTable(tableName: string, target: 'd1' | 'do' | 'kv' = 'd1') {
+		const { addTableToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table add", (code) => 
-			addTableToSchema(code, name, target)
+			addTableToSchema(code, tableName, target)
 		);
 	}
 
@@ -507,7 +561,7 @@ class SchemaState {
 		referencesTable?: string,
 		referencesColumn?: string
 	) {
-		const { addColumnToSchema } = await import("./parser");
+		const { addColumnToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column add", (code) => 
 			addColumnToSchema(code, tableName, columnName, type, referencesTable, referencesColumn)
 		);
@@ -517,7 +571,7 @@ class SchemaState {
 	 * Adds a relation/edge to the schema and syncs to disk.
 	 */
 	async addRelation(source: string, target: string) {
-		const { addEdgeToSchema } = await import("./parser");
+		const { addEdgeToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Relation add", (code) => 
 			addEdgeToSchema(code, source, target)
 		);
@@ -560,14 +614,3 @@ class SchemaState {
 		}
 	}
 }
-
-/**
- * Singleton instance of the application state.
- */
-export const schemaState = new SchemaState();
-
-// Expose to window for E2E testing
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-	(window as any).schemaState = schemaState;
-}
-

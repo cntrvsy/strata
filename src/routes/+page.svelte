@@ -10,7 +10,7 @@
   import type { Connection } from "@xyflow/svelte";
   import { onMount } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import { PlatformService } from "$lib/services/platform";
 
   // --- Components ---
