@@ -11,7 +11,8 @@ import {
   removeColumnFromSchema,
   updateColumnModifiersInSchema,
   removeEdgeFromSchema,
-  wrapCode
+  wrapCode,
+  updateProjectConfigInSchema
 } from '../../src/lib/parser';
 
 describe('Parser Core', () => {
@@ -637,6 +638,23 @@ describe('Mutation Logic', () => {
       
       mutated = removeColumnFromSchema(mutated, 'bucket', 'archives');
       expect(mutated).not.toContain('archives');
+    });
+
+    it('should parse strataConfig project wranglerPath correctly', () => {
+      const code = `/** @strata { "target": "project", "wranglerPath": "../wrangler.toml" } */\nexport const strataConfig = {};`;
+      const result = parseSchema(code);
+      expect(result.wranglerPath).toBe('../wrangler.toml');
+    });
+
+    it('should write and update project configuration JSDoc metadata', () => {
+      const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
+      let mutated = updateProjectConfigInSchema(baseCode, { wranglerPath: '../../wrangler.toml' });
+      expect(mutated).toContain('"target":"project"');
+      expect(mutated).toContain('"wranglerPath":"../../wrangler.toml"');
+
+      // Update existing config
+      mutated = updateProjectConfigInSchema(mutated, { wranglerPath: './wrangler.toml' });
+      expect(mutated).toContain('"wranglerPath":"./wrangler.toml"');
     });
   });
 });

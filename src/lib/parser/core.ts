@@ -51,6 +51,7 @@ export function parseSchema(code: string, externalFilesMap?: Map<string, string>
 		// Find all exported declarations in main schema file
 		const variableStatements = sf.getVariableStatements();
 		const tableDeclarations = new Map<string, VariableDeclaration>();
+		let wranglerPath: string | undefined = undefined;
 		
 		for (const statement of variableStatements) {
 			const declarations = statement.getDeclarations();
@@ -76,6 +77,12 @@ export function parseSchema(code: string, externalFilesMap?: Map<string, string>
 						} catch (e) {
 							console.warn('Failed to parse @strata JSON:', match[1], e);
 						}
+					}
+				}
+
+				if (strataData.target === 'project') {
+					if (strataData.wranglerPath) {
+						wranglerPath = strataData.wranglerPath;
 					}
 				}
 
@@ -321,10 +328,10 @@ export function parseSchema(code: string, externalFilesMap?: Map<string, string>
 		const validEdges = edges.filter(e => tableNames.has(e.source) && tableNames.has(e.target));
 		
 		if (nodes.length === 0 && code.trim().length > 0) {
-			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports, externalPaths, warnings };
+			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports, externalPaths, warnings, wranglerPath };
 		}
 
-		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings };
+		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, wranglerPath };
 	} catch (e: any) {
 		console.error("[Strata] Parse critical failure:", e);
 		

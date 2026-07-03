@@ -129,8 +129,9 @@
   const isReadOnly = $derived(
     !!selectedNode && (
       (selectedNode.data as any)?.isExternal || 
-      ((selectedNode.data as any)?.target === "do" && (selectedNode.data as any)?.strata?.path) || 
-      ((selectedNode.data as any)?.target === "kv" && (selectedNode.data as any)?.strata?.binding && !(selectedNode.data as any)?.strata?.schema)
+      (selectedNode.data as any)?.target === "do" || 
+      (selectedNode.data as any)?.target === "kv" || 
+      (selectedNode.data as any)?.target === "r2"
     )
   );
 </script>

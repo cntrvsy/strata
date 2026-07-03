@@ -124,14 +124,20 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 	return bindings;
 }
 
-async function discoverWranglerBindings(filePath: string): Promise<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]> {
+async function discoverWranglerBindings(filePath: string, customWranglerPath?: string): Promise<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]> {
 	if (!filePath) return [];
 	let dir = filePath.substring(0, filePath.lastIndexOf('/'));
-	const candidatePaths = [
+	const candidatePaths: string[] = [];
+	if (customWranglerPath) {
+		candidatePaths.push(dir + '/' + customWranglerPath);
+	}
+	candidatePaths.push(
 		dir + '/wrangler.toml',
 		dir + '/../wrangler.toml',
-		dir + '/../../wrangler.toml'
-	];
+		dir + '/../../wrangler.toml',
+		dir + '/../../../wrangler.toml',
+		dir + '/../../../../wrangler.toml'
+	);
 	for (const candidate of candidatePaths) {
 		try {
 			const toml = await PlatformService.readText(candidate);
@@ -241,6 +247,11 @@ export class SchemaState {
 	/** The current UI view mode: diagram canvas or code editor */
 	viewMode = $state<'diagram' | 'code'>('diagram');
 
+	/** Custom relative path to wrangler.toml configured in the schema */
+	wranglerPath = $state<string | undefined>(undefined);
+	/** Whether the project settings modal is visible */
+	showProjectSettingsModal = $state(false);
+
 	/**
 	 * Force-syncs the UI state with the current file on disk.
 	 * This is the definitive "Ground Truth" sync that bypasses local HTML previews.
@@ -264,6 +275,7 @@ export class SchemaState {
 		const result = parseSchema(code, externalFilesMap);
 		
 		if (result.success) {
+			this.wranglerPath = result.wranglerPath;
 			// Display any warnings
 			if (result.warnings && result.warnings.length > 0) {
 				for (const warning of result.warnings) {
@@ -275,7 +287,7 @@ export class SchemaState {
 			}
 			
 			// Discover wrangler.toml bindings
-			const wranglerBindings = await discoverWranglerBindings(this.filePath!);
+			const wranglerBindings = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
 			const finalNodes = [...result.nodes];
 			
 			for (const binding of wranglerBindings) {
@@ -542,9 +554,19 @@ export class SchemaState {
 	}
 
 	/**
+	 * Updates the project-level wranglerPath configuration.
+	 */
+	async updateProjectConfig(wranglerPath?: string) {
+		const { updateProjectConfigInSchema } = await import("../parser");
+		await this.executeSchemaMutation("Project Config update", (code) =>
+			updateProjectConfigInSchema(code, { wranglerPath })
+		);
+	}
+
+	/**
 	 * Adds a new table or plain entity to the schema and syncs to disk.
 	 */
-	async addTable(tableName: string, target: 'd1' | 'do' | 'kv' = 'd1') {
+	async addTable(tableName: string, target: 'd1' | 'do' | 'kv' | 'r2' = 'd1') {
 		const { addTableToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table add", (code) => 
 			addTableToSchema(code, tableName, target)

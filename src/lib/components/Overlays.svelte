@@ -9,6 +9,7 @@
   import { FileCode, FolderOpen } from "lucide-svelte";
   import { schemaState } from "../state";
   import { toast } from "svelte-sonner";
+  import ProjectSettingsModal from "./ProjectSettingsModal.svelte";
 
   // Watch for save / syncing states
   $effect(() => {
@@ -133,4 +134,8 @@
       >
     </div>
   </div>
+{/if}
+
+{#if schemaState.showProjectSettingsModal}
+  <ProjectSettingsModal />
 {/if}

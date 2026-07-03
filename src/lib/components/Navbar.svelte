@@ -16,6 +16,7 @@
     Workflow,
     Save,
     Undo,
+    Settings,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
@@ -217,6 +218,14 @@
 
   <div class="flex items-center gap-3">
     {#if schemaState.filePath}
+      <button
+        class="btn btn-outline btn-sm gap-2 rounded-xl border-base-300 hover:bg-base-200"
+        onclick={() => (schemaState.showProjectSettingsModal = true)}
+        data-testid="project-settings-button"
+        title="Project Settings"
+      >
+        <Settings class="w-4 h-4 text-base-content/70" />
+      </button>
       <button
         class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20"
         onclick={() => (schemaState.showNewTableModal = true)}

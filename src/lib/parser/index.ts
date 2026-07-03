@@ -21,7 +21,8 @@ export {
 	removeColumnFromSchema, 
 	renameTableInSchema, 
 	renameColumnInSchema, 
-	updateColumnModifiersInSchema 
+	updateColumnModifiersInSchema,
+	updateProjectConfigInSchema
 } from './mutators';
 
 export type { ParseResult } from './types';

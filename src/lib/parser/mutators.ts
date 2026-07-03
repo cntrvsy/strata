@@ -665,3 +665,47 @@ export function updateColumnModifiersInSchema(
 	}
 	return sf.getFullText();
 }
+
+/**
+ * Updates the project-level config block in the schema file.
+ */
+export function updateProjectConfigInSchema(code: string, config: { wranglerPath?: string }): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration('strataConfig');
+	
+	const strataVal = {
+		target: 'project',
+		wranglerPath: config.wranglerPath
+	};
+
+	if (decl) {
+		const statement = decl.getVariableStatement();
+		if (statement) {
+			const jsDocs = statement.getJsDocs();
+			if (jsDocs.length > 0) {
+				const doc = jsDocs[0];
+				const text = doc.getText();
+				const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (match) {
+					try {
+						const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						strata.wranglerPath = config.wranglerPath;
+						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						return sf.getFullText();
+					} catch (e) {}
+				}
+				doc.replaceWithText(`*\n * @strata ${JSON.stringify(strataVal)}\n `);
+				return sf.getFullText();
+			} else {
+				statement.addJsDoc({
+					description: `\n * @strata ${JSON.stringify(strataVal)}\n `
+				});
+				return sf.getFullText();
+			}
+		}
+	} else {
+		const content = `\n/**\n * @strata ${JSON.stringify(strataVal)}\n */\nexport const strataConfig = {};\n`;
+		sf.insertText(sf.getFullWidth(), content);
+	}
+	return sf.getFullText();
+}

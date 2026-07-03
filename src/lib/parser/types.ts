@@ -16,6 +16,7 @@ export interface ParseResult {
 	externalImports?: { filePath: string; importNames: string[] }[];
 	externalPaths?: string[]; // Custom paths parsed from JSDoc metadata (e.g. schema pointers, DO class paths)
 	warnings?: string[];
+	wranglerPath?: string;
 }
 
 export interface ChainElement {
