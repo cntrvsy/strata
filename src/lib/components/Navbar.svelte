@@ -17,6 +17,7 @@
     Save,
     Undo,
     Settings,
+    Menu,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
@@ -219,15 +220,7 @@
   <div class="flex items-center gap-3">
     {#if schemaState.filePath}
       <button
-        class="btn btn-outline btn-sm gap-2 rounded-xl border-base-300 hover:bg-base-200"
-        onclick={() => (schemaState.showProjectSettingsModal = true)}
-        data-testid="project-settings-button"
-        title="Project Settings"
-      >
-        <Settings class="w-4 h-4 text-base-content/70" />
-      </button>
-      <button
-        class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20"
+        class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20 font-bold"
         onclick={() => (schemaState.showNewTableModal = true)}
         data-testid="new-table-button"
       >
@@ -255,52 +248,86 @@
         <span class="text-base-content/75">Discard</span>
       </button>
     {/if}
-    {#if schemaState.nodes.length > 0}
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl text-primary hover:bg-primary/5"
-        onclick={exportToImage}
-        title="Export as PNG"
-      >
-        <Camera class="w-4 h-4" />
-        Export
-      </button>
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
-        onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
-        title="Toggle Compact View (Keys/References Only)"
-        data-testid="compact-mode-button"
-      >
-        {#if schemaState.compactMode}
-          <EyeOff class="w-4 h-4 text-warning" />
-          <span class="text-warning">Compact Mode</span>
-        {:else}
-          <Eye class="w-4 h-4 text-base-content/70" />
-          <span class="text-base-content/75">Compact Mode</span>
-        {/if}
-      </button>
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
-        onclick={onAutoLayout}
-        title="Arrange tables automatically using ELK layout algorithm"
-        data-testid="auto-layout-button"
-      >
-        <Workflow class="w-4 h-4 text-base-content/70" />
-        <span class="text-base-content/75">Auto Layout</span>
-      </button>
-    {/if}
+
     <button class="btn btn-ghost btn-sm gap-2 rounded-xl" onclick={onOpenFile}>
-      <FolderOpen class="w-4 h-4" />
+      <FolderOpen class="w-4 h-4 text-base-content/70" />
       Open Schema
     </button>
-    <button
-      class="btn btn-ghost btn-sm btn-circle"
-      onclick={() => (showHelp = true)}
-      data-testid="help-button"
-    >
-      <BadgeQuestionMark
-        class="w-5 h-5 opacity-40 hover:opacity-100 transition-all"
-      />
-    </button>
+
+    <!-- Unified Menu Dropdown -->
+    <div class="dropdown dropdown-end">
+      <div
+        tabindex="0"
+        role="button"
+        class="btn btn-ghost btn-sm gap-2 rounded-xl border border-base-300 hover:bg-base-200 transition-all"
+        title="More Actions"
+      >
+        <Menu class="w-4 h-4 text-base-content/70" />
+        <span class="text-xs font-semibold text-base-content/85">Menu</span>
+      </div>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-base-100 border border-base-300 rounded-2xl z-50 w-56 p-2 shadow-2xl mt-2 gap-1 animate-in fade-in slide-in-from-top-2 duration-200"
+      >
+        {#if schemaState.nodes.length > 0}
+          <li>
+            <button
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+              onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
+            >
+              {#if schemaState.compactMode}
+                <EyeOff class="w-4 h-4 text-warning" />
+                <span class="text-warning font-semibold text-xs">Disable Compact View</span>
+              {:else}
+                <Eye class="w-4 h-4 text-base-content/70" />
+                <span class="text-base-content/75 font-semibold text-xs">Enable Compact View</span>
+              {/if}
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+              onclick={onAutoLayout}
+            >
+              <Workflow class="w-4 h-4 text-base-content/70" />
+              <span class="text-base-content/75 font-semibold text-xs">Auto Layout Diagram</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 text-primary hover:bg-primary/5 transition-colors"
+              onclick={exportToImage}
+            >
+              <Camera class="w-4 h-4" />
+              <span class="font-bold text-xs">Export as PNG</span>
+            </button>
+          </li>
+          <div class="h-px bg-base-300/60 my-1"></div>
+        {/if}
+        
+        {#if schemaState.filePath}
+          <li>
+            <button
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+              onclick={() => (schemaState.showProjectSettingsModal = true)}
+            >
+              <Settings class="w-4 h-4 text-base-content/70" />
+              <span class="text-base-content/75 font-semibold text-xs">Project Settings</span>
+            </button>
+          </li>
+        {/if}
+
+        <li>
+          <button
+            class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+            onclick={() => (showHelp = true)}
+          >
+            <BadgeQuestionMark class="w-4 h-4 text-base-content/70" />
+            <span class="text-base-content/75 font-semibold text-xs">Help & Shortcuts</span>
+          </button>
+        </li>
+      </ul>
+    </div>
   </div>
 </div>
 

@@ -111,15 +111,24 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 /**
  * Adds a new table or plain object entity to the schema.
  */
-export function addTableToSchema(code: string, tableName: string, target: 'd1' | 'do' | 'kv' | 'r2' = 'd1'): string {
+export function addTableToSchema(
+	code: string, 
+	tableName: string, 
+	target: 'd1' | 'do' | 'kv' | 'r2' = 'd1',
+	extra?: { class?: string; path?: string }
+): string {
 	const sf = syncSourceFile(code);
 	
-	if (target === 'd1' || target === 'do') {
+	if (target === 'd1') {
 		ensureImports(sf, "drizzle-orm/sqlite-core", ["sqliteTable", "integer", "text"]);
-		const targetLabel = target === 'do' ? ',"target":"do"' : '';
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}${targetLabel}} \n */\nexport const ${tableName} = sqliteTable("${tableName}", {
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${tableName} = sqliteTable("${tableName}", {
   id: integer("id").primaryKey(),
 });\n`;
+		sf.insertText(sf.getFullWidth(), content);
+	} else if (target === 'do') {
+		const className = extra?.class || "MyClass";
+		const classPath = extra?.path || `./src/${className}.ts`;
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${tableName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'r2') {
 		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}} \n */\nexport const ${tableName} = {};\n`;

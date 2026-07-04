@@ -18,7 +18,7 @@
   import Inspector from "$lib/components/Inspector.svelte";
   import Overlays from "$lib/components/Overlays.svelte";
   import SchemaStats from "$lib/components/SchemaStats.svelte";
-  import NewTableForm from "$lib/components/NewTableForm.svelte";
+  import NewEntityForm from "$lib/components/forms/NewEntityForm.svelte";
   import CodeEditor from "$lib/components/CodeEditor.svelte";
 
   /**
@@ -187,5 +187,5 @@
 </div>
 
 {#if schemaState.showNewTableModal}
-  <NewTableForm />
+  <NewEntityForm />
 {/if}

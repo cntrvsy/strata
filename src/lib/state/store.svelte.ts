@@ -566,10 +566,10 @@ export class SchemaState {
 	/**
 	 * Adds a new table or plain entity to the schema and syncs to disk.
 	 */
-	async addTable(tableName: string, target: 'd1' | 'do' | 'kv' | 'r2' = 'd1') {
+	async addTable(tableName: string, target: 'd1' | 'do' | 'kv' | 'r2' = 'd1', extra?: { class?: string; path?: string }) {
 		const { addTableToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table add", (code) => 
-			addTableToSchema(code, tableName, target)
+			addTableToSchema(code, tableName, target, extra)
 		);
 	}
 
