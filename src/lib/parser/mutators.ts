@@ -7,14 +7,16 @@
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node } from '@xyflow/svelte';
-import { syncSourceFile } from './project';
+import { project, syncSourceFile } from './project';
 import { 
 	findSqliteTableCall, 
 	isDrizzleTableDeclaration, 
 	parseColumnChain, 
 	buildColumnChain, 
-	ensureImports 
+	ensureImports,
+	resolveRelativePath
 } from './helpers';
+import { PlatformService } from '../services/platform';
 
 /**
  * Updates a node's position inside its @strata JSDoc metadata.
@@ -143,14 +145,15 @@ export function addTableToSchema(
 /**
  * Adds a new column or field to an existing entity.
  */
-export function addColumnToSchema(
+export async function addColumnToSchema(
 	code: string, 
 	tableName: string, 
 	columnName: string, 
 	type: string = 'text',
 	referencesTable?: string,
-	referencesColumn?: string
-): string {
+	referencesColumn?: string,
+	schemaFilePath?: string
+): Promise<string> {
 	const sf = syncSourceFile(code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
@@ -173,6 +176,59 @@ export function addColumnToSchema(
 						if (!strata.folders) strata.folders = {};
 						strata.folders[columnName] = type || '*/*';
 						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						return sf.getFullText();
+					} else if (strata.target === 'do') {
+						if (schemaFilePath && strata.path && strata.class) {
+							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							try {
+								const fileContent = await PlatformService.readText(resolvedPath);
+								const extSf = project.createSourceFile(`temp_do_add_${Date.now()}.ts`, fileContent, { overwrite: true });
+								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+								if (classDecl) {
+									let methodName = columnName.trim();
+									let parameters: { name: string; type?: string }[] = [];
+									const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
+									if (parseMatch) {
+										methodName = parseMatch[1].trim();
+										const paramsStr = parseMatch[2].trim();
+										if (paramsStr) {
+											parameters = paramsStr.split(',').map(p => {
+												const [pName, pType] = p.split(':').map(x => x.trim());
+												return {
+													name: pName,
+													type: pType || 'any'
+												};
+											});
+										}
+									}
+									if (!classDecl.getMethod(methodName)) {
+										classDecl.addMethod({
+											name: methodName,
+											parameters,
+											returnType: type || 'Promise<any>',
+											statements: `throw new Error("Method not implemented.");`,
+											scope: 'public' as any
+										});
+									}
+									const newExtContent = extSf.getFullText();
+									await PlatformService.writeText(resolvedPath, newExtContent);
+								}
+							} catch (err) {
+								console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
+							}
+						} else {
+							if (!strata.methods) strata.methods = [];
+							let methodName = columnName.trim();
+							const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
+							if (parseMatch) {
+								methodName = parseMatch[1].trim();
+							}
+							if (!strata.methods.includes(methodName)) {
+								strata.methods.push(methodName);
+								doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+								return sf.getFullText();
+							}
+						}
 						return sf.getFullText();
 					}
 				} catch (e) {}
@@ -447,7 +503,12 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 /**
  * Removes a specific column or field from an entity.
  */
-export function removeColumnFromSchema(code: string, tableName: string, columnName: string): string {
+export async function removeColumnFromSchema(
+	code: string, 
+	tableName: string, 
+	columnName: string,
+	schemaFilePath?: string
+): Promise<string> {
 	const sf = syncSourceFile(code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
@@ -469,6 +530,32 @@ export function removeColumnFromSchema(code: string, tableName: string, columnNa
 						const cleanKey = columnName.endsWith('/') ? columnName.slice(0, -1) : columnName;
 						delete strata.folders[cleanKey];
 						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						return sf.getFullText();
+					} else if (strata.target === 'do') {
+						let methodName = columnName.trim();
+						const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
+						if (parseMatch) {
+							methodName = parseMatch[1].trim();
+						}
+						if (schemaFilePath && strata.path && strata.class) {
+							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							try {
+								const fileContent = await PlatformService.readText(resolvedPath);
+								const extSf = project.createSourceFile(`temp_do_remove_${Date.now()}.ts`, fileContent, { overwrite: true });
+								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+								if (classDecl) {
+									classDecl.getMethod(methodName)?.remove();
+									const newExtContent = extSf.getFullText();
+									await PlatformService.writeText(resolvedPath, newExtContent);
+								}
+							} catch (err) {
+								console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
+							}
+						} else if (strata.methods) {
+							strata.methods = strata.methods.filter((m: string) => m !== methodName);
+							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+							return sf.getFullText();
+						}
 						return sf.getFullText();
 					}
 				} catch (e) {}
@@ -535,7 +622,13 @@ export function renameTableInSchema(code: string, oldName: string, newName: stri
 /**
  * Renames a specific column or field within an entity.
  */
-export function renameColumnInSchema(code: string, tableName: string, oldColName: string, newColName: string): string {
+export async function renameColumnInSchema(
+	code: string, 
+	tableName: string, 
+	oldColName: string, 
+	newColName: string,
+	schemaFilePath?: string
+): Promise<string> {
 	const sf = syncSourceFile(code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
@@ -565,6 +658,37 @@ export function renameColumnInSchema(code: string, tableName: string, oldColName
 							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 							return sf.getFullText();
 						}
+					} else if (strata.target === 'do') {
+						let oldMethodName = oldColName.trim();
+						let newMethodName = newColName.trim();
+						const oldMatch = oldColName.match(/^([a-zA-Z0-9_]+)/);
+						if (oldMatch) oldMethodName = oldMatch[1].trim();
+						const newMatch = newColName.match(/^([a-zA-Z0-9_]+)/);
+						if (newMatch) newMethodName = newMatch[1].trim();
+
+						if (schemaFilePath && strata.path && strata.class) {
+							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							try {
+								const fileContent = await PlatformService.readText(resolvedPath);
+								const extSf = project.createSourceFile(`temp_do_rename_${Date.now()}.ts`, fileContent, { overwrite: true });
+								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+								if (classDecl) {
+									classDecl.getMethod(oldMethodName)?.rename(newMethodName);
+									const newExtContent = extSf.getFullText();
+									await PlatformService.writeText(resolvedPath, newExtContent);
+								}
+							} catch (err) {
+								console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
+							}
+						} else if (strata.methods && Array.isArray(strata.methods)) {
+							const idx = strata.methods.indexOf(oldMethodName);
+							if (idx !== -1) {
+								strata.methods[idx] = newMethodName;
+								doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+								return sf.getFullText();
+							}
+						}
+						return sf.getFullText();
 					}
 				} catch (e) {}
 			}
@@ -609,12 +733,66 @@ export function updateColumnModifiersInSchema(
 	code: string,
 	tableName: string,
 	columnName: string,
-	modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null }
+	modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null; ttl?: number | null; metadata?: string | null }
 ): string {
 	const sf = syncSourceFile(code);
 	const decl = sf.getVariableDeclaration(tableName);
-	const initializer = decl?.getInitializer();
-	
+	if (!decl) return code;
+
+	const statement = decl.getVariableStatement();
+	if (statement) {
+		const jsDocs = statement.getJsDocs();
+		for (const doc of jsDocs) {
+			const text = doc.getText();
+			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			if (match) {
+				try {
+					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					if (strata.target === 'kv' && strata.schema && strata.schema[columnName] !== undefined) {
+						const current = strata.schema[columnName];
+						let updatedVal: any = {};
+						if (typeof current === 'object' && current !== null) {
+							updatedVal = { ...current };
+						} else {
+							updatedVal = { type: String(current) };
+						}
+						
+						if (modifiers.ttl !== undefined) {
+							if (modifiers.ttl === null || modifiers.ttl === undefined || isNaN(Number(modifiers.ttl))) {
+								delete updatedVal.ttl;
+							} else {
+								updatedVal.ttl = Number(modifiers.ttl);
+							}
+						}
+						if (modifiers.metadata !== undefined) {
+							if (modifiers.metadata === null || modifiers.metadata === undefined || modifiers.metadata.trim() === '') {
+								delete updatedVal.metadata;
+							} else {
+								updatedVal.metadata = modifiers.metadata.trim();
+							}
+						}
+						if (modifiers.defaultVal !== undefined) {
+							if (modifiers.defaultVal) {
+								updatedVal.type = modifiers.defaultVal;
+							}
+						}
+						
+						const keys = Object.keys(updatedVal);
+						if (keys.length === 1 && keys[0] === 'type') {
+							strata.schema[columnName] = updatedVal.type;
+						} else {
+							strata.schema[columnName] = updatedVal;
+						}
+						
+						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						return sf.getFullText();
+					}
+				} catch (e) {}
+			}
+		}
+	}
+
+	const initializer = decl.getInitializer();
 	if (!initializer) return code;
 	
 	const tableCall = findSqliteTableCall(initializer);
@@ -673,6 +851,59 @@ export function updateColumnModifiersInSchema(
 		}
 	}
 	return sf.getFullText();
+}
+
+/**
+ * Updates bucket-level configuration (e.g. public access, custom domain, CORS) in R2 JSDoc metadata.
+ */
+export function updateTableMetadataInSchema(
+	code: string,
+	tableName: string,
+	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }
+): string {
+	const sf = syncSourceFile(code);
+	const decl = sf.getVariableDeclaration(tableName);
+	if (!decl) return code;
+
+	const statement = decl.getVariableStatement();
+	if (statement) {
+		const jsDocs = statement.getJsDocs();
+		for (const doc of jsDocs) {
+			const text = doc.getText();
+			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			if (match) {
+				try {
+					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					
+					if (metadata.public !== undefined) {
+						if (metadata.public) {
+							strata.public = true;
+						} else {
+							delete strata.public;
+						}
+					}
+					if (metadata.customDomain !== undefined) {
+						if (metadata.customDomain && metadata.customDomain.trim() !== '') {
+							strata.customDomain = metadata.customDomain.trim();
+						} else {
+							delete strata.customDomain;
+						}
+					}
+					if (metadata.cors !== undefined) {
+						if (metadata.cors) {
+							strata.cors = true;
+						} else {
+							delete strata.cors;
+						}
+					}
+
+					doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+					return sf.getFullText();
+				} catch (e) {}
+			}
+		}
+	}
+	return code;
 }
 
 /**

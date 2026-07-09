@@ -102,12 +102,25 @@ export function parseSchema(code: string, externalFilesMap?: Map<string, string>
 						columns = extractColumns(decl);
 					} else if (target === 'kv') {
 						if (strataData.schema) {
-							columns = Object.entries(strataData.schema).map(([name, type]) => ({
-								name,
-								definition: String(type),
-								isPk: false,
-								isReferences: false
-							}));
+							columns = Object.entries(strataData.schema).map(([name, val]) => {
+								if (typeof val === 'object' && val !== null) {
+									const valObj = val as any;
+									return {
+										name,
+										definition: String(valObj.type || 'string'),
+										ttl: valObj.ttl ? Number(valObj.ttl) : undefined,
+										metadata: valObj.metadata ? String(valObj.metadata) : undefined,
+										isPk: false,
+										isReferences: false
+									};
+								}
+								return {
+									name,
+									definition: String(val),
+									isPk: false,
+									isReferences: false
+								};
+							});
 						} else {
 							columns = extractObjectFields(decl);
 						}
@@ -323,8 +336,30 @@ export function parseSchema(code: string, externalFilesMap?: Map<string, string>
 			}
 		}
 
-		// Cleanup: Ensure all edges point to existing nodes
+		// Validation: Ensure all synthetic relations point to existing targets
 		const tableNames = new Set(nodes.map(n => n.id));
+		for (const [tableName, decl] of tableDeclarations) {
+			const statement = decl.getVariableStatement();
+			const jsDocs = statement?.getJsDocs() || [];
+			for (const doc of jsDocs) {
+				const text = doc.getText();
+				const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (match) {
+					try {
+						const strataData = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						if (strataData.relations && Array.isArray(strataData.relations)) {
+							for (const rel of strataData.relations) {
+								if (!tableNames.has(rel.to)) {
+									warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
+								}
+							}
+						}
+					} catch (e) {}
+				}
+			}
+		}
+
+		// Cleanup: Ensure all edges point to existing nodes
 		const validEdges = edges.filter(e => tableNames.has(e.source) && tableNames.has(e.target));
 		
 		if (nodes.length === 0 && code.trim().length > 0) {

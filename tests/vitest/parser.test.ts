@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { 
   parseSchema, 
   updateNodePositionInSchema, 
@@ -12,8 +12,10 @@ import {
   updateColumnModifiersInSchema,
   removeEdgeFromSchema,
   wrapCode,
-  updateProjectConfigInSchema
+  updateProjectConfigInSchema,
+  updateTableMetadataInSchema
 } from '../../src/lib/parser';
+import { PlatformService } from '../../src/lib/services/platform';
 
 describe('Parser Core', () => {
   it('should parse simple D1 tables', () => {
@@ -247,9 +249,9 @@ describe('Mutation Logic', () => {
     expect(newCode).not.toContain('export const usersRelations');
   });
 
-  it('should add a column to an existing D1 table', () => {
+  it('should add a column to an existing D1 table', async () => {
     const code = `export const users = sqliteTable("users", { id: integer("id") });`;
-    const newCode = addColumnToSchema(code, 'users', 'email', 'text');
+    const newCode = await addColumnToSchema(code, 'users', 'email', 'text');
     expect(newCode).toContain('email: text("email")');
   });
 
@@ -263,9 +265,9 @@ describe('Mutation Logic', () => {
     expect(newCode).toContain('export const customersRelations = relations(customers');
   });
 
-  it('should rename a column and its database identifier', () => {
+  it('should rename a column and its database identifier', async () => {
     const code = `export const users = sqliteTable("users", { name: text("name") });`;
-    const newCode = renameColumnInSchema(code, 'users', 'name', 'fullName');
+    const newCode = await renameColumnInSchema(code, 'users', 'name', 'fullName');
     expect(newCode).toContain('fullName: text("fullName")');
   });
 
@@ -314,27 +316,27 @@ describe('Mutation Logic', () => {
       expect(newCode).toContain('comments: many(comments)');
     });
 
-    it('should rename a column in a KV object', () => {
+    it('should rename a column in a KV object', async () => {
       const code = `export const sessions = { id: "string", user: "string" };`;
-      const newCode = renameColumnInSchema(code, 'sessions', 'user', 'userId');
+      const newCode = await renameColumnInSchema(code, 'sessions', 'user', 'userId');
       expect(newCode).toContain('userId: "string"');
     });
 
-    it('should add a column to a KV object', () => {
+    it('should add a column to a KV object', async () => {
       const code = `export const sessions = { id: "string" };`;
-      const newCode = addColumnToSchema(code, 'sessions', 'ttl', 'number');
+      const newCode = await addColumnToSchema(code, 'sessions', 'ttl', 'number');
       expect(newCode).toContain('ttl: "number"');
     });
 
-    it('should remove a column from a KV object', () => {
+    it('should remove a column from a KV object', async () => {
       const code = `export const sessions = { id: "string", trash: "any" };`;
-      const newerCode = removeColumnFromSchema(code, 'sessions', 'trash');
+      const newerCode = await removeColumnFromSchema(code, 'sessions', 'trash');
       expect(newerCode).not.toContain('trash: "any"');
     });
 
-    it('should remove a column from a D1 table', () => {
+    it('should remove a column from a D1 table', async () => {
       const code = `export const users = sqliteTable("users", { id: integer("id"), bio: text("bio") });`;
-      const newCode = removeColumnFromSchema(code, 'users', 'bio');
+      const newCode = await removeColumnFromSchema(code, 'users', 'bio');
       expect(newCode).not.toContain('bio: text("bio")');
     });
 
@@ -363,9 +365,9 @@ describe('Mutation Logic', () => {
       expect(wrapCode('const x = 1;')).toBe('<pre><code>const x = 1;</code></pre>');
     });
 
-    it('should handle complex sqliteTable initializers (descendants check)', () => {
+    it('should handle complex sqliteTable initializers (descendants check)', async () => {
       const code = `export const users = someWrapper(sqliteTable("users", { id: integer("id") }));`;
-      const result = renameColumnInSchema(code, 'users', 'id', 'newId');
+      const result = await renameColumnInSchema(code, 'users', 'id', 'newId');
       expect(result).toContain('newId: integer("newId")');
     });
 
@@ -376,9 +378,9 @@ describe('Mutation Logic', () => {
       expect(newCode).toContain('"relations":[{"to":"b"}]');
     });
 
-    it('should add a column with references', () => {
+    it('should add a column with references', async () => {
       const code = `export const users = sqliteTable("users", { id: integer("id") }); export const posts = sqliteTable("posts", { id: integer("id") });`;
-      const newCode = addColumnToSchema(code, 'posts', 'authorId', 'integer', 'users', 'id');
+      const newCode = await addColumnToSchema(code, 'posts', 'authorId', 'integer', 'users', 'id');
       expect(newCode).toContain('.references(() => users.id)');
     });
 
@@ -589,54 +591,54 @@ describe('Mutation Logic', () => {
   });
 
   describe('Target-Specific Schema CRUD Operations', () => {
-    it('should correctly mutate D1 table columns', () => {
+    it('should correctly mutate D1 table columns', async () => {
       const code = `export const users = sqliteTable("users", { id: integer("id") });`;
-      let mutated = addColumnToSchema(code, 'users', 'email', 'text');
+      let mutated = await addColumnToSchema(code, 'users', 'email', 'text');
       expect(mutated).toContain('email: text("email")');
       
-      mutated = renameColumnInSchema(mutated, 'users', 'email', 'userEmail');
+      mutated = await renameColumnInSchema(mutated, 'users', 'email', 'userEmail');
       expect(mutated).toContain('userEmail: text("userEmail")');
       expect(mutated).not.toContain('email: text("email")');
       
-      mutated = removeColumnFromSchema(mutated, 'users', 'userEmail');
+      mutated = await removeColumnFromSchema(mutated, 'users', 'userEmail');
       expect(mutated).not.toContain('userEmail');
     });
 
-    it('should correctly mutate KV object fields in inline definitions and JSDoc schemas', () => {
+    it('should correctly mutate KV object fields in inline definitions and JSDoc schemas', async () => {
       // Inline literal mutation
       const inlineCode = `export const kv = { val: "string" };`;
-      let mutated = addColumnToSchema(inlineCode, 'kv', 'expires', 'number');
+      let mutated = await addColumnToSchema(inlineCode, 'kv', 'expires', 'number');
       expect(mutated).toContain('expires: "number"');
       
-      mutated = renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
+      mutated = await renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
       expect(mutated).toContain('expiresAt: "number"');
       
-      mutated = removeColumnFromSchema(mutated, 'kv', 'expiresAt');
+      mutated = await removeColumnFromSchema(mutated, 'kv', 'expiresAt');
       expect(mutated).not.toContain('expiresAt');
 
       // JSDoc schema metadata mutation
       const jsdocCode = `/** @strata { "target": "kv", "schema": { "val": "string" } } */\nexport const kv = {};`;
-      mutated = addColumnToSchema(jsdocCode, 'kv', 'expires', 'number');
+      mutated = await addColumnToSchema(jsdocCode, 'kv', 'expires', 'number');
       expect(mutated).toContain('"expires":"number"');
       
-      mutated = renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
+      mutated = await renameColumnInSchema(mutated, 'kv', 'expires', 'expiresAt');
       expect(mutated).toContain('"expiresAt":"number"');
       expect(mutated).not.toContain('"expires":');
       
-      mutated = removeColumnFromSchema(mutated, 'kv', 'expiresAt');
+      mutated = await removeColumnFromSchema(mutated, 'kv', 'expiresAt');
       expect(mutated).not.toContain('expiresAt');
     });
 
-    it('should correctly mutate R2 folder structures in JSDoc', () => {
+    it('should correctly mutate R2 folder structures in JSDoc', async () => {
       const code = `/** @strata { "target": "r2", "folders": { "avatars": "image/*" } } */\nexport const bucket = {};`;
-      let mutated = addColumnToSchema(code, 'bucket', 'backups', 'application/zip');
+      let mutated = await addColumnToSchema(code, 'bucket', 'backups', 'application/zip');
       expect(mutated).toContain('"backups":"application/zip"');
       
-      mutated = renameColumnInSchema(mutated, 'bucket', 'backups', 'archives');
+      mutated = await renameColumnInSchema(mutated, 'bucket', 'backups', 'archives');
       expect(mutated).toContain('"archives":"application/zip"');
       expect(mutated).not.toContain('backups');
       
-      mutated = removeColumnFromSchema(mutated, 'bucket', 'archives');
+      mutated = await removeColumnFromSchema(mutated, 'bucket', 'archives');
       expect(mutated).not.toContain('archives');
     });
 
@@ -655,6 +657,148 @@ describe('Mutation Logic', () => {
       // Update existing config
       mutated = updateProjectConfigInSchema(mutated, { wranglerPath: './wrangler.toml' });
       expect(mutated).toContain('"wranglerPath":"./wrangler.toml"');
+    });
+
+    it('should correctly mutate DO methods using JSDoc fallbacks', async () => {
+      const code = `/** @strata { "target": "do", "methods": ["getValue"] } */\nexport const Counter = {};`;
+      let mutated = await addColumnToSchema(code, 'Counter', 'increment(by: number)', 'Promise<void>');
+      expect(mutated).toContain('"methods":["getValue","increment"]');
+
+      mutated = await renameColumnInSchema(mutated, 'Counter', 'increment', 'add');
+      expect(mutated).toContain('"methods":["getValue","add"]');
+
+      mutated = await removeColumnFromSchema(mutated, 'Counter', 'add');
+      expect(mutated).toContain('"methods":["getValue"]');
+    });
+
+    it('should correctly mutate external DO class files directly', async () => {
+      const schemaCode = `/** @strata { "target": "do", "path": "./Counter.ts", "class": "Counter" } */\nexport const Counter = {};`;
+      const classContent = `export class Counter {\n  public async getCount(): Promise<number> {\n    return 0;\n  }\n}`;
+
+      const readSpy = vi.spyOn(PlatformService, 'readText').mockResolvedValue(classContent);
+      const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+
+      // Add a method
+      let mutated = await addColumnToSchema(schemaCode, 'Counter', 'increment(by: number)', 'Promise<void>', undefined, undefined, '/projects/schema.ts');
+      expect(readSpy).toHaveBeenCalledWith('/projects/Counter.ts');
+      expect(writeSpy).toHaveBeenCalled();
+      const writtenClass = writeSpy.mock.calls[0][1];
+      expect(writtenClass).toContain('increment(by: number)');
+      expect(writtenClass).toContain('Promise<void>');
+
+      // Rename method
+      writeSpy.mockClear();
+      readSpy.mockResolvedValue(writtenClass);
+      mutated = await renameColumnInSchema(mutated, 'Counter', 'increment(by: number)', 'add(by: number)', '/projects/schema.ts');
+      expect(writeSpy).toHaveBeenCalled();
+      const renamedClass = writeSpy.mock.calls[0][1];
+      expect(renamedClass).toContain('add(by: number)');
+      expect(renamedClass).not.toContain('increment');
+
+      // Remove method
+      writeSpy.mockClear();
+      readSpy.mockResolvedValue(renamedClass);
+      mutated = await removeColumnFromSchema(mutated, 'Counter', 'add(by: number)', '/projects/schema.ts');
+      expect(writeSpy).toHaveBeenCalled();
+      const removedClass = writeSpy.mock.calls[0][1];
+      expect(removedClass).not.toContain('add');
+
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+    });
+  });
+
+  describe('KV Structured Schemas', () => {
+    it('should correctly parse structured KV definitions from JSDoc', () => {
+      const code = `
+        /**
+         * @strata { "target": "kv", "schema": { "config": { "type": "any", "ttl": 3600, "metadata": "config-tag" }, "version": "number" } }
+         */
+        export const kv = {};
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      const kvNode = result.nodes.find(n => n.id === 'kv') as any;
+      expect(kvNode).toBeDefined();
+      const configCol = kvNode?.data.columns.find((c: any) => c.name === 'config');
+      expect(configCol).toBeDefined();
+      expect(configCol.definition).toBe('any');
+      expect(configCol.ttl).toBe(3600);
+      expect(configCol.metadata).toBe('config-tag');
+
+      const versionCol = kvNode?.data.columns.find((c: any) => c.name === 'version');
+      expect(versionCol).toBeDefined();
+      expect(versionCol.definition).toBe('number');
+      expect(versionCol.ttl).toBeUndefined();
+    });
+
+    it('should update TTL, metadata, and type of structured KV keys in JSDoc', () => {
+      const code = `/** @strata { "target": "kv", "schema": { "key": "string" } } */\nexport const kv = {};`;
+
+      // Update TTL
+      let mutated = updateColumnModifiersInSchema(code, 'kv', 'key', { ttl: 86400 });
+      expect(mutated).toContain('"ttl":86400');
+      expect(mutated).toContain('"type":"string"');
+
+      // Update Metadata
+      mutated = updateColumnModifiersInSchema(mutated, 'kv', 'key', { metadata: 'my-tag' });
+      expect(mutated).toContain('"metadata":"my-tag"');
+
+      // Update Type
+      mutated = updateColumnModifiersInSchema(mutated, 'kv', 'key', { defaultVal: 'number' });
+      expect(mutated).toContain('"type":"number"');
+
+      // Remove TTL and Metadata (should fall back to flat string type)
+      mutated = updateColumnModifiersInSchema(mutated, 'kv', 'key', { ttl: null, metadata: null });
+      expect(mutated).toContain('"key":"number"');
+      expect(mutated).not.toContain('ttl');
+      expect(mutated).not.toContain('metadata');
+    });
+  });
+
+  describe('Synthetic Relationship Validation', () => {
+    it('should generate warning when synthetic relations target missing nodes', () => {
+      const code = `
+        /** @strata { "target": "d1", "relations": [{ "to": "missing_kv" }] } */
+        export const users = sqliteTable("users", {});
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      expect(result.warnings || []).toHaveLength(1);
+      expect((result.warnings || [])[0]).toContain('Synthetic relationship in "users" points to missing target "missing_kv"');
+    });
+
+    it('should not generate warnings if target exists', () => {
+      const code = `
+        /** @strata { "target": "d1", "relations": [{ "to": "my_kv" }] } */
+        export const users = sqliteTable("users", {});
+        
+        /** @strata { "target": "kv", "schema": {} } */
+        export const my_kv = {};
+      `;
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      expect(result.warnings || []).toHaveLength(0);
+    });
+  });
+
+  describe('R2 Bucket Configurations', () => {
+    it('should update JSDoc metadata for R2 bucket configurations', () => {
+      const code = `/** @strata { "target": "r2", "folders": {} } */\nexport const images = {};`;
+      
+      // Update public and customDomain
+      let mutated = updateTableMetadataInSchema(code, 'images', { public: true, customDomain: 'cdn.my-app.com' });
+      expect(mutated).toContain('"public":true');
+      expect(mutated).toContain('"customDomain":"cdn.my-app.com"');
+
+      // Update CORS rules
+      mutated = updateTableMetadataInSchema(mutated, 'images', { cors: true });
+      expect(mutated).toContain('"cors":true');
+
+      // Toggle public off
+      mutated = updateTableMetadataInSchema(mutated, 'images', { public: false, customDomain: null });
+      expect(mutated).not.toContain('public');
+      expect(mutated).not.toContain('customDomain');
     });
   });
 });

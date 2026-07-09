@@ -19,6 +19,7 @@
     Settings,
     Menu,
     Code,
+    Cpu,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
@@ -328,6 +329,17 @@
             >
               <Workflow class="w-4 h-4 text-base-content/70" />
               <span class="font-medium text-xs">Auto Layout Diagram</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200/60 transition-all font-medium text-xs text-base-content/75"
+              onclick={() => schemaState.generateAndSaveResolvers()}
+            >
+              <Cpu class="w-4 h-4 text-primary" />
+              <span class="font-medium text-xs text-primary"
+                >Generate TS Resolvers</span
+              >
             </button>
           </li>
           <li>

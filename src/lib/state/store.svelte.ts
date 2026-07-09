@@ -12,27 +12,7 @@ import { createStateMachine } from "./fsm";
 import { OperationQueue } from "./queue";
 import { toast } from "svelte-sonner";
 
-/**
- * Helper to resolve relative path from base file path.
- */
-function resolveRelativePath(base: string, rel: string): string {
-	const parts = base.split('/');
-	parts.pop(); // Remove filename
-	const relParts = rel.split('/');
-	for (const part of relParts) {
-		if (part === '.') continue;
-		if (part === '..') {
-			parts.pop();
-		} else {
-			parts.push(part);
-		}
-	}
-	let resolved = parts.join('/');
-	if (!resolved.endsWith('.ts')) {
-		resolved += '.ts';
-	}
-	return resolved;
-}
+import { resolveRelativePath } from "../parser";
 
 /**
  * Loads external schemas asynchronously based on import path declarations.
@@ -167,8 +147,11 @@ function parseWranglerContent(fileName: string, content: string): { type: 'kv' |
 	return parseWranglerBindings(content);
 }
 
-async function discoverWranglerBindings(filePath: string, customWranglerPath?: string): Promise<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]> {
-	if (!filePath) return [];
+async function discoverWranglerBindings(filePath: string, customWranglerPath?: string): Promise<{
+	bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[];
+	configFilePath: string | null;
+}> {
+	if (!filePath) return { bindings: [], configFilePath: null };
 	let dir = filePath.substring(0, filePath.lastIndexOf('/'));
 	
 	// If the user specified a custom path, try to resolve it first
@@ -177,7 +160,10 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		try {
 			const content = await PlatformService.readText(fullPath);
 			if (content) {
-				return parseWranglerContent(customWranglerPath, content);
+				return {
+					bindings: parseWranglerContent(customWranglerPath, content),
+					configFilePath: fullPath
+				};
 			}
 		} catch (e) {}
 	}
@@ -191,7 +177,10 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 			try {
 				const content = await PlatformService.readText(candidate);
 				if (content) {
-					return parseWranglerContent(name, content);
+					return {
+						bindings: parseWranglerContent(name, content),
+						configFilePath: candidate
+					};
 				}
 			} catch (e) {}
 		}
@@ -200,7 +189,7 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		currentDir = currentDir.substring(0, lastSlash);
 		prefix += '../';
 	}
-	return [];
+	return { bindings: [], configFilePath: null };
 }
 
 /**
@@ -313,6 +302,8 @@ export class SchemaState {
 
 	/** Custom relative path to wrangler.toml configured in the schema */
 	wranglerPath = $state<string | undefined>(undefined);
+	/** Absolute path to the resolved wrangler configuration file */
+	wranglerConfigFilePath = $state<string | null>(null);
 	/** Whether the project settings modal is visible */
 	showProjectSettingsModal = $state(false);
 
@@ -351,7 +342,8 @@ export class SchemaState {
 			}
 			
 			// Discover wrangler.toml bindings
-			const wranglerBindings = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
+			const { bindings: wranglerBindings, configFilePath } = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
+			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
 			
 			for (const binding of wranglerBindings) {
@@ -524,11 +516,21 @@ export class SchemaState {
 	async updateColumnModifiers(
 		tableName: string,
 		columnName: string,
-		modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null }
+		modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null; ttl?: number | null; metadata?: string | null }
 	) {
 		const { updateColumnModifiersInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column modifier update", (code) => 
 			updateColumnModifiersInSchema(code, tableName, columnName, modifiers)
+		);
+	}
+
+	/**
+	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
+	 */
+	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }) {
+		const { updateTableMetadataInSchema } = await import("../parser");
+		await this.executeSchemaMutation("Table metadata update", (code) => 
+			updateTableMetadataInSchema(code, tableName, metadata)
 		);
 	}
 
@@ -538,7 +540,7 @@ export class SchemaState {
 	async deleteColumn(tableName: string, colName: string) {
 		const { removeColumnFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column delete", (code) => 
-			removeColumnFromSchema(code, tableName, colName)
+			removeColumnFromSchema(code, tableName, colName, this.filePath || undefined)
 		);
 	}
 
@@ -546,12 +548,19 @@ export class SchemaState {
 	 * Deletes an entire table/entity from the schema and syncs to disk.
 	 */
 	async deleteTable(tableName: string) {
+		const node = this.nodes.find(n => n.id === tableName);
+		const target = (node?.data as any)?.target || 'd1';
+
 		const { removeTableFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table delete", (code) => 
 			removeTableFromSchema(code, tableName)
 		);
 		if (this.activeInspectorNodeId === tableName) {
 			this.activeInspectorNodeId = null;
+		}
+
+		if (target !== 'd1' && this.wranglerConfigFilePath) {
+			await this.syncToWranglerConfig('remove', { type: target, name: tableName });
 		}
 	}
 
@@ -594,16 +603,22 @@ export class SchemaState {
 		setTimeout(() => (this.isRecentlySaved = false), 1500);
 	}
 
-	/**
-	 * Renames a table in the schema and syncs to disk.
-	 */
 	async renameTable(oldName: string, newName: string) {
+		const node = this.nodes.find(n => n.id === oldName);
+		const target = (node?.data as any)?.target || 'd1';
+		const extra = (node?.data as any)?.strata || {};
+
 		const { renameTableInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table rename", (code) => 
 			renameTableInSchema(code, oldName, newName)
 		);
 		if (this.activeInspectorNodeId === oldName) {
 			this.activeInspectorNodeId = newName;
+		}
+
+		if (target !== 'd1' && this.wranglerConfigFilePath) {
+			await this.syncToWranglerConfig('remove', { type: target, name: oldName });
+			await this.syncToWranglerConfig('add', { type: target, name: newName, extra });
 		}
 	}
 
@@ -613,7 +628,7 @@ export class SchemaState {
 	async renameColumn(tableName: string, oldColName: string, newColName: string) {
 		const { renameColumnInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column rename", (code) => 
-			renameColumnInSchema(code, tableName, oldColName, newColName)
+			renameColumnInSchema(code, tableName, oldColName, newColName, this.filePath || undefined)
 		);
 	}
 
@@ -635,6 +650,10 @@ export class SchemaState {
 		await this.executeSchemaMutation("Table add", (code) => 
 			addTableToSchema(code, tableName, target, extra)
 		);
+
+		if (target !== 'd1' && this.wranglerConfigFilePath) {
+			await this.syncToWranglerConfig('add', { type: target, name: tableName, extra });
+		}
 	}
 
 	/**
@@ -649,7 +668,7 @@ export class SchemaState {
 	) {
 		const { addColumnToSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column add", (code) => 
-			addColumnToSchema(code, tableName, columnName, type, referencesTable, referencesColumn)
+			addColumnToSchema(code, tableName, columnName, type, referencesTable, referencesColumn, this.filePath || undefined)
 		);
 	}
 
@@ -678,6 +697,84 @@ export class SchemaState {
 		this.machine.send("RESET");
 	}
 
+	/**
+	 * Synchronizes a canvas mutation (add/remove/rename) back to wrangler.toml or json config
+	 */
+	async syncToWranglerConfig(
+		action: 'add' | 'remove',
+		binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }
+	) {
+		if (!this.wranglerConfigFilePath) return;
+		try {
+			const content = await PlatformService.readText(this.wranglerConfigFilePath);
+			let updatedContent = '';
+			if (this.wranglerConfigFilePath.endsWith('.toml')) {
+				updatedContent = mutateTomlConfig(content, action, binding);
+			} else {
+				updatedContent = mutateJsonConfig(content, action, binding);
+			}
+			if (updatedContent && updatedContent !== content) {
+				await PlatformService.writeText(this.wranglerConfigFilePath, updatedContent);
+				toast.success(`Wrangler configuration synced`, {
+					description: `${action === 'add' ? 'Added' : 'Removed'} ${binding.type} binding: ${binding.name}`
+				});
+			}
+		} catch (err: any) {
+			console.error("[Strata] Failed to sync wrangler config:", err);
+			toast.error(`Wrangler sync failed`, {
+				description: err?.message || "Could not write changes to wrangler config."
+			});
+		}
+	}
+
+	/**
+	 * Generates a TS resolver helper file next to schema.ts and copies it to the clipboard.
+	 */
+	async generateAndSaveResolvers() {
+		if (!this.filePath) {
+			toast.error("No active schema file", {
+				description: "Please open a schema file before generating resolvers."
+			});
+			return;
+		}
+
+		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
+		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
+		
+		const hasRelations = this.nodes.some(n => {
+			const strata = (n.data as any)?.strata;
+			return strata && strata.relations && strata.relations.length > 0;
+		});
+
+		if (kvNodes.length === 0 && doNodes.length === 0 && !hasRelations) {
+			toast.warning("No targets for resolvers", {
+				description: "No KV/DO targets or synthetic relations found in the schema."
+			});
+			return;
+		}
+
+		try {
+			const code = generateResolverCode(this.nodes);
+			const dir = this.filePath.substring(0, this.filePath.lastIndexOf('/'));
+			const resolverPath = `${dir}/resolvers.ts`;
+
+			await PlatformService.writeText(resolverPath, code);
+
+			if (typeof navigator !== 'undefined' && navigator.clipboard) {
+				await navigator.clipboard.writeText(code);
+			}
+
+			toast.success("Resolvers generated successfully", {
+				description: `Saved to resolvers.ts and copied to clipboard.`
+			});
+		} catch (e: any) {
+			console.error("[Strata] Failed to generate resolvers:", e);
+			toast.error("Resolver generation failed", {
+				description: e.message || "Could not write resolvers.ts to disk."
+			});
+		}
+	}
+
 	constructor() {
 		if (typeof window !== 'undefined' && window.localStorage) {
 			try {
@@ -699,4 +796,210 @@ export class SchemaState {
 			} catch (e) {}
 		}
 	}
+}
+
+/**
+ * Surgically mutates TOML config string, preserving comments and format.
+ */
+export function mutateTomlConfig(content: string, action: 'add' | 'remove', binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }): string {
+	const blocks = content.split(/(?=\[\[)/);
+	
+	if (action === 'remove') {
+		const filteredBlocks = blocks.filter(block => {
+			const trimmed = block.trim();
+			if (!trimmed.startsWith('[[')) return true;
+			
+			const lines = trimmed.split('\n');
+			const header = lines[0].trim();
+			
+			if (binding.type === 'kv' && header.startsWith('[[kv_namespaces]]')) {
+				return !lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)));
+			}
+			if (binding.type === 'r2' && header.startsWith('[[r2_buckets]]')) {
+				return !lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)));
+			}
+			if (binding.type === 'do' && header.startsWith('[[durable_objects.bindings]]')) {
+				return !lines.some(line => line.match(new RegExp(`name\\s*=\\s*["']${binding.name}["']`)));
+			}
+			return true;
+		});
+		return filteredBlocks.join('');
+	} else {
+		let exists = false;
+		for (const block of blocks) {
+			const trimmed = block.trim();
+			if (!trimmed.startsWith('[[')) continue;
+			const lines = trimmed.split('\n');
+			const header = lines[0].trim();
+			
+			if (binding.type === 'kv' && header.startsWith('[[kv_namespaces]]')) {
+				if (lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)))) {
+					exists = true;
+					break;
+				}
+			}
+			if (binding.type === 'r2' && header.startsWith('[[r2_buckets]]')) {
+				if (lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)))) {
+					exists = true;
+					break;
+				}
+			}
+			if (binding.type === 'do' && header.startsWith('[[durable_objects.bindings]]')) {
+				if (lines.some(line => line.match(new RegExp(`name\\s*=\\s*["']${binding.name}["']`)))) {
+					exists = true;
+					break;
+				}
+			}
+		}
+		
+		if (exists) return content;
+		
+		let appendText = '';
+		if (binding.type === 'kv') {
+			appendText = `\n\n[[kv_namespaces]]\nbinding = "${binding.name}"\nid = "placeholder-id"`;
+		} else if (binding.type === 'r2') {
+			appendText = `\n\n[[r2_buckets]]\nbinding = "${binding.name}"\nbucket_name = "${binding.name}"`;
+		} else if (binding.type === 'do') {
+			const className = binding.extra?.class || binding.name;
+			appendText = `\n\n[[durable_objects.bindings]]\nname = "${binding.name}"\nclass_name = "${className}"`;
+		}
+		return content.trimEnd() + appendText + '\n';
+	}
+}
+
+/**
+ * Mutates JSON/JSONC config string by parsing and regenerating formatting.
+ */
+export function mutateJsonConfig(content: string, action: 'add' | 'remove', binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }): string {
+	const cleaned = content
+		.replace(/\/\*[\s\S]*?\*\//g, '')
+		.replace(/(?:^|[^\\:])\/\/.*$/gm, '');
+	const data = JSON.parse(cleaned);
+	
+	if (action === 'remove') {
+		if (binding.type === 'kv' && Array.isArray(data.kv_namespaces)) {
+			data.kv_namespaces = data.kv_namespaces.filter((kv: any) => kv?.binding !== binding.name);
+		} else if (binding.type === 'r2' && Array.isArray(data.r2_buckets)) {
+			data.r2_buckets = data.r2_buckets.filter((r2: any) => r2?.binding !== binding.name);
+		} else if (binding.type === 'do' && data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
+			data.durable_objects.bindings = data.durable_objects.bindings.filter((dobj: any) => dobj?.name !== binding.name);
+		}
+	} else {
+		if (binding.type === 'kv') {
+			if (!Array.isArray(data.kv_namespaces)) data.kv_namespaces = [];
+			if (!data.kv_namespaces.some((kv: any) => kv?.binding === binding.name)) {
+				data.kv_namespaces.push({ binding: binding.name, id: "placeholder-id" });
+			}
+		} else if (binding.type === 'r2') {
+			if (!Array.isArray(data.r2_buckets)) data.r2_buckets = [];
+			if (!data.r2_buckets.some((r2: any) => r2?.binding === binding.name)) {
+				data.r2_buckets.push({ binding: binding.name, bucket_name: binding.name });
+			}
+		} else if (binding.type === 'do') {
+			if (!data.durable_objects) data.durable_objects = {};
+			if (!Array.isArray(data.durable_objects.bindings)) data.durable_objects.bindings = [];
+			if (!data.durable_objects.bindings.some((dobj: any) => dobj?.name === binding.name)) {
+				const className = binding.extra?.class || binding.name;
+				data.durable_objects.bindings.push({ name: binding.name, class_name: className });
+			}
+		}
+	}
+	return JSON.stringify(data, null, 2);
+}
+
+/**
+ * Generates TS code for Cloudflare KV and DO resolvers based on synthetic relations.
+ */
+export function generateResolverCode(nodes: Node[]): string {
+	let code = `/**
+ * Generated by Strata.
+ * This file contains typed resolver helpers to bridge D1 database records
+ * with Cloudflare KV, Durable Objects, and R2 storage targets.
+ */
+
+import type { KVNamespace, DurableObjectNamespace } from '@cloudflare/workers-types';
+
+`;
+
+	const kvNodes = nodes.filter(n => (n.data as any)?.target === 'kv');
+	const doNodes = nodes.filter(n => (n.data as any)?.target === 'do');
+
+	// Process KV Resolvers
+	for (const kv of kvNodes) {
+		const name = kv.id;
+		const referringNodes = nodes.filter(n => {
+			const strata = (n.data as any)?.strata;
+			return strata && strata.relations && strata.relations.some((r: any) => r.to === name);
+		});
+
+		for (const refNode of referringNodes) {
+			const fnName = `resolve${refNode.id}To${name}`;
+			code += `/**
+ * Resolves KV values from "${name}" linked by records in "${refNode.id}".
+ */
+export async function ${fnName}(kv: KVNamespace, key: string) {
+	try {
+		return await kv.get(key, { type: 'json' });
+	} catch (e) {
+		return await kv.get(key, { type: 'text' });
+	}
+}
+
+`;
+		}
+	}
+
+	// Process DO Resolvers
+	for (const doNode of doNodes) {
+		const name = doNode.id;
+		const methods = (doNode.data as any)?.columns || [];
+		
+		const referringNodes = nodes.filter(n => {
+			const strata = (n.data as any)?.strata;
+			return strata && strata.relations && strata.relations.some((r: any) => r.to === name);
+		});
+
+		for (const refNode of referringNodes) {
+			const fnName = `resolve${refNode.id}To${name}Stub`;
+			code += `/**
+ * Resolves the Durable Object stub for "${name}" linked by records in "${refNode.id}".
+ */
+export function ${fnName}(ns: DurableObjectNamespace, idStr: string) {
+	const id = ns.idFromString(idStr);
+	return ns.get(id);
+}
+
+`;
+		}
+
+		if (methods.length > 0) {
+			const className = `${name}Client`;
+			code += `/**
+ * Typed client wrapper for Durable Object stub "${name}".
+ */
+export class ${className} {
+	constructor(private stub: any) {}
+
+`;
+			for (const m of methods) {
+				const sig = m.name;
+				const match = sig.match(/^([a-zA-Z0-9_]+)\s*\(([^)]*)\)/);
+				const methodName = match ? match[1] : sig;
+				const args = match ? match[2] : '';
+				const argNames = args.split(',').map((a: string) => {
+					const parts = a.split(':');
+					return parts[0].trim();
+				}).filter(Boolean).join(', ');
+
+				code += `	async ${methodName}(${args}): ${m.definition} {
+		return await this.stub.${methodName}(${argNames});
+	}
+
+`;
+			}
+			code += `}\n\n`;
+		}
+	}
+
+	return code;
 }

@@ -10,6 +10,10 @@ export {
 	wrapCode 
 } from './core';
 
+export {
+	resolveRelativePath
+} from './helpers';
+
 export { 
 	updateNodePositionInSchema, 
 	updateAllNodePositionsInSchema, 
@@ -22,7 +26,8 @@ export {
 	renameTableInSchema, 
 	renameColumnInSchema, 
 	updateColumnModifiersInSchema,
-	updateProjectConfigInSchema
+	updateProjectConfigInSchema,
+	updateTableMetadataInSchema
 } from './mutators';
 
 export type { ParseResult } from './types';

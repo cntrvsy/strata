@@ -62,7 +62,7 @@
     class="flex items-center justify-between border-b border-base-300/60 pb-3 mb-1"
   >
     <h4 class="text-[10px] font-bold uppercase tracking-wider opacity-50">
-      {target === "r2" ? "Add Folder Path" : "Add Field"}
+      {target === "r2" ? "Add Folder Path" : target === "do" ? "Add Public Method" : "Add Field"}
     </h4>
     <button class="btn btn-ghost btn-xs btn-circle hover:bg-base-200" onclick={onComplete}>
       <X class="w-3.5 h-3.5 opacity-60" />
@@ -77,12 +77,12 @@
             <Form.Label
               class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
-              {target === "r2" ? "Folder Name/Prefix" : "Name"}
+              {target === "r2" ? "Folder Name/Prefix" : target === "do" ? "Method Signature" : "Name"}
             </Form.Label>
             <input
               {...props}
               bind:value={$formData.name}
-              placeholder={target === "r2" ? "e.g. avatars" : "e.g. id, email"}
+              placeholder={target === "r2" ? "e.g. avatars" : target === "do" ? "e.g. getValue() or getVal(id: number)" : "e.g. id, email"}
               class="input input-sm input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all text-xs"
             />
           {/snippet}
@@ -95,7 +95,7 @@
             <Form.Label
               class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
-              {target === "r2" ? "MIME Type Constraint" : "Type"}
+              {target === "r2" ? "MIME Type Constraint" : target === "do" ? "Return Type" : "Type"}
             </Form.Label>
             {#if target === "r2"}
               <input
@@ -115,6 +115,12 @@
                   <option value="number">Number</option>
                   <option value="boolean">Boolean</option>
                   <option value="any">Any</option>
+                {:else if target === "do"}
+                  <option value="Promise<any>">Promise&lt;any&gt;</option>
+                  <option value="Promise<string>">Promise&lt;string&gt;</option>
+                  <option value="Promise<number>">Promise&lt;number&gt;</option>
+                  <option value="Promise<boolean>">Promise&lt;boolean&gt;</option>
+                  <option value="Promise<void>">Promise&lt;void&gt;</option>
                 {:else}
                   <option value="text">Text</option>
                   <option value="integer">Integer</option>
@@ -184,7 +190,7 @@
       class="btn btn-primary btn-sm rounded-xl w-full gap-2 mt-2 shadow-sm font-semibold"
     >
       <Check class="w-3.5 h-3.5" />
-      {target === "r2" ? "Add Folder Path" : "Create Field"}
+      {target === "r2" ? "Add Folder Path" : target === "do" ? "Create Method" : "Create Field"}
     </button>
   </form>
 </div>

@@ -1,9 +1,9 @@
 <!--
   HelpModal.svelte
 
-  Summary: Help and documentation modal explaining sync mechanics, storage targets, relations, and AI prompts.
+  Summary: Complete Developer Help Center & Searchable Documentation for Strata.
   Expects: show bindable prop.
-  Output: Interative help overlay rendering helper copy prompts and workflows.
+  Output: Searchable help guides, zero lock-in policies, achievements walkthrough, and AI prompts.
 -->
 <script lang="ts">
   import {
@@ -17,21 +17,228 @@
     BookOpen,
     Check,
     FingerprintPattern,
+    Search,
+    HelpCircle,
+    Info,
+    AlertTriangle,
+    HardDrive,
+    History
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
 
   let { show = $bindable(false) } = $props();
-  let activeTab = $state("sync");
 
-  const tabs = [
-    { id: "sync", label: "Sync Engine", icon: RefreshCw },
-    { id: "targets", label: "Storage Targets", icon: Database },
-    { id: "relations", label: "Smart Relations", icon: Share2 },
-    { id: "imports", label: "External Schemas", icon: FingerprintPattern },
-    { id: "ai", label: "AI Integration", icon: Sparkles },
+  let activeTab = $state("all");
+  let searchQuery = $state("");
+  let copied = $state(false);
+
+  const categories = [
+    { id: "all", label: "All Documentation", icon: BookOpen },
+    { id: "getting-started", label: "Getting Started", icon: FingerprintPattern },
+    { id: "cloudflare", label: "Cloudflare Bindings", icon: Database },
+    { id: "relationships", label: "ERD Relationships", icon: Share2 },
+    { id: "troubleshooting", label: "Troubleshooting", icon: AlertTriangle },
+    { id: "achievements", label: "Release Walkthrough", icon: History },
+    { id: "ai", label: "AI Co-Design Prompt", icon: Sparkles }
   ];
 
-  let copied = $state(false);
+  interface DocTopic {
+    id: string;
+    title: string;
+    category: string;
+    tags: string[];
+    summary: string;
+    content: string;
+  }
+
+  const docTopics: DocTopic[] = [
+    {
+      id: "onboarding-policy",
+      category: "getting-started",
+      title: "Capabilities & Live Visual Mapping",
+      tags: ["onboarding", "sync", "ast", "watch", "start"],
+      summary: "Strata is an interactive ERD tool for Drizzle + Cloudflare. We parse schema.ts variables and render them as custom database nodes.",
+      content: `<p class="mb-2">Strata reads your codebase as the absolute single source of truth:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Bi-directional Sync:</strong> Visual edits trigger AST updates to your TypeScript files.</li>
+                  <li><strong>Live File Watcher:</strong> Saving schemas in external IDEs updates the ERD canvas instantly.</li>
+                  <li><strong>Tauri Desktop Integration:</strong> Works locally in your filesystem with native write permissions.</li>
+                </ul>`
+    },
+    {
+      id: "offboarding-policy",
+      category: "getting-started",
+      title: "Lock-in Free Offboarding Guarantee",
+      tags: ["offboarding", "lockin", "jsdoc", "clean", "walk"],
+      summary: "Strata leaves no proprietary databases or JSON sidecars in your workspace. You can walk away at any time.",
+      content: `<p class="mb-2">We respect your engineering intelligence. All metadata is stored exclusively in standard JSDoc tags:</p>
+                <pre class="bg-neutral p-3 rounded-lg text-neutral-content font-mono text-[10px] my-2">
+/** @strata { "target": "d1", "x": 100, "y": 200 } */
+export const users = sqliteTable("users", {});</pre>
+                <p>If you stop using Strata, your schema remains 100% standard Drizzle code. You can strip the comments or keep them—zero locked configurations, zero dependencies.</p>`
+    },
+    {
+      id: "wrangler-sync",
+      category: "cloudflare",
+      title: "Wrangler Configuration Binding Sync",
+      tags: ["wrangler", "toml", "json", "jsonc", "sync"],
+      summary: "Visual modifications to KV, DO, or R2 targets automatically synchronize configuration parameters back to Wrangler configs.",
+      content: `<p class="mb-2">Adding, deleting, or renaming non-D1 targets updates configurations in real-time:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>TOML Mutator:</strong> Surgically edits wrangler.toml headers while preserving comments.</li>
+                  <li><strong>JSON/JSONC Mutator:</strong> Formats bindings safely without structural breakage.</li>
+                  <li><strong>Path Auto-Detection:</strong> Scans up to 12 parent levels to identify config locations.</li>
+                </ul>`
+    },
+    {
+      id: "durable-objects",
+      category: "cloudflare",
+      title: "Stateful Durable Objects Class Mutations",
+      tags: ["durable", "objects", "class", "methods", "do"],
+      summary: "Visual Durable Object public method edits rewrite the underlying TS class declaration files.",
+      content: `<p class="mb-2">Strata bridges the gap between database schema and method routing:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>External Class Mutation:</strong> Modifying methods in DO canvas cards directly patches external class declarations (declared via <code>strata.path</code>).</li>
+                  <li><strong>Local JSDoc Fallbacks:</strong> If class files are omitted, method states fall back to JSDoc comments.</li>
+                  <li><strong>DO Method Builder:</strong> Interactive public method builders displaying names, params, and DO return types (e.g. <code>Promise&lt;string&gt;</code>).</li>
+                </ul>`
+    },
+    {
+      id: "kv-namespaces",
+      category: "cloudflare",
+      title: "KV Namespace Static Registry Mode",
+      tags: ["kv", "keys", "expiration", "ttl", "metadata"],
+      summary: "Allows modeling key-value namespaces with custom data-type assertions, custom Expirations, and metadata fields.",
+      content: `<p class="mb-2">Provides database-like visual inspector structures over flat key stores:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Advanced Inspector:</strong> Define key data-types (String, Number, Boolean, or Any).</li>
+                  <li><strong>Expiration Limits:</strong> Assign custom Expiration TTL limits (minimum 60 seconds).</li>
+                  <li><strong>Badges:</strong> Visual pills showing expirations and metadata strings per row.</li>
+                </ul>`
+    },
+    {
+      id: "r2-buckets",
+      category: "cloudflare",
+      title: "R2 Bucket Configuration Settings",
+      tags: ["r2", "bucket", "public", "cors", "domain"],
+      summary: "Model storage folders and edit access control settings (Public, CORS, Domains) visually.",
+      content: `<p class="mb-2">Visualize R2 buckets with comprehensive config drawers:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Public access:</strong> Toggles bucket visibility directly.</li>
+                  <li><strong>Custom domains:</strong> Routable text inputs for public domain endpoints.</li>
+                  <li><strong>CORS policies:</strong> Toggles Cross-Origin Resource Sharing.</li>
+                  <li><strong>Directories:</strong> List folders mapped to specific MIME-type filters.</li>
+                </ul>`
+    },
+    {
+      id: "erd-relationships",
+      category: "relationships",
+      title: "Physical vs Logical Relationships",
+      tags: ["relations", "cardinality", "foreign", "keys"],
+      summary: "Understand differences between solid SQLite foreign key lines and dashed logical relationships.",
+      content: `<p class="mb-2">Strata displays relationship lines based on database structure:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Solid Lines (FK):</strong> Extracted from SQLite <code>.references()</code> rules. Enforces engine constraint validation.</li>
+                  <li><strong>Dashed Lines (Relations):</strong> Modeled from Drizzle's logical <code>relations()</code> API queries.</li>
+                  <li><strong>Directional Arrowheads:</strong> Points from the Child table (has the key) to the Parent table (One side).</li>
+                </ul>`
+    },
+    {
+      id: "synthetic-relations",
+      category: "relationships",
+      title: "Synthetic JSDoc Cross-Storage Relationships",
+      tags: ["synthetic", "jsdoc", "relations", "cross"],
+      summary: "Map connections between D1 tables and KV, DO, or R2 targets without database engine overhead.",
+      content: `<p class="mb-2">Allows bridging SQL records to Cloudflare storage bindings:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Zero Overhead:</strong> Saves connections in table JSDoc metadata <code>relations</code> array.</li>
+                  <li><strong>Dashed Rendering:</strong> Display logical paths across databases and file binders visually.</li>
+                  <li><strong>Resolver Hooks:</strong> Bridges targets type-safely during application execution.</li>
+                </ul>`
+    },
+    {
+      id: "syntax-errors",
+      category: "troubleshooting",
+      title: "Resolving Syntax & Parsing Failures",
+      tags: ["error", "parse", "syntax", "tsmorph", "fail"],
+      summary: "Steps to fix errors when the parser blocks workspace synchronization due to invalid TypeScript code.",
+      content: `<p class="mb-2">If Strata shows parse errors after editing code in the code tab:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li>Ensure all typescript imports (e.g. from <code>drizzle-orm/sqlite-core</code>) are valid.</li>
+                  <li>Look at the parse failure console logs or toast warning messages for line/column highlights.</li>
+                  <li>Check that braces, commas, and parentheses are closed in variable declarations.</li>
+                </ul>`
+    },
+    {
+      id: "relation-warnings",
+      category: "troubleshooting",
+      title: "Resolving Target Mismatch Warnings",
+      tags: ["warning", "target", "relations", "missing"],
+      summary: "How to fix synthetic target warning flags when a relation references a node variable that has been deleted or renamed.",
+      content: `<p class="mb-2">If you see warnings about missing synthetic relationship targets:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li>Open the JSDoc of the warning table.</li>
+                  <li>Verify that <code>strata.relations</code> targets point to exact, case-sensitive variable names existing in the diagram.</li>
+                  <li>Update the target <code>to</code> key if the related KV, DO, or R2 table has been renamed.</li>
+                </ul>`
+    },
+    {
+      id: "kv-ttl-guard",
+      category: "troubleshooting",
+      title: "KV Expiration TTL Restrictions",
+      tags: ["kv", "ttl", "guard", "limit", "time"],
+      summary: "Addresses Cloudflare's mandatory minimum of 60 seconds for expiration values to prevent deploy-time validation errors.",
+      content: `<p>Cloudflare KV requires any configured Expiration TTL values to be at least <strong>60 seconds</strong>. Strata's visual inspector implements client-side validation preventing values below 60s, keeping your configuration deployments clean.</p>`
+    },
+    {
+      id: "ach-do-mutations",
+      category: "achievements",
+      title: "1. Durable Objects (DO) Mutation Support",
+      tags: ["achievements", "durable", "objects", "ast"],
+      summary: "Surgically edits external class declarations on disk via ts-morph AST, with local JSDoc fallbacks, DO public method forms, signatures, and return types.",
+      content: `<p>Canvas updates to DO public methods edit either local schema JSDocs or the backing external TypeScript class declaration directly, parsing signatures and return signatures seamlessly.</p>`
+    },
+    {
+      id: "ach-visual-overhaul",
+      category: "achievements",
+      title: "2. UI Layout & Terminology Refinement",
+      tags: ["achievements", "ui", "collapsible", "wrangler", "detect"],
+      summary: "Collapsible joint code/canvas splits, relocated action items, comment-stripped upward Wrangler directory scanners, and cleanup of marketing jargon.",
+      content: `<p>Cleaner developer interface incorporating collapsible viewports, a comment-safe recursive parent-folder configuration scanner, and term cleanup replacing buzzwords with engineering terminology.</p>`
+    },
+    {
+      id: "ach-wrangler-sync",
+      category: "achievements",
+      title: "3. Bi-directional Wrangler Config Sync",
+      tags: ["achievements", "wrangler", "sync", "toml", "json"],
+      summary: "Real-time updates of KV, DO, R2 canvas additions and deletions directly inside wrangler.toml and json files using block-preserving mutators.",
+      content: `<p>Adding, deleting, or renaming non-D1 visual targets propagates parameter binding fields back to configurations in real-time, matching workspace settings automatically.</p>`
+    },
+    {
+      id: "ach-kv-datatypes",
+      category: "achievements",
+      title: "4. KV Namespace Datatypes & Help Center",
+      summary: "Advanced KV inspector drawers (types, TTL, metadata), custom badges, and detailed developer guide integrations.",
+      tags: ["achievements", "kv", "inspector", "ttl"],
+      content: `<p>Allows developers to enforce typed key-value structures, configure custom expirations, write descriptions, and display structured configurations instantly.</p>`
+    },
+    {
+      id: "ach-relations-resolvers",
+      category: "achievements",
+      title: "5. Logical Relationship Validation & Resolvers",
+      summary: "Adds synthetic target warning parsers and resolver.ts code generation to construct type-safe KV retrieval wrappers and Durable Object stub proxies.",
+      tags: ["achievements", "relations", "resolvers", "generate"],
+      content: `<p>Raises warnings for disconnected targets and builds resolvers next to schemas, generating typed getters and client class stubs with complete return parameters.</p>`
+    },
+    {
+      id: "ach-r2-settings",
+      category: "achievements",
+      title: "6. R2 Bucket Configuration Settings",
+      summary: "Bucket-level configuration controls (Public access, CORS, custom domain routing) updating target JSDoc comment tags selectively.",
+      tags: ["achievements", "r2", "bucket", "cors", "public"],
+      content: `<p>Introduces access control settings directly in the R2 inspector, updating underlying JSDocs without modifying files or directory configurations.</p>`
+    }
+  ];
 
   const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare D1 (SQLite dialect).
 We are using Strata, an interactive ERD tool that parses our \`schema.ts\` file.
@@ -40,7 +247,7 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
 
 1. AESTHETICS & METADATA: Every table or collection declaration MUST be preceded by a standard JSDoc comment containing Strata visual coordinates. Do NOT strip or omit these:
    /**
-    * @strata { "target": "d1" | "do" | "kv", "x": number, "y": number }
+    * @strata { "target": "d1" | "do" | "kv" | "r2", "x": number, "y": number }
     */
 
 2. GRID LAYOUT: Pre-calculate visual layout positions (x, y coordinates) for new tables. Space them out logically (e.g. 400px apart horizontally, 300px apart vertically) to avoid overlaps.
@@ -48,668 +255,231 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
 3. DATATYPES (Cloudflare D1 / SQLite):
    - SQLite does not have a native Date type. Always map dates using:
      integer("column_name", { mode: "timestamp" }) or integer("column_name", { mode: "timestamp_ms" })
-   - Ensure all column constraints match Drizzle core SQLite capabilities.
+   - Booleans must map to: integer("column_name", { mode: "boolean" })
 
-4. RELATIONSHIPS:
-   - Physical foreign keys: Use inline \`.references()\` declarations (renders as solid lines on diagram).
-     Example: authorId: integer("author_id").references(() => users.id, { onDelete: "cascade" })
-   - Logical relations: Use Drizzle's \`relations()\` query-builder api (renders as dashed lines on diagram). Ensure they follow the naming standard \`\${tableName}Relations\`.
-     Example: export const postsRelations = relations(posts, ({ one }) => ({ author: one(users, { fields: [posts.authorId], references: [users.id] }) }))`;
+4. STORAGE TARGETS (JSDoc overrides):
+   - SQLite D1 database target is specified by: "target": "d1"
+   - Durable Object targets are specified by: "target": "do". Specify methods using: /** @strata { "target": "do", "methods": ["methodName(arg: type): PromiseType"] } */
+   - KV Namespace targets are specified by: "target": "kv". Specify key mappings via: /** @strata { "target": "kv", "schema": { "keyName": "type" | { "type": "type", "ttl": number, "metadata": "desc" } } } */
+   - R2 Bucket targets are specified by: "target": "r2". Specify configurations and directories via: /** @strata { "target": "r2", "public": boolean, "customDomain": string, "cors": boolean, "folders": { "folderName": "mime/filter" } } */
 
-  function copyPrompt() {
-    navigator.clipboard.writeText(aiPrompt).then(() => {
+5. SYNTHETIC RELATIONSHIPS:
+   - If establishing relations involving KV, DO, or R2 targets, do not declare physical SQL foreign keys. Instead, specify logical connections inside the source entity JSDoc:
+     /** @strata { "target": "d1", "relations": [{"to": "USERS_KV"}] } */
+
+Generate only code inside standard markdown codeblocks without conversational fluff.`;
+
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(aiPrompt);
       copied = true;
       setTimeout(() => (copied = false), 2000);
-    });
+    } catch (e) {
+      console.error("[Strata] Clipboard write failed:", e);
+    }
+  }
+
+  // Filter topics based on category tab & search query
+  const filteredTopics = $derived(
+    docTopics.filter((t) => {
+      const matchesCategory = activeTab === "all" || t.category === activeTab;
+      
+      if (!searchQuery.trim()) {
+        return matchesCategory;
+      }
+
+      const query = searchQuery.toLowerCase();
+      const matchesText =
+        t.title.toLowerCase().includes(query) ||
+        t.summary.toLowerCase().includes(query) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(query));
+
+      return matchesText;
+    })
+  );
+
+  function resetSearch() {
+    searchQuery = "";
+    activeTab = "all";
+  }
+
+  // Count topics helper for badges
+  function getTopicCount(catId: string) {
+    if (catId === "all") return docTopics.length;
+    if (catId === "ai") return 1;
+    return docTopics.filter((t) => t.category === catId).length;
   }
 </script>
 
 {#if show}
-  <!-- Backdrop Overlay -->
   <div
-    class="fixed inset-0 z-100 bg-base-900/60 backdrop-blur-[2px] transition-all duration-300"
-    role="button"
-    tabindex="0"
-    onclick={() => (show = false)}
-    onkeydown={(e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        show = false;
-      }
-    }}
-    aria-label="Close guide"
-  ></div>
-
-  <!-- Modal Wrapper -->
-  <div
-    class="fixed inset-0 z-100 flex items-center justify-center p-4 pointer-events-none"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-6"
+    transition:fade={{ duration: 150 }}
   >
-    <!-- Modal Container -->
     <div
-      class="bg-base-100 w-full max-w-3xl rounded-4xl shadow-2xl border border-base-300 overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] pointer-events-auto"
-      data-testid="help-modal"
+      class="bg-base-100 rounded-3xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl border border-base-300 overflow-hidden"
+      role="dialog"
+      aria-modal="true"
     >
       <!-- Header -->
       <div
-        class="px-8 py-6 border-b border-base-200 flex items-center justify-between bg-linear-to-r from-base-100 to-base-200/50"
+        class="px-8 py-5 bg-base-200/90 border-b border-base-300 flex items-center justify-between gap-4"
       >
         <div class="flex items-center gap-3">
-          <div class="p-2.5 bg-primary/10 rounded-2xl shadow-inner">
-            <BookOpen class="w-5 h-5 text-primary" />
+          <div class="p-2.5 bg-primary/10 rounded-2xl text-primary">
+            <HelpCircle class="w-5 h-5" />
           </div>
           <div>
-            <h2 class="text-xl font-bold tracking-tight">
-              Strata Guide & Blueprint
+            <h2 class="font-black text-base text-base-content tracking-wide uppercase">
+              Developer Help Center
             </h2>
-            <p
-              class="text-[10px] uppercase font-black tracking-widest opacity-40"
-            >
-              Making it easier to visualize your cloudflare applications
+            <p class="text-[10px] opacity-50 font-medium mt-0.5 leading-none">
+              Onboarding, Cloudflare storage targets, troubleshooting, and syntax guides.
             </p>
           </div>
         </div>
+
         <button
-          class="btn btn-ghost btn-circle btn-sm hover:bg-base-200"
+          class="btn btn-ghost btn-sm btn-circle text-base-content/65 hover:text-base-content hover:bg-base-300 transition-colors"
           onclick={() => (show = false)}
         >
-          <X class="w-5 h-5" />
+          <X class="w-4 h-4" />
         </button>
       </div>
 
-      <!-- Content Area with Sidebar Tabs -->
-      <div class="flex flex-1 overflow-hidden min-h-[450px]">
-        <!-- Sidebar Navigation -->
-        <div
-          class="w-1/3 bg-base-200/50 border-r border-base-200 p-4 flex flex-col gap-1.5 overflow-y-auto"
-        >
-          <span
-            class="text-[9px] uppercase tracking-widest font-black opacity-30 px-3 mb-2"
-            >Documentation</span
-          >
-          {#each tabs as tab (tab.id)}
+      <!-- Search Box & Filter Tabs Layout -->
+      <div class="px-8 py-3 bg-base-200/40 border-b border-base-300/60 flex items-center gap-4">
+        <div class="relative grow">
+          <Search class="absolute left-3 top-2.5 w-4 h-4 text-base-content/35" />
+          <input
+            type="text"
+            placeholder="Search help topics, error messages, locks, expirations..."
+            class="input input-sm input-bordered w-full pl-9 rounded-xl text-xs bg-base-100 focus:input-primary transition-all border-base-300/65"
+            bind:value={searchQuery}
+          />
+          {#if searchQuery}
             <button
-              class="w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-left font-bold text-xs group relative {activeTab ===
-              tab.id
-                ? 'bg-primary text-primary-content shadow-lg shadow-primary/20 scale-[1.02]'
-                : 'hover:bg-base-200 text-base-content/60 hover:text-base-content'}"
-              onclick={() => (activeTab = tab.id)}
+              class="absolute right-2.5 top-2 text-[10px] uppercase font-bold text-primary hover:text-primary-focus transition-colors"
+              onclick={() => (searchQuery = "")}
             >
-              <tab.icon
-                class="w-4 h-4 transition-transform group-hover:scale-110"
-              />
-              <span>{tab.label}</span>
-              {#if activeTab === tab.id}
-                <div
-                  class="absolute right-3 w-1.5 h-1.5 rounded-full bg-white animate-pulse"
-                ></div>
-              {/if}
+              clear
             </button>
-          {/each}
+          {/if}
+        </div>
+      </div>
+
+      <!-- Main Layout -->
+      <div class="flex grow overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <div class="w-1/3 bg-base-200/50 border-r border-base-300/80 p-4 overflow-y-auto">
+          <span class="text-[9px] font-black uppercase tracking-widest opacity-40 px-3 block mb-2">Categories</span>
+          <ul class="space-y-1">
+            {#each categories as cat}
+              <li>
+                <button
+                  class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all text-xs font-semibold group {activeTab === cat.id && !searchQuery
+                    ? 'bg-primary text-primary-content shadow-lg shadow-primary/10'
+                    : 'text-base-content/75 hover:bg-base-200'}"
+                  onclick={() => {
+                    activeTab = cat.id;
+                    searchQuery = ""; // clear search when navigating tabs
+                  }}
+                >
+                  <div class="flex items-center gap-2.5">
+                    <cat.icon class="w-4 h-4 opacity-75 group-hover:scale-105 transition-transform" />
+                    <span>{cat.label}</span>
+                  </div>
+                  <span class="badge badge-xs text-[9px] font-bold border-none {activeTab === cat.id && !searchQuery ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300 text-base-content/60'}">
+                    {getTopicCount(cat.id)}
+                  </span>
+                </button>
+              </li>
+            {/each}
+          </ul>
         </div>
 
-        <!-- Tab Content View -->
-        <div class="w-2/3 p-8 overflow-y-auto flex flex-col gap-4 bg-base-100">
-          {#if activeTab === "sync"}
-            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
-              <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
-                  <RefreshCw class="w-4 h-4" />
-                </div>
-                <h3 class="font-bold text-sm text-base-content">
-                  Code ⇄ UI Bi-directional Sync
-                </h3>
-              </div>
-              <p class="text-xs leading-relaxed text-base-content/70">
-                Strata has **no internal database or sidecar JSON files**. Your
-                TypeScript <code
-                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-                  >schema.ts</code
-                > file is the absolute, single source of truth.
-              </p>
-
-              <!-- Conceptual Flow Diagram -->
-              <div
-                class="bg-base-200/80 rounded-2xl p-4 border border-base-300 flex flex-col gap-2"
-              >
-                <span
-                  class="text-[9px] font-black uppercase tracking-widest opacity-40"
-                  >System Architecture</span
-                >
-                <div
-                  class="flex items-center justify-between text-center gap-2"
-                >
-                  <div
-                    class="flex-1 bg-base-100 border border-base-300 py-2.5 rounded-xl"
-                  >
-                    <span
-                      class="font-mono text-[10px] font-bold text-base-content/70 block"
-                      >1. Code Edit</span
-                    >
-                    <span class="text-[8px] opacity-40">VS Code or Editor</span>
-                  </div>
-                  <span class="text-primary font-bold animate-pulse text-xs"
-                    >➔</span
-                  >
-                  <div
-                    class="flex-1 bg-base-100 border border-primary/20 py-2.5 rounded-xl"
-                  >
-                    <span class="font-mono text-[10px] font-bold block"
-                      >2. AST Parser</span
-                    >
-                    <span class="text-[8px] opacity-50 text-primary/70"
-                      >ts-morph Analysis</span
-                    >
-                  </div>
-                  <span class="text-primary font-bold animate-pulse text-xs"
-                    >➔</span
-                  >
-                  <div
-                    class="flex-1 bg-base-100 border border-base-300 py-2.5 rounded-xl"
-                  >
-                    <span
-                      class="font-mono text-[10px] font-bold text-base-content/70 block"
-                      >3. ERD Diagram</span
-                    >
-                    <span class="text-[8px] opacity-40">Interactive Canvas</span
-                    >
-                  </div>
-                </div>
-              </div>
-
-              <div
-                class="text-xs leading-relaxed text-base-content/70 flex flex-col gap-2"
-              >
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Instant Code Sync:</strong> Every visual interaction
-                    (such as dragging nodes, adding columns, or forging relationships)
-                    triggers surgical AST editing that patches the file on disk.</span
-                  >
-                </div>
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Live File Watcher:</strong> When you save changes externally
-                    (e.g. in your favorite IDE), Strata's native OS file watcher
-                    detects it, re-parses the file, and reflects the updates on the
-                    canvas instantly.</span
-                  >
-                </div>
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Node Inspector:</strong> Double-click any table node
-                    on the canvas to open the sidebar Inspector, where you can rename
-                    the table, add/remove fields, customize keys, or manage relations.</span
-                  >
-                </div>
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Canvas Navigation:</strong> Designed for both mouse
-                    and trackpads:
-                    <ul
-                      class="list-disc pl-4 mt-1 flex flex-col gap-1 text-[11px] opacity-90"
-                    >
-                      <li>
-                        <strong>Trackpad:</strong> Swipe with two fingers to pan
-                        in any direction. Pinch to zoom in/out.
-                      </li>
-                      <li>
-                        <strong>Mouse:</strong> Hold Right-Click or Middle-Click
-                        and drag to pan. Hold
-                        <code
-                          class="bg-base-200 px-1 py-0.5 rounded font-mono text-[9px]"
-                          >Ctrl</code
-                        >
-                        /
-                        <code
-                          class="bg-base-200 px-1 py-0.5 rounded font-mono text-[9px]"
-                          >Cmd</code
-                        > and scroll the wheel to zoom.
-                      </li>
-                    </ul>
-                  </span>
-                </div>
-              </div>
+        <!-- Help Documentation Content Area -->
+        <div class="w-2/3 p-8 overflow-y-auto flex flex-col gap-5 bg-base-100">
+          {#if searchQuery}
+            <div class="flex items-center justify-between text-xs text-base-content/60 border-b border-base-200 pb-2">
+              <span>Found <strong>{filteredTopics.length}</strong> matching results for "{searchQuery}"</span>
+              <button class="text-primary font-bold hover:underline" onclick={resetSearch}>Reset</button>
             </div>
           {/if}
 
-          {#if activeTab === "targets"}
-            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
-              <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
-                  <Database class="w-4 h-4" />
-                </div>
-                <h3 class="font-bold text-sm text-base-content">
-                  Storage Targets & metadata
-                </h3>
+          <!-- Display topics lists -->
+          {#each filteredTopics as topic (topic.id)}
+            <div
+              class="bg-base-200/40 border border-base-300/60 rounded-2xl p-5 flex flex-col gap-2 transition-all hover:border-base-300 hover:shadow-xs group/card"
+              in:fade={{ duration: 150 }}
+            >
+              <div class="flex items-center justify-between">
+                <h4 class="font-bold text-xs text-base-content group-hover/card:text-primary transition-colors flex items-center gap-1.5">
+                  {#if topic.category === "troubleshooting"}
+                    <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
+                  {:else if topic.category === "achievements"}
+                    <History class="w-3.5 h-3.5 text-success shrink-0" />
+                  {:else}
+                    <Info class="w-3.5 h-3.5 text-primary shrink-0" />
+                  {/if}
+                  {topic.title}
+                </h4>
+                <span class="badge badge-outline badge-xs opacity-60 text-[9px] font-mono capitalize">
+                  {topic.category.replace("-", " ")}
+                </span>
               </div>
-              <p class="text-xs leading-relaxed text-base-content/70">
-                Strata adapts its visuals, badges, and code generation based on
-                the targeted database architecture specified in your table's
-                JSDoc metadata.
+              <p class="text-xs text-base-content/80 font-medium leading-normal">
+                {topic.summary}
               </p>
-
-              <!-- Target Type Cards -->
-              <div class="grid grid-cols-3 gap-3">
-                <div
-                  class="bg-base-200 border-t-4 border-primary p-3 rounded-xl flex flex-col gap-1.5"
-                >
-                  <div class="flex items-center gap-1.5 text-primary">
-                    <Database class="w-3.5 h-3.5" />
-                    <span class="font-bold text-[10px] uppercase tracking-wider"
-                      >Cloudflare D1</span
-                    >
-                  </div>
-                  <p class="text-[9px] opacity-60 leading-normal">
-                    Standard SQLite relational tables for edge scale SQL
-                    databases.
-                  </p>
-                </div>
-
-                <div
-                  class="bg-base-200 border-t-4 border-secondary p-3 rounded-xl flex flex-col gap-1.5"
-                >
-                  <div class="flex items-center gap-1.5 text-secondary">
-                    <Cpu class="w-3.5 h-3.5" />
-                    <span class="font-bold text-[10px] uppercase tracking-wider"
-                      >Durable Obj</span
-                    >
-                  </div>
-                  <p class="text-[9px] opacity-60 leading-normal">
-                    SQLite storage blocks embedded within stateful Durable
-                    Objects.
-                  </p>
-                </div>
-
-                <div
-                  class="bg-base-200 border-t-4 border-accent p-3 rounded-xl flex flex-col gap-1.5"
-                >
-                  <div class="flex items-center gap-1.5 text-accent">
-                    <Zap class="w-3.5 h-3.5" />
-                    <span class="font-bold text-[10px] uppercase tracking-wider"
-                      >KV Store</span
-                    >
-                  </div>
-                  <p class="text-[9px] opacity-60 leading-normal">
-                    Key-Value representations for high performance caching.
-                  </p>
-                </div>
-              </div>
-
-              <!-- Code block JSDoc -->
-              <div class="flex flex-col gap-1.5">
-                <span
-                  class="text-[9px] font-black uppercase tracking-widest opacity-40"
-                  >JSDoc Metadata Syntax</span
-                >
-                <pre
-                  class="bg-neutral text-neutral-content p-4 rounded-2xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5">
-<span class="text-success"
-                    >/**
- * @strata &#123; "target": "d1", "x": 150, "y": 300 &#125;
- */</span
-                  >
-<span class="text-primary">export const</span> users = sqliteTable(<span
-                    class="text-warning">"users"</span
-                  >, &#123;
-  id: integer(<span class="text-warning">"id"</span>).primaryKey(),
-&#125;);</pre>
+              <div class="text-[11px] leading-relaxed text-base-content/65 border-t border-base-300/40 pt-2 mt-1">
+                {@html topic.content}
               </div>
             </div>
-          {/if}
+          {/each}
 
-          {#if activeTab === "relations"}
-            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
-              <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
-                  <Share2 class="w-4 h-4" />
-                </div>
-                <h3 class="font-bold text-sm text-base-content">
-                  Physical & Logical Relationships
-                </h3>
-              </div>
-              <p class="text-xs leading-relaxed text-base-content/70">
-                Strata supports two types of relationships between your schema
-                tables, visualised differently to represent physical constraints
-                vs logical connections.
-              </p>
-
-              <!-- Connection Types Grid -->
-              <div class="flex flex-col gap-3">
-                <div
-                  class="flex items-center gap-4 bg-base-200/60 p-3 rounded-2xl border border-base-300"
-                >
-                  <div
-                    class="w-20 shrink-0 text-center font-bold text-[10px] uppercase bg-primary/10 text-primary px-2 py-1 rounded-lg border border-primary/20"
-                  >
-                    Solid Line
-                  </div>
-                  <div class="flex flex-col gap-0.5">
-                    <span class="font-bold text-xs"
-                      >Physical Foreign Key Constraint</span
-                    >
-                    <span class="text-[10px] opacity-60"
-                      >Created in code via `.references(() => parentTable.id)`.
-                      Enforces absolute relational integrity in the SQLite
-                      engine.</span
-                    >
-                  </div>
-                </div>
-
-                <div
-                  class="flex items-center gap-4 bg-base-200/60 p-3 rounded-2xl border border-base-300"
-                >
-                  <div
-                    class="w-20 shrink-0 text-center font-bold text-[10px] uppercase bg-secondary/10 text-secondary px-2 py-1 rounded-lg border border-secondary/20 border-dashed"
-                  >
-                    Dashed Line
-                  </div>
-                  <div class="flex flex-col gap-0.5">
-                    <span class="font-bold text-xs"
-                      >Logical Drizzle Relation block</span
-                    >
-                    <span class="text-[10px] opacity-60 font-medium"
-                      >Created in code via Drizzle's `relations()` API. Used to
-                      make relational querying simple and fluid in your TS
-                      queries.</span
-                    >
-                  </div>
-                </div>
-
-                <div
-                  class="flex items-center gap-4 bg-base-200/60 p-3 rounded-2xl border border-base-300"
-                >
-                  <div
-                    class="w-20 shrink-0 text-center font-bold text-[10px] uppercase bg-base-300 text-base-content/70 px-2 py-1 rounded-lg border border-base-400"
-                  >
-                    Arrowhead
-                  </div>
-                  <div class="flex flex-col gap-0.5">
-                    <span class="font-bold text-xs"
-                      >Dependency / Cardinality Direction</span
-                    >
-                    <span class="text-[10px] opacity-60 font-medium"
-                      >A closed arrowhead points from the Child table
-                      (possessing the Foreign Key) to the Parent table (One
-                      side). This establishes relationship flows instantly.</span
-                    >
-                  </div>
-                </div>
-              </div>
-
-              <!-- Drag Connection Guide -->
-              <div
-                class="flex gap-3 bg-linear-to-r from-primary/5 to-base-100 border border-primary/10 rounded-2xl p-4 items-center"
-              >
-                <div class="p-2 bg-primary/10 rounded-xl text-primary">
-                  <Share2 class="w-5 h-5 animate-pulse" />
-                </div>
-                <div class="flex flex-col">
-                  <span class="font-bold text-xs text-base-content"
-                    >Visual Drag-and-Drop Creation</span
-                  >
-                  <span class="text-[11px] opacity-70 mt-0.5 leading-normal"
-                    >Drag an edge line from a **source handle** (right dot) of a
-                    table to the **target handle** (left dot) of another. Strata
-                    will automatically generate and inject the corresponding
-                    relationship blocks directly into your source code!</span
-                  >
-                </div>
-              </div>
-
-              <!-- Synthetic JSDoc Connections -->
-              <div
-                class="flex flex-col gap-2 bg-base-200/40 border border-base-300 rounded-2xl p-4"
-              >
-                <div class="flex items-center gap-2 text-secondary">
-                  <Zap class="w-4 h-4" />
-                  <span class="font-bold text-xs"
-                    >Synthetic JSDoc Connections</span
-                  >
-                </div>
-                <p class="text-[11px] opacity-70 leading-relaxed">
-                  When establishing relations involving non-relational storage
-                  targets (like Key-Value namespaces or Durable Objects),
-                  standard SQL foreign keys are not available. Strata handles
-                  this by saving the relation directly inside your entity's
-                  JSDoc metadata under the <code
-                    class="bg-base-300 px-1 py-0.5 rounded text-[10px] font-mono"
-                    >relations</code
-                  > key:
-                </p>
-                <pre
-                  class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 mt-1">
-<span class="text-success"
-                    >/**
- * @strata &#123; "target": "kv", "relations": [&#123;"to": "users"&#125;] &#125;
- */</span
-                  ></pre>
-                <p class="text-[10px] opacity-50 leading-relaxed">
-                  These connections render on your visual canvas as dashed
-                  lines, but have **zero compilation or runtime overhead** on
-                  your database engine.
-                </p>
-              </div>
-            </div>
-          {/if}
-
-          {#if activeTab === "imports"}
-            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
-              <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
-                  <FingerprintPattern class="w-4 h-4" />
-                </div>
-                <h3 class="font-bold text-sm text-base-content">
-                  Better Auth & External Schema Imports
-                </h3>
-              </div>
-              <p class="text-xs leading-relaxed text-base-content/70">
-                Modern architectures often decouple schemas. For instance,
-                **Better Auth** automatically generates its own authentication
-                schema (e.g. <code
-                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-                  >auth.schema.ts</code
-                >) containing the
-                <code
-                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
-                  >user</code
-                >,
-                <code
-                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
-                  >session</code
-                >, or
-                <code
-                  class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px]"
-                  >account</code
-                > tables.
-              </p>
-
-              <div
-                class="bg-base-200/50 rounded-2xl p-4 border border-base-300 flex flex-col gap-2"
-              >
-                <span
-                  class="text-[9px] font-black uppercase tracking-widest opacity-40"
-                  >Visualizing Decoupled Tables</span
-                >
-                <p class="text-[11px] opacity-70 leading-relaxed">
-                  Strata dynamically resolves external schema imports declared
-                  in your main schema file:
-                </p>
-                <pre
-                  class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5">
-<span class="text-secondary">import</span> &#123; user &#125; <span
-                    class="text-secondary">from</span
-                  > <span class="text-warning">"./auth.schema"</span>;
-
-<span class="text-primary">export const</span> profile = sqliteTable(<span
-                    class="text-warning">"profile"</span
-                  >, &#123;
-  userId: text(<span class="text-warning">"user_id"</span
-                  >).references(() => user.id),
-&#125;);</pre>
-              </div>
-
-              <div
-                class="text-xs leading-relaxed text-base-content/70 flex flex-col gap-2"
-              >
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Automatic Resolution:</strong> Strata parses imported
-                    variables using `ts-morph` to traverse files and render external
-                    tables as read-only nodes in your diagram.</span
-                  >
-                </div>
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Seamless Relationships:</strong> Draw or visualize foreign
-                    keys referencing imported tables (like drawing a link from `profile`
-                    to Better Auth's `user`). They render beautifully on the canvas.</span
-                  >
-                </div>
-                <div class="flex gap-2">
-                  <span class="text-primary font-bold">●</span>
-                  <span
-                    ><strong>Zero Mismatch:</strong> Coordinates for imported tables
-                    are stored safely in local storage, preserving your visual layout
-                    without altering external third-party files.</span
-                  >
-                </div>
-              </div>
-
-              <div class="flex flex-col gap-2 border-t border-base-200 pt-4 mt-2">
-                <span class="text-[9px] font-black uppercase opacity-40 tracking-widest">Cloudflare Storage & Auto-Discovery</span>
-                
-                <div class="flex flex-col gap-3.5 mt-2">
-                  <div class="flex flex-col gap-1">
-                    <span class="font-bold text-xs">Wrangler Auto-Discovery</span>
-                    <span class="text-[11px] opacity-70 leading-relaxed">
-                      Strata dynamically searches for and parses <code>wrangler.toml</code> inside the workspace directories. Discovered KV namespaces, Durable Objects, and R2 buckets are rendered automatically in the diagram. When dragged or modified, they write matching stubs and coordinate JSDoc metadata to <code>schema.ts</code> to preserve file-based synchronization.
-                    </span>
-                  </div>
-
-                  <div class="flex flex-col gap-1">
-                    <span class="font-bold text-xs">Schema Pointer Registry</span>
-                    <span class="text-[11px] opacity-70 leading-relaxed font-medium">
-                      Developers can define schema pointers to scan external database structures without direct TypeScript import requirements:
-                    </span>
-                    <pre class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 mt-1">
-<span class="text-success">/** @strata &#123; "target": "schema", "path": "./src/db/auth.ts" &#125; */</span>
-<span class="text-primary">export const</span> authSchema = &#123;&#125;;</pre>
-                  </div>
-
-                  <div class="flex flex-col gap-1">
-                    <span class="font-bold text-xs">Durable Object Method Extraction</span>
-                    <span class="text-[11px] opacity-70 leading-relaxed">
-                      Durable Objects pointing to external typescript class files are parsed using a two-pass parser model. Svelte Flow renders public class methods (methods and their parameters) visually inside the DO card as storage interfaces.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          {/if}
-
-          {#if activeTab === "ai"}
-            <div class="flex flex-col gap-4" in:fade={{ duration: 150 }}>
-              <div class="flex items-center gap-2">
-                <div class="p-1.5 bg-primary/10 rounded-xl text-primary">
-                  <Sparkles class="w-4 h-4" />
-                </div>
-                <h3 class="font-bold text-sm text-base-content">
-                  AI-Driven Schema Architecting
-                </h3>
-              </div>
-              <p class="text-xs leading-relaxed text-base-content/70">
-                Strata is engineered to seamlessly integrate with LLM assistants
-                (such as Claude, Gemini, or ChatGPT). You can pair program with
-                your AI to design entire schemas, and the AI will auto-position
-                tables visually!
-              </p>
-
-              <!-- Copy Prompt Panel -->
-              <div
-                class="flex items-center justify-between bg-base-200/50 p-4 rounded-2xl border border-base-300"
-              >
-                <div class="flex flex-col gap-0.5">
-                  <span class="font-bold text-xs">AI System Prompt</span>
-                  <span class="text-[10px] opacity-60"
-                    >Copy the fully optimized prompt for your LLM context</span
-                  >
+          <!-- Special interactive display for AI prompts tab -->
+          {#if (activeTab === "ai" || searchQuery.toLowerCase().includes("ai") || searchQuery.toLowerCase().includes("prompt")) && filteredTopics.length > 0}
+            <div
+              class="bg-linear-to-r from-primary/5 to-base-100 border border-primary/10 rounded-2xl p-5 flex flex-col gap-3"
+              in:fade={{ duration: 150 }}
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <Sparkles class="w-4 h-4 text-primary animate-pulse" />
+                  <span class="font-bold text-xs">Copy AI Architect Prompt</span>
                 </div>
                 <button
-                  class="btn btn-primary btn-sm rounded-xl font-bold flex items-center gap-1.5 shadow-md shadow-primary/10 transition-all active:scale-95"
+                  class="btn btn-primary btn-xs rounded-lg font-bold flex items-center gap-1 hover:shadow-md transition-all active:scale-95"
                   onclick={copyPrompt}
                 >
                   {#if copied}
-                    <Check class="w-3.5 h-3.5" />
+                    <Check class="w-3 h-3" />
                     Copied!
                   {:else}
-                    <span class="text-xs">Copy Prompt</span>
+                    <span>Copy Prompt</span>
                   {/if}
                 </button>
               </div>
+              <p class="text-[11px] opacity-70 leading-relaxed">
+                Feed this context template directly to Claude, GPT-4, or Gemini when prompt co-designing schemas. It teaches the AI how to automatically output Drizzle variables decorated with pre-calculated <code>@strata</code> layouts.
+              </p>
+              <pre class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-48 overflow-y-auto">
+{aiPrompt}</pre>
+            </div>
+          {/if}
 
-              <!-- Instruction cards -->
-              <div class="flex flex-col gap-3.5">
-                <div class="flex gap-3">
-                  <div
-                    class="w-6 h-6 rounded-full bg-base-200 flex items-center justify-center font-bold text-xs text-primary"
-                  >
-                    1
-                  </div>
-                  <div class="flex flex-col gap-0.5 grow">
-                    <span class="font-bold text-xs"
-                      >Feed the AI the Blueprint</span
-                    >
-                    <span class="text-[11px] opacity-65 leading-relaxed"
-                      >Copy the prompt and paste it straight into your AI system
-                      prompt or chat context.</span
-                    >
-                  </div>
-                </div>
-
-                <div class="flex gap-3">
-                  <div
-                    class="w-6 h-6 rounded-full bg-base-200 flex items-center justify-center font-bold text-xs text-primary"
-                  >
-                    2
-                  </div>
-                  <div class="flex flex-col gap-0.5 grow">
-                    <span class="font-bold text-xs"
-                      >Prompt the AI to generate schemas</span
-                    >
-                    <span class="text-[11px] opacity-65 leading-relaxed"
-                      >Ask the AI to design your features (e.g. "Add a billing
-                      system with subscription tables"). The AI will output
-                      standard Drizzle code containing pre-calculated `@strata`
-                      coordinate coordinates.</span
-                    >
-                  </div>
-                </div>
-
-                <div class="flex gap-3">
-                  <div
-                    class="w-6 h-6 rounded-full bg-base-200 flex items-center justify-center font-bold text-xs text-primary"
-                  >
-                    3
-                  </div>
-                  <div class="flex flex-col gap-0.5 grow">
-                    <span class="font-bold text-xs"
-                      >Paste and watch it mirror</span
-                    >
-                    <span class="text-[11px] opacity-65 leading-relaxed"
-                      >Paste the generated Drizzle tables into your <code
-                        class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-                        >schema.ts</code
-                      > file. The Svelte Flow diagram will immediately refresh and
-                      display the beautifully structured layout in full!</span
-                    >
-                  </div>
-                </div>
+          {#if filteredTopics.length === 0}
+            <div class="flex flex-col items-center justify-center gap-3 py-16 text-center animate-in fade-in duration-300">
+              <div class="p-4 bg-base-200 rounded-full text-base-content/40">
+                <Search class="w-8 h-8" />
               </div>
+              <div>
+                <h4 class="font-bold text-sm text-base-content">No documentation results found</h4>
+                <p class="text-xs opacity-60 mt-1">We couldn't find anything matching your search term "{searchQuery}".</p>
+              </div>
+              <button class="btn btn-primary btn-sm rounded-xl px-5 font-bold mt-2" onclick={resetSearch}>
+                Clear Search Query
+              </button>
             </div>
           {/if}
         </div>
@@ -720,10 +490,10 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
         class="px-8 py-5 bg-base-200/50 flex items-center justify-between border-t border-base-200"
       >
         <p class="text-[10px] font-bold opacity-30 tracking-wider font-mono">
-          DESIGNED FOR CLOUDFLARE D1 + DRIZZLE ORM v0.45.2
+          DESIGNED FOR DRIZZLE ORM + CLOUDFLARE BINDINGS ➔ ZERO LOCK-IN
         </p>
         <button
-          class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold"
+          class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold transition-all active:scale-95"
           onclick={() => (show = false)}
         >
           Acknowledge & Close

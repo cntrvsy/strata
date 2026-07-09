@@ -395,3 +395,176 @@ describe('SchemaState FSM & Reactivity', () => {
 
 });
 
+import { mutateTomlConfig, mutateJsonConfig } from '$lib/state/store.svelte';
+import { PlatformService } from '$lib/services/platform';
+
+describe('Wrangler Configuration Sync', () => {
+  it('should correctly add/remove KV, R2, DO to TOML configuration', () => {
+    const originalToml = `name = "my-worker"\n\n[[kv_namespaces]]\nbinding = "EXISTING_KV"\nid = "123"`;
+
+    // Add KV namespace
+    let mutated = mutateTomlConfig(originalToml, 'add', { type: 'kv', name: 'NEW_KV' });
+    expect(mutated).toContain('binding = "NEW_KV"');
+    expect(mutated).toContain('binding = "EXISTING_KV"');
+
+    // Add DO binding
+    mutated = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
+    expect(mutated).toContain('[[durable_objects.bindings]]');
+    expect(mutated).toContain('class_name = "MyDOClass"');
+
+    // Add existing DO binding (should be idempotent)
+    const idempotent = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
+    expect(idempotent).toBe(mutated);
+
+    // Remove KV namespace
+    const removedKv = mutateTomlConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
+    expect(removedKv).not.toContain('binding = "EXISTING_KV"');
+    expect(removedKv).toContain('binding = "NEW_KV"');
+
+    // Remove DO binding
+    const removedDo = mutateTomlConfig(mutated, 'remove', { type: 'do', name: 'MY_DO' });
+    expect(removedDo).not.toContain('MY_DO');
+    expect(removedDo).toContain('NEW_KV');
+  });
+
+  it('should correctly add/remove KV, R2, DO to JSON configuration', () => {
+    const originalJson = `{\n  "name": "my-worker",\n  "kv_namespaces": [\n    { "binding": "EXISTING_KV" }\n  ]\n}`;
+
+    // Add KV namespace
+    let mutated = mutateJsonConfig(originalJson, 'add', { type: 'kv', name: 'NEW_KV' });
+    const parsedAdd = JSON.parse(mutated);
+    expect(parsedAdd.kv_namespaces).toHaveLength(2);
+    expect(parsedAdd.kv_namespaces[1].binding).toBe('NEW_KV');
+
+    // Add R2 binding
+    mutated = mutateJsonConfig(mutated, 'add', { type: 'r2', name: 'MY_R2' });
+    const parsedR2 = JSON.parse(mutated);
+    expect(parsedR2.r2_buckets).toHaveLength(1);
+    expect(parsedR2.r2_buckets[0].binding).toBe('MY_R2');
+
+    // Remove KV namespace
+    const removed = mutateJsonConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
+    const parsedRemove = JSON.parse(removed);
+    expect(parsedRemove.kv_namespaces).toHaveLength(1);
+    expect(parsedRemove.kv_namespaces[0].binding).toBe('NEW_KV');
+  });
+
+  it('should call PlatformService.writeText when mutate operations trigger syncToWranglerConfig', async () => {
+    const tomlContent = `name = "project"`;
+    const readSpy = vi.spyOn(PlatformService, 'readText').mockResolvedValue(tomlContent);
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+
+    schemaState.wranglerConfigFilePath = '/project/wrangler.toml';
+    schemaState.filePath = '/project/schema.ts';
+
+    // Mock active nodes so we can test rename/delete targets
+    schemaState.nodes = [
+      { id: 'my_kv', type: 'table', data: { label: 'my_kv', target: 'kv' }, position: { x: 0, y: 0 } }
+    ];
+
+    // Trigger table delete
+    vi.mocked(invoke).mockResolvedValue('export const dummy = 1;'); // Schema mutation mock success
+    await schemaState.deleteTable('my_kv');
+
+    expect(readSpy).toHaveBeenCalledWith('/project/wrangler.toml');
+    expect(writeSpy).toHaveBeenCalled();
+    
+    // Clean up spies
+    readSpy.mockRestore();
+    writeSpy.mockRestore();
+  });
+});
+
+import { generateResolverCode } from '$lib/state/store.svelte';
+
+describe('Resolver Code Generator', () => {
+  it('should generate typed resolver helpers for KV and DO relation bindings', () => {
+    const mockNodes = [
+      {
+        id: 'sessions',
+        type: 'table',
+        data: {
+          label: 'sessions',
+          target: 'd1',
+          strata: {
+            relations: [{ to: 'USERS_KV' }, { to: 'COUNTER_DO' }]
+          }
+        },
+        position: { x: 0, y: 0 }
+      },
+      {
+        id: 'USERS_KV',
+        type: 'table',
+        data: {
+          label: 'USERS_KV',
+          target: 'kv'
+        },
+        position: { x: 0, y: 0 }
+      },
+      {
+        id: 'COUNTER_DO',
+        type: 'table',
+        data: {
+          label: 'COUNTER_DO',
+          target: 'do',
+          columns: [
+            { name: 'increment(by: number)', definition: 'Promise<number>' }
+          ]
+        },
+        position: { x: 0, y: 0 }
+      }
+    ] as any[];
+
+    const generated = generateResolverCode(mockNodes);
+    expect(generated).toContain('export async function resolvesessionsToUSERS_KV');
+    expect(generated).toContain('export function resolvesessionsToCOUNTER_DOStub');
+    expect(generated).toContain('class COUNTER_DOClient');
+    expect(generated).toContain('async increment(by: number): Promise<number>');
+  });
+
+  it('should execute saveToFile path resolution and clipboard writes on generateAndSaveResolvers call', async () => {
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+    
+    // Mock navigator clipboard
+    const clipMock = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', {
+      clipboard: {
+        writeText: clipMock
+      }
+    });
+
+    schemaState.filePath = '/project/db/schema.ts';
+    schemaState.nodes = [
+      {
+        id: 'USERS_KV',
+        type: 'table',
+        data: { label: 'USERS_KV', target: 'kv' },
+        position: { x: 0, y: 0 }
+      }
+    ] as any[];
+
+    await schemaState.generateAndSaveResolvers();
+
+    expect(writeSpy).toHaveBeenCalledWith('/project/db/resolvers.ts', expect.any(String));
+    expect(clipMock).toHaveBeenCalled();
+
+    writeSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('should call PlatformService.writeText when updateTableMetadata is invoked', async () => {
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+
+    schemaState.filePath = '/project/db/schema.ts';
+    schemaState.nodes = [
+      { id: 'images', type: 'table', data: { label: 'images', target: 'r2' }, position: { x: 0, y: 0 } }
+    ];
+
+    vi.mocked(invoke).mockResolvedValue('/** @strata { "target": "r2", "folders": {} } */\nexport const images = {};');
+    await schemaState.updateTableMetadata('images', { public: true, customDomain: 'assets.io', cors: true });
+
+    expect(writeSpy).toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
+});
+

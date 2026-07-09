@@ -97,3 +97,25 @@ export function ensureImports(sf: SourceFile, module: string, names: string[]) {
 		}
 	}
 }
+
+/**
+ * Helper to resolve relative path from base file path.
+ */
+export function resolveRelativePath(base: string, rel: string): string {
+	const parts = base.split('/');
+	parts.pop(); // Remove filename
+	const relParts = rel.split('/');
+	for (const part of relParts) {
+		if (part === '.') continue;
+		if (part === '..') {
+			parts.pop();
+		} else {
+			parts.push(part);
+		}
+	}
+	let resolved = parts.join('/');
+	if (!resolved.endsWith('.ts')) {
+		resolved += '.ts';
+	}
+	return resolved;
+}
