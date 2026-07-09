@@ -20,7 +20,7 @@
   } from "lucide-svelte";
   import { schemaState } from "../state";
   import AddFieldForm from "./forms/AddFieldForm.svelte";
-  import AddRelationForm from "$lib/components/AddRelationForm.svelte";
+  import AddRelationForm from "./forms/AddRelationForm.svelte";
   import D1Inspector from "./inspector/D1Inspector.svelte";
   import KVInspector from "./inspector/KVInspector.svelte";
   import DOInspector from "./inspector/DOInspector.svelte";
@@ -29,8 +29,8 @@
   // --- Local UI State ---
   /** Whether the user is currently filling out the 'Add Field' form */
   let isAddingField = $state(false);
-  /** Whether the user is currently filling out the 'Forge Relation' form */
-  let isForgingRelation = $state(false);
+  /** Whether the user is currently filling out the 'Create Relation' form */
+  let isCreatingRelation = $state(false);
   /** Whether the user is confirming a destructive deletion */
   let isConfirmingDelete = $state(false);
 
@@ -108,7 +108,7 @@
    */
   function dismiss() {
     isAddingField = false;
-    isForgingRelation = false;
+    isCreatingRelation = false;
     isConfirmingDelete = false;
     editingTableName = null;
     editingColumnName = null;
@@ -121,7 +121,7 @@
   $effect(() => {
     if (schemaState.activeInspectorNodeId) {
       isAddingField = false;
-      isForgingRelation = false;
+      isCreatingRelation = false;
       isConfirmingDelete = false;
       editingTableName = null;
       editingColumnName = null;
@@ -148,12 +148,12 @@
       targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
   <div
-    class="w-full h-full max-h-full bg-base-100/90 border-r border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
+    class="w-full h-full max-h-full bg-base-100/85 backdrop-blur-md border-r border-base-300/60 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
     data-testid="inspector-panel"
   >
     <!-- Header -->
     <div
-      class="p-6 border-b border-base-300 flex items-center justify-between bg-base-200/30"
+      class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/20"
     >
       <div class="flex items-center gap-3">
         <div class="p-2 {config.bg} rounded-xl">
@@ -164,7 +164,7 @@
             <div class="flex items-center gap-1">
               <input
                 bind:value={newTableName}
-                class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:border-primary transition-all"
+                class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all"
                 onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
               />
               <button
@@ -179,19 +179,19 @@
               </h3>
               {#if !isReadOnly}
                 <button
-                  class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5"
+                  class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5 hover:bg-base-200"
                   onclick={() => {
                     editingTableName = selectedNode.id;
                     newTableName = selectedNode.id;
                   }}
                 >
-                  <Pencil class="w-3 h-3" />
+                  <Pencil class="w-3 h-3 opacity-60" />
                 </button>
               {/if}
             </div>
           {/if}
           <span
-            class="text-[9px] uppercase tracking-widest font-black opacity-30"
+            class="text-[9px] uppercase tracking-wider font-bold opacity-40 mt-0.5"
             >{config.label}</span
           >
         </div>
@@ -200,7 +200,7 @@
         {#if !isReadOnly}
           {#if !isConfirmingDelete}
             <button
-              class="btn btn-ghost btn-xs btn-circle hover:text-error opacity-40 hover:opacity-100 transition-all"
+              class="btn btn-ghost btn-xs btn-circle hover:text-error hover:bg-error/10 opacity-50 hover:opacity-100 transition-all"
               onclick={() => (isConfirmingDelete = true)}
               title="Delete Entity"
               data-testid="delete-entity-button"
@@ -212,11 +212,11 @@
               class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
             >
               <button
-                class="btn btn-error btn-xs rounded-lg px-2 text-[10px]"
+                class="btn btn-error btn-xs rounded-lg px-2 text-[10px] text-error-content"
                 onclick={() => deleteTable(selectedNode.id)}>Confirm</button
               >
               <button
-                class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px]"
+                class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px] hover:bg-base-200"
                 onclick={() => (isConfirmingDelete = false)}>Cancel</button
               >
             </div>
@@ -232,15 +232,15 @@
     </div>
 
     <!-- Tabs Navigation -->
-    <div class="tabs tabs-boxed rounded-xl bg-base-200/50 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/30">
+    <div class="tabs tabs-boxed rounded-xl bg-base-200/40 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/40">
       <button 
-        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'fields' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/80'}"
+        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'fields' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/85'}"
         onclick={() => (activeTab = 'fields')}
       >
         Fields ({data.columns.length})
       </button>
       <button 
-        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'relations' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/80'}"
+        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'relations' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/85'}"
         onclick={() => (activeTab = 'relations')}
       >
         Relationships ({schemaState.edges.filter(e => e.source === selectedNode.id || e.target === selectedNode.id).length})
@@ -250,7 +250,7 @@
     <!-- Content -->
     <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
       {#if isReadOnly}
-        <div class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-xl flex items-start gap-2 border border-info/10 p-3 leading-relaxed">
+        <div class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed">
           <span>ℹ️</span>
           <span>This entity's structure is read-only (parsed dynamically from external source code or wrangler.toml configuration). Modifying its fields is disabled.</span>
         </div>
@@ -261,16 +261,16 @@
           tableName={selectedNode.id}
           onComplete={() => (isAddingField = false)}
         />
-      {:else if isForgingRelation}
+      {:else if isCreatingRelation}
         <AddRelationForm
           sourceTableName={selectedNode.id}
-          onComplete={() => (isForgingRelation = false)}
+          onComplete={() => (isCreatingRelation = false)}
         />
       {:else if activeTab === 'fields'}
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between px-1">
             <span
-              class="text-[10px] font-black uppercase opacity-30 tracking-widest"
+              class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
               >Structure</span
             >
           </div>
@@ -289,18 +289,18 @@
             {#if !isReadOnly}
               <div class="grid grid-cols-2 gap-2 mt-2">
                 <button
-                  class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-primary/50 transition-all"
+                  class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-primary/60 hover:bg-primary/5 transition-all"
                   onclick={() => (isAddingField = true)}
                   data-testid="add-field-button"
                 >
-                  <span class="text-xs font-bold uppercase">+ Field</span>
+                  <span class="text-xs font-semibold uppercase tracking-wider">+ Field</span>
                 </button>
                 <button
-                  class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all"
-                  onclick={() => (isForgingRelation = true)}
+                  class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all"
+                  onclick={() => (isCreatingRelation = true)}
                   data-testid="add-relation-button"
                 >
-                  <span class="text-xs font-bold uppercase">+ Relation</span>
+                  <span class="text-xs font-semibold uppercase tracking-wider">+ Relation</span>
                 </button>
               </div>
             {/if}
@@ -311,7 +311,7 @@
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between px-1">
             <span
-              class="text-[10px] font-black uppercase opacity-30 tracking-widest"
+              class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
               >Defined Connections</span
             >
           </div>
@@ -328,7 +328,7 @@
                 {@const isVirtual = edge.data?.isVirtual}
                 {@const card = edge.data?.cardinality || 'unknown'}
                 <div
-                  class="bg-base-200/40 p-3.5 rounded-2xl flex flex-col gap-2 border border-transparent hover:border-base-300 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
+                  class="bg-base-200/30 p-3.5 rounded-2xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
                 >
                   <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
@@ -345,7 +345,7 @@
 
                   <div class="flex items-center justify-between mt-1 text-[10px] text-base-content/60">
                     <div class="flex items-center gap-1.5">
-                      <span class="px-1.5 py-0.5 rounded bg-base-300 font-mono text-[9px] font-semibold text-base-content/60">
+                      <span class="px-1.5 py-0.5 rounded bg-base-200 font-mono text-[9px] font-semibold text-base-content/60 border border-base-300/60">
                         {isVirtual ? 'Logical' : 'Physical'}
                       </span>
                       {#if edge.label}
@@ -355,7 +355,7 @@
 
                     {#if !isReadOnly}
                       <button
-                        class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error transition-all"
+                        class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
                         onclick={() => {
                           if (confirm(`Delete relationship with ${otherNode}?`)) {
                             schemaState.deleteRelation(edge.source, edge.target, edge.label);
@@ -372,21 +372,21 @@
           {/if}
 
           <!-- footnote banner -->
-          <div class="mt-4 p-3.5 bg-base-200/40 border border-base-300/40 rounded-2xl flex flex-col gap-1.5 text-[10px]">
+          <div class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-2xl flex flex-col gap-1.5 text-[10px]">
             <span class="font-bold text-base-content/85 flex items-center gap-1">
               💡 Handle Fallbacks
             </span>
-            <p class="leading-relaxed opacity-65">
+            <p class="leading-relaxed opacity-65 font-medium">
               Physical foreign key references connect directly to the column rows. Logical relations and synthetic references fall back to entity-level handles on the sides of the node cards.
             </p>
           </div>
           
           {#if !isReadOnly}
             <button
-              class="btn btn-ghost btn-sm border-dashed border-base-300 rounded-2xl h-auto py-4 flex flex-col gap-1 opacity-60 hover:opacity-100 hover:border-secondary/50 transition-all mt-2"
-              onclick={() => (isForgingRelation = true)}
+              class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all mt-2"
+              onclick={() => (isCreatingRelation = true)}
             >
-              <span class="text-xs font-bold uppercase">+ Forge Relation</span>
+              <span class="text-xs font-semibold uppercase tracking-wider">+ Create Relation</span>
             </button>
           {/if}
         </div>
@@ -394,11 +394,11 @@
     </div>
 
     <!-- Footer Stats/Hint -->
-    <div class="p-6 bg-base-200/50 border-t border-base-300">
+    <div class="p-6 bg-base-200/30 border-t border-base-300/60">
       <div class="flex flex-col items-center gap-4">
         <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
           Made with<Heart class="w-4 h-4" fill="red" /> from
-          <a href="https://frstudios.co.ke">FRStudios</a>.
+          <a href="https://frstudios.co.ke" class="hover:text-primary transition-colors">FRStudios</a>.
         </p>
       </div>
     </div>

@@ -71,37 +71,37 @@
 <!-- Empty State Overlay -->
 {#if schemaState.machine.current === "EMPTY"}
   <div
-    class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-base-100/60 backdrop-blur-sm animate-in fade-in duration-700"
+    class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-base-100/65 backdrop-blur-md animate-in fade-in duration-700"
   >
     <div
-      class="p-8 bg-base-100 border border-base-300 rounded-[3rem] shadow-2xl flex flex-col items-center w-full max-w-md text-center"
+      class="p-8 bg-base-100 border border-base-300/80 rounded-3xl shadow-2xl flex flex-col items-center w-full max-w-md text-center"
     >
       <div
         class="w-20 h-20 bg-primary/5 rounded-3xl flex items-center justify-center mb-6 ring-1 ring-primary/10"
       >
         <FileCode class="w-10 h-10 text-primary/40" />
       </div>
-      <h2 class="text-2xl font-black mb-3 tracking-tight">Ready?</h2>
-      <p class="text-sm text-base-content/50 mb-8 leading-relaxed">
+      <h2 class="text-2xl font-bold mb-3 tracking-tight">Ready?</h2>
+      <p class="text-sm text-base-content/50 mb-8 leading-relaxed font-medium">
         Drag & drop your Drizzle <code
-          class="bg-base-200 px-1.5 py-0.5 rounded text-primary">schema.ts</code
+          class="bg-base-200/60 px-1.5 py-0.5 rounded text-primary">schema.ts</code
         > here and see your mental model come to life.
       </p>
       <button
-        class="btn btn-primary btn-lg rounded-2xl w-full px-12 shadow-xl shadow-primary/30"
+        class="btn btn-primary rounded-xl w-full px-12 shadow-sm font-semibold text-sm"
         onclick={() => schemaState.openNewFile()}
       >
-        <FolderOpen class="w-5 h-5 mr-3" />
+        <FolderOpen class="w-4 h-4 mr-2" />
         Select File
       </button>
 
       {#if schemaState.recentFiles.length > 0}
-        <div class="w-full border-t border-base-300 pt-6 mt-6 text-left">
-          <h3 class="text-[10px] font-black uppercase tracking-widest text-base-content/40 mb-3">Recent Schemas</h3>
+        <div class="w-full border-t border-base-300/60 pt-6 mt-6 text-left">
+          <h3 class="text-[10px] font-bold uppercase tracking-wider text-base-content/40 mb-3">Recent Schemas</h3>
           <div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
             {#each schemaState.recentFiles as path}
               <button
-                class="w-full text-left p-3 rounded-xl hover:bg-base-200 border border-base-200 hover:border-base-300 flex items-center justify-between group transition-all"
+                class="w-full text-left p-3 rounded-xl hover:bg-base-200/50 border border-base-200/40 hover:border-base-300/60 flex items-center justify-between group transition-all"
                 onclick={() => schemaState.openFileDirectly(path)}
               >
                 <div class="flex flex-col min-w-0 flex-1 pr-2">
@@ -126,10 +126,10 @@
     class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-base-100/10 backdrop-blur-[1px] animate-in fade-in duration-300"
   >
     <div
-      class="p-4 bg-base-100 border border-base-300 rounded-2xl shadow-xl flex items-center gap-3"
+      class="p-4 bg-base-100 border border-base-300/80 rounded-2xl shadow-xl flex items-center gap-3"
     >
       <span class="loading loading-spinner loading-sm text-primary"></span>
-      <span class="text-[10px] font-black uppercase tracking-widest opacity-40"
+      <span class="text-[10px] font-bold uppercase tracking-wider opacity-40"
         >Syncing Schema...</span
       >
     </div>

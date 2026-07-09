@@ -18,6 +18,7 @@
     Undo,
     Settings,
     Menu,
+    Code,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
@@ -119,15 +120,15 @@
 </script>
 
 <div
-  class="w-full h-14 border-b border-base-300 bg-base-100/80 backdrop-blur-xl z-30 flex items-center justify-between px-6 select-none shrink-0"
+  class="w-full h-14 border-b border-base-300/60 bg-base-100/75 backdrop-blur-md z-30 flex items-center justify-between px-6 select-none shrink-0"
   data-testid="navbar"
 >
   <div class="flex items-center gap-4">
     <div
-      class="flex items-center gap-2.5 bg-base-200/40 hover:bg-base-200/80 px-3.5 py-1.5 rounded-full border border-base-300 transition-all cursor-help relative group"
+      class="flex items-center gap-2.5 bg-base-200/30 hover:bg-base-200/60 px-3.5 py-1.5 rounded-full border border-base-300/60 transition-all cursor-help relative group"
     >
       <span
-        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
+        class="text-[9px] font-bold uppercase tracking-wider text-base-content/60"
         >Code</span
       >
       <div class="flex items-center gap-0.5 text-primary">
@@ -136,10 +137,10 @@
         />
       </div>
       <span
-        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
+        class="text-[9px] font-bold uppercase tracking-wider text-base-content/60"
         >UI</span
       >
-      <div class="h-3 w-px bg-base-300"></div>
+      <div class="h-3 w-px bg-base-300/60"></div>
       <div class="flex items-center gap-1.5">
         <div
           class="w-1.5 h-1.5 rounded-full {!schemaState.filePath
@@ -171,7 +172,7 @@
 
       <!-- Detail Card (glorious tooltip) -->
       <div
-        class="absolute top-12 left-0 w-80 p-5 bg-base-100/98 border border-base-300 rounded-3xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
+        class="absolute top-12 left-0 w-80 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
       >
         <div class="flex items-center gap-2.5">
           <div class="p-1.5 bg-primary/10 rounded-xl">
@@ -179,7 +180,7 @@
           </div>
           <div>
             <span
-              class="text-[9px] font-black uppercase tracking-widest text-primary/75 block leading-none mb-0.5"
+              class="text-[9px] font-bold uppercase tracking-wider text-primary/75 block leading-none mb-0.5"
               >Bi-Directional Engine</span
             >
             <span class="font-bold text-xs text-base-content"
@@ -189,7 +190,7 @@
         </div>
         <p class="text-[11px] leading-relaxed text-base-content/75">
           Strata keeps your <code
-            class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
+            class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
             >schema.ts</code
           > file as the absolute single source of truth.
         </p>
@@ -220,17 +221,42 @@
   <div class="flex items-center gap-3">
     {#if schemaState.filePath}
       <button
-        class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20 font-bold"
+        class="btn btn-primary btn-sm gap-1.5 rounded-xl shadow-sm font-semibold"
         onclick={() => (schemaState.showNewTableModal = true)}
         data-testid="new-table-button"
       >
-        <span class="text-lg leading-none">+</span>
-        New Table
+        <span class="text-base leading-none">+</span>
+        New
       </button>
+
+      <div
+        class="join border border-base-300/60 rounded-xl overflow-hidden bg-base-200/40 p-0.5 ml-1"
+      >
+        <button
+          class="btn btn-xs join-item font-semibold px-2.5 rounded-lg border-0 transition-all {schemaState.isCodeCollapsed
+            ? 'btn-ghost text-base-content/40 hover:text-base-content'
+            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
+          onclick={() => schemaState.toggleCodePane()}
+          title="Toggle Code Editor View"
+        >
+          <Code class="w-3.5 h-3.5 mr-1" />
+          Code
+        </button>
+        <button
+          class="btn btn-xs join-item font-semibold px-2.5 rounded-lg border-0 transition-all {schemaState.isDiagramCollapsed
+            ? 'btn-ghost text-base-content/40 hover:text-base-content'
+            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
+          onclick={() => schemaState.toggleDiagramPane()}
+          title="Toggle Diagram Canvas View"
+        >
+          <Workflow class="w-3.5 h-3.5 mr-1" />
+          Diagram
+        </button>
+      </div>
     {/if}
     {#if schemaState.hasUnsavedChanges}
       <button
-        class="btn btn-warning btn-sm gap-2 rounded-xl shadow-lg shadow-warning/20 animate-pulse hover:animate-none"
+        class="btn btn-warning btn-sm gap-1.5 rounded-xl shadow-sm animate-pulse hover:animate-none font-semibold text-warning-content"
         onclick={() => schemaState.saveToFile()}
         data-testid="save-layout-button"
         title="Save current layout changes to disk"
@@ -239,7 +265,7 @@
         Save Layout
       </button>
       <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
+        class="btn btn-ghost btn-sm gap-1.5 rounded-xl hover:bg-base-200 font-semibold"
         onclick={() => schemaState.syncWithFile()}
         data-testid="discard-layout-button"
         title="Discard unsaved layout changes and revert to disk schema"
@@ -249,81 +275,92 @@
       </button>
     {/if}
 
-    <button class="btn btn-ghost btn-sm gap-2 rounded-xl" onclick={onOpenFile}>
-      <FolderOpen class="w-4 h-4 text-base-content/70" />
-      Open Schema
-    </button>
-
     <!-- Unified Menu Dropdown -->
     <div class="dropdown dropdown-end">
       <div
         tabindex="0"
         role="button"
-        class="btn btn-ghost btn-sm gap-2 rounded-xl border border-base-300 hover:bg-base-200 transition-all"
+        class="btn btn-ghost btn-sm gap-1.5 rounded-xl hover:bg-base-200 transition-all font-semibold"
         title="More Actions"
       >
         <Menu class="w-4 h-4 text-base-content/70" />
-        <span class="text-xs font-semibold text-base-content/85">Menu</span>
       </div>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <ul
         tabindex="0"
-        class="dropdown-content menu bg-base-100 border border-base-300 rounded-2xl z-50 w-56 p-2 shadow-2xl mt-2 gap-1 animate-in fade-in slide-in-from-top-2 duration-200"
+        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-2xl z-50 w-56 p-2 shadow-2xl mt-2 gap-1 animate-in fade-in slide-in-from-top-2 duration-200"
       >
+        <li>
+          <button
+            class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200/60 transition-all font-medium text-xs text-base-content/75"
+            onclick={onOpenFile}
+          >
+            <FolderOpen class="w-4 h-4 text-base-content/70" />
+            <span class="font-medium text-xs">Open Schema</span>
+          </button>
+        </li>
+        <div class="h-px bg-base-300/40 my-1"></div>
+
         {#if schemaState.nodes.length > 0}
           <li>
             <button
-              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
-              onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors font-medium text-xs text-base-content/75"
+              onclick={() =>
+                (schemaState.compactMode = !schemaState.compactMode)}
             >
               {#if schemaState.compactMode}
                 <EyeOff class="w-4 h-4 text-warning" />
-                <span class="text-warning font-semibold text-xs">Disable Compact View</span>
+                <span class="text-warning font-semibold text-xs"
+                  >Disable Compact View</span
+                >
               {:else}
                 <Eye class="w-4 h-4 text-base-content/70" />
-                <span class="text-base-content/75 font-semibold text-xs">Enable Compact View</span>
+                <span class="text-base-content/75 font-semibold text-xs"
+                  >Enable Compact View</span
+                >
               {/if}
             </button>
           </li>
           <li>
             <button
-              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200/60 transition-all font-medium text-xs text-base-content/75"
               onclick={onAutoLayout}
             >
               <Workflow class="w-4 h-4 text-base-content/70" />
-              <span class="text-base-content/75 font-semibold text-xs">Auto Layout Diagram</span>
+              <span class="font-medium text-xs">Auto Layout Diagram</span>
             </button>
           </li>
           <li>
             <button
-              class="flex items-center gap-2.5 rounded-xl py-2 px-3 text-primary hover:bg-primary/5 transition-colors"
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 text-primary hover:bg-primary/5 transition-all font-semibold text-xs"
               onclick={exportToImage}
             >
               <Camera class="w-4 h-4" />
               <span class="font-bold text-xs">Export as PNG</span>
             </button>
           </li>
-          <div class="h-px bg-base-300/60 my-1"></div>
+          <div class="h-px bg-base-300/40 my-1"></div>
         {/if}
-        
+
         {#if schemaState.filePath}
           <li>
             <button
-              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+              class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200/60 transition-all font-medium text-xs text-base-content/75"
               onclick={() => (schemaState.showProjectSettingsModal = true)}
             >
               <Settings class="w-4 h-4 text-base-content/70" />
-              <span class="text-base-content/75 font-semibold text-xs">Project Settings</span>
+              <span class="font-medium text-xs">Project Settings</span>
             </button>
           </li>
         {/if}
 
         <li>
           <button
-            class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200 transition-colors"
+            class="flex items-center gap-2.5 rounded-xl py-2 px-3 hover:bg-base-200/60 transition-all font-medium text-xs text-base-content/75"
             onclick={() => (showHelp = true)}
           >
             <BadgeQuestionMark class="w-4 h-4 text-base-content/70" />
-            <span class="text-base-content/75 font-semibold text-xs">Help & Shortcuts</span>
+            <span class="font-medium text-xs">Help & Shortcuts</span>
           </button>
         </li>
       </ul>

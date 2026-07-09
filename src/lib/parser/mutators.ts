@@ -208,7 +208,7 @@ export function addColumnToSchema(
 }
 
 /**
- * Forges a relationship between two entities. 
+ * Creates a relationship between two entities. 
  * Detects if it should use Drizzle relations() or Synthetic JSDoc relations.
  */
 export function addEdgeToSchema(code: string, source: string, target: string): string {

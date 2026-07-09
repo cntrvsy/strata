@@ -124,27 +124,81 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 	return bindings;
 }
 
+function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
+	try {
+		// Simple strip of single line and multi-line comments for JSONC support
+		const cleaned = jsonContent
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.replace(/(?:^|[^\\:])\/\/.*$/gm, '');
+		const data = JSON.parse(cleaned);
+
+		if (Array.isArray(data.kv_namespaces)) {
+			for (const kv of data.kv_namespaces) {
+				if (kv && kv.binding) {
+					bindings.push({ type: 'kv', name: kv.binding, extra: {} });
+				}
+			}
+		}
+		if (data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
+			for (const dobj of data.durable_objects.bindings) {
+				if (dobj && dobj.name) {
+					bindings.push({ type: 'do', name: dobj.name, extra: { class: dobj.class_name } });
+				}
+			}
+		}
+		if (Array.isArray(data.r2_buckets)) {
+			for (const r2 of data.r2_buckets) {
+				if (r2 && r2.binding) {
+					bindings.push({ type: 'r2', name: r2.binding, extra: {} });
+				}
+			}
+		}
+	} catch (e) {
+		console.warn("[Strata] Failed to parse JSON/JSONC wrangler config:", e);
+	}
+	return bindings;
+}
+
+function parseWranglerContent(fileName: string, content: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+	if (fileName.endsWith('.json') || fileName.endsWith('.jsonc')) {
+		return parseJsonBindings(content);
+	}
+	return parseWranglerBindings(content);
+}
+
 async function discoverWranglerBindings(filePath: string, customWranglerPath?: string): Promise<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]> {
 	if (!filePath) return [];
 	let dir = filePath.substring(0, filePath.lastIndexOf('/'));
-	const candidatePaths: string[] = [];
+	
+	// If the user specified a custom path, try to resolve it first
 	if (customWranglerPath) {
-		candidatePaths.push(dir + '/' + customWranglerPath);
-	}
-	candidatePaths.push(
-		dir + '/wrangler.toml',
-		dir + '/../wrangler.toml',
-		dir + '/../../wrangler.toml',
-		dir + '/../../../wrangler.toml',
-		dir + '/../../../../wrangler.toml'
-	);
-	for (const candidate of candidatePaths) {
+		const fullPath = dir + '/' + customWranglerPath;
 		try {
-			const toml = await PlatformService.readText(candidate);
-			if (toml) {
-				return parseWranglerBindings(toml);
+			const content = await PlatformService.readText(fullPath);
+			if (content) {
+				return parseWranglerContent(customWranglerPath, content);
 			}
 		} catch (e) {}
+	}
+
+	// Dynamic upward traversal to look for wrangler files
+	let currentDir = dir;
+	let prefix = '';
+	for (let depth = 0; depth < 12; depth++) {
+		for (const name of ['wrangler.toml', 'wrangler.jsonc', 'wrangler.json']) {
+			const candidate = currentDir + '/' + name;
+			try {
+				const content = await PlatformService.readText(candidate);
+				if (content) {
+					return parseWranglerContent(name, content);
+				}
+			} catch (e) {}
+		}
+		const lastSlash = currentDir.lastIndexOf('/');
+		if (lastSlash <= 0) break;
+		currentDir = currentDir.substring(0, lastSlash);
+		prefix += '../';
 	}
 	return [];
 }
@@ -206,6 +260,16 @@ export class SchemaState {
 	hoveredNodeId = $state<string | null>(null);
 	/** Whether compact mode is currently active (keys only) */
 	compactMode = $state(false);
+
+	/** Collapsed status of the code panel */
+	isCodeCollapsed = $state(false);
+	/** Collapsed status of the diagram panel */
+	isDiagramCollapsed = $state(false);
+
+	/** Toggle code panel expand/collapse */
+	toggleCodePane = () => {};
+	/** Toggle diagram panel expand/collapse */
+	toggleDiagramPane = () => {};
 
 	// --- File State ---
 	/** Absolute path to the currently open schema.ts file */

@@ -59,13 +59,13 @@
   class="flex flex-col gap-5 p-1 animate-in fade-in slide-in-from-top-2 duration-300"
 >
   <div
-    class="flex items-center justify-between border-b border-base-300 pb-3 mb-1"
+    class="flex items-center justify-between border-b border-base-300/60 pb-3 mb-1"
   >
-    <h4 class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
+    <h4 class="text-[10px] font-bold uppercase tracking-wider opacity-50">
       {target === "r2" ? "Add Folder Path" : "Add Field"}
     </h4>
-    <button class="btn btn-ghost btn-xs btn-circle" onclick={onComplete}>
-      <X class="w-3 h-3" />
+    <button class="btn btn-ghost btn-xs btn-circle hover:bg-base-200" onclick={onComplete}>
+      <X class="w-3.5 h-3.5 opacity-60" />
     </button>
   </div>
 
@@ -75,7 +75,7 @@
         <Form.Control>
           {#snippet children({ props })}
             <Form.Label
-              class="text-[10px] font-bold opacity-50 mb-1.5 block uppercase"
+              class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
               {target === "r2" ? "Folder Name/Prefix" : "Name"}
             </Form.Label>
@@ -83,7 +83,7 @@
               {...props}
               bind:value={$formData.name}
               placeholder={target === "r2" ? "e.g. avatars" : "e.g. id, email"}
-              class="input input-sm input-bordered w-full rounded-lg bg-base-200 focus:border-primary transition-all text-xs"
+              class="input input-sm input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all text-xs"
             />
           {/snippet}
         </Form.Control>
@@ -93,7 +93,7 @@
         <Form.Control>
           {#snippet children({ props })}
             <Form.Label
-              class="text-[10px] font-bold opacity-50 mb-1.5 block uppercase"
+              class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
               {target === "r2" ? "MIME Type Constraint" : "Type"}
             </Form.Label>
@@ -102,13 +102,13 @@
                 {...props}
                 bind:value={$formData.type}
                 placeholder="e.g. image/*, application/pdf"
-                class="input input-sm input-bordered w-full rounded-lg bg-base-200 focus:border-primary transition-all text-xs font-mono"
+                class="input input-sm input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all text-xs font-mono"
               />
             {:else}
               <select
                 {...props}
                 bind:value={$formData.type}
-                class="select select-sm select-bordered w-full rounded-lg bg-base-200 focus:border-primary transition-all text-xs"
+                class="select select-sm select-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-xs"
               >
                 {#if target === "kv"}
                   <option value="string">String</option>
@@ -131,11 +131,11 @@
     <!-- Foreign Key Section (only for D1 tables) -->
     {#if target === "d1"}
       <div
-        class="bg-base-200/50 p-4 rounded-lg border border-base-300 flex flex-col gap-3"
+        class="bg-base-200/30 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3"
       >
-        <div class="flex items-center gap-2 opacity-40">
+        <div class="flex items-center gap-2 opacity-50">
           <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-          <span class="text-[9px] font-black uppercase tracking-widest"
+          <span class="text-[9px] font-bold uppercase tracking-wider"
             >Foreign Key (Optional)</span
           >
         </div>
@@ -147,7 +147,7 @@
                 <select
                   {...props}
                   bind:value={$formData.referencesTable}
-                  class="select select-xs select-bordered w-full rounded-lg bg-base-100 transition-all text-[10px]"
+                  class="select select-xs select-bordered w-full rounded-xl bg-base-100/60 border-base-300/60 focus:select-primary transition-all text-[10px]"
                 >
                   <option value="">No Reference</option>
                   {#each potentialTargets as targetName}
@@ -165,7 +165,7 @@
                   {...props}
                   bind:value={$formData.referencesColumn}
                   disabled={!$formData.referencesTable}
-                  class="select select-xs select-bordered w-full rounded-lg bg-base-100 transition-all text-[10px]"
+                  class="select select-xs select-bordered w-full rounded-xl bg-base-100/60 border-base-300/60 focus:select-primary transition-all text-[10px] disabled:opacity-50"
                 >
                   <option value="">Select col...</option>
                   {#each potentialColumns as col}
@@ -181,10 +181,10 @@
 
     <button
       type="submit"
-      class="btn btn-primary btn-sm rounded-lg w-full gap-2 mt-2 shadow-lg shadow-primary/20"
+      class="btn btn-primary btn-sm rounded-xl w-full gap-2 mt-2 shadow-sm font-semibold"
     >
-      <Check class="w-3 h-3" />
-      {target === "r2" ? "Add Folder Path" : "Forge Field"}
+      <Check class="w-3.5 h-3.5" />
+      {target === "r2" ? "Add Folder Path" : "Create Field"}
     </button>
   </form>
 </div>

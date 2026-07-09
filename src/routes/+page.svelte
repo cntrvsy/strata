@@ -3,7 +3,7 @@
    * Strata: The Drizzle Design Companion
    *
    * This is the root page component that assembles the visual editor.
-   * It handles global keyboard shortcuts, drag-and-drop relationship forging,
+   * It handles global keyboard shortcuts, drag-and-drop relationship creation,
    * and coordinates the synchronization between UI events and AST persistence.
    */
   import { addEdge, SvelteFlowProvider } from "@xyflow/svelte";
@@ -12,7 +12,33 @@
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { schemaState } from "$lib/state";
   import { PlatformService } from "$lib/services/platform";
+  import { ChevronLeft, ChevronRight } from "lucide-svelte";
 
+  let codePane = $state<ReturnType<typeof Pane>>();
+  let diagramPane = $state<ReturnType<typeof Pane>>();
+
+  function resetLayout() {
+    codePane?.resize(45);
+    diagramPane?.resize(55);
+  }
+
+  $effect(() => {
+    schemaState.toggleCodePane = () => {
+      if (schemaState.isCodeCollapsed) {
+        codePane?.resize(45);
+      } else {
+        codePane?.collapse();
+      }
+    };
+    schemaState.toggleDiagramPane = () => {
+      if (schemaState.isDiagramCollapsed) {
+        diagramPane?.resize(55);
+      } else {
+        diagramPane?.collapse();
+      }
+    };
+  });
+ 
   // --- Components ---
   import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
   import Inspector from "$lib/components/Inspector.svelte";
@@ -154,14 +180,55 @@
   {#if !schemaState.filePath}
     <Overlays />
   {:else}
+    <!-- Floating expand triggers when panes are collapsed -->
+    {#if schemaState.isCodeCollapsed}
+      <button
+        onclick={() => codePane?.resize(45)}
+        class="absolute left-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-primary btn-sm shadow-md animate-in slide-in-from-left-2 duration-300"
+        title="Show Code Editor"
+      >
+        <ChevronRight class="w-4 h-4 text-primary-content" />
+      </button>
+    {/if}
+    {#if schemaState.isDiagramCollapsed}
+      <button
+        onclick={() => diagramPane?.resize(55)}
+        class="absolute right-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-primary btn-sm shadow-md animate-in slide-in-from-right-2 duration-300"
+        title="Show Diagram Canvas"
+      >
+        <ChevronLeft class="w-4 h-4 text-primary-content" />
+      </button>
+    {/if}
+
     <PaneGroup direction="horizontal" class="w-full h-full">
-      <Pane minSize={20} defaultSize={45} order={0}>
+      <Pane
+        minSize={15}
+        defaultSize={45}
+        order={0}
+        collapsible={true}
+        collapsedSize={0}
+        bind:this={codePane}
+        onCollapse={() => (schemaState.isCodeCollapsed = true)}
+        onExpand={() => (schemaState.isCodeCollapsed = false)}
+      >
         <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
           <CodeEditor />
         </div>
       </Pane>
-      <PaneResizer class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" />
-      <Pane minSize={20} defaultSize={55} order={1}>
+      <PaneResizer 
+        class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" 
+        ondblclick={resetLayout}
+      />
+      <Pane
+        minSize={20}
+        defaultSize={55}
+        order={1}
+        collapsible={true}
+        collapsedSize={0}
+        bind:this={diagramPane}
+        onCollapse={() => (schemaState.isDiagramCollapsed = true)}
+        onExpand={() => (schemaState.isDiagramCollapsed = false)}
+      >
         <PaneGroup direction="horizontal" class="w-full h-full">
           {#if schemaState.activeInspectorNodeId}
             <Pane minSize={15} defaultSize={25} order={0}>

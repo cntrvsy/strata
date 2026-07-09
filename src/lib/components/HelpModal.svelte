@@ -439,7 +439,7 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
                 </div>
               </div>
 
-              <!-- Drag Forge Guide -->
+              <!-- Drag Connection Guide -->
               <div
                 class="flex gap-3 bg-linear-to-r from-primary/5 to-base-100 border border-primary/10 rounded-2xl p-4 items-center"
               >
@@ -448,7 +448,7 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
                 </div>
                 <div class="flex flex-col">
                   <span class="font-bold text-xs text-base-content"
-                    >Visual Drag-and-Drop Forging</span
+                    >Visual Drag-and-Drop Creation</span
                   >
                   <span class="text-[11px] opacity-70 mt-0.5 leading-normal"
                     >Drag an edge line from a **source handle** (right dot) of a
@@ -720,7 +720,7 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
         class="px-8 py-5 bg-base-200/50 flex items-center justify-between border-t border-base-200"
       >
         <p class="text-[10px] font-bold opacity-30 tracking-wider font-mono">
-          FORGED FOR CLOUDFLARE D1 + DRIZZLE ORM v0.45.2
+          DESIGNED FOR CLOUDFLARE D1 + DRIZZLE ORM v0.45.2
         </p>
         <button
           class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold"
