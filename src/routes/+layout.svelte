@@ -2,6 +2,8 @@
 	import './layout.css';
 	import Titlebar from '$lib/components/Titlebar.svelte';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import BottomBar from '$lib/components/BottomBar.svelte';
+	import ResolverModal from '$lib/components/ResolverModal.svelte';
 	import { onMount } from 'svelte';
 	import { Toaster } from 'svelte-sonner';
 
@@ -32,4 +34,7 @@
 	<main class="flex-1 min-h-0 w-full relative overflow-hidden">
 		{@render children()}
 	</main>
+	<BottomBar />
 </div>
+
+<ResolverModal />

@@ -522,16 +522,8 @@ describe('Resolver Code Generator', () => {
     expect(generated).toContain('async increment(by: number): Promise<number>');
   });
 
-  it('should execute saveToFile path resolution and clipboard writes on generateAndSaveResolvers call', async () => {
+  it('should open customizer modal on generateAndSaveResolvers and write text on saveResolvers call', async () => {
     const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
-    
-    // Mock navigator clipboard
-    const clipMock = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('navigator', {
-      clipboard: {
-        writeText: clipMock
-      }
-    });
 
     schemaState.filePath = '/project/db/schema.ts';
     schemaState.nodes = [
@@ -543,13 +535,19 @@ describe('Resolver Code Generator', () => {
       }
     ] as any[];
 
+    schemaState.showResolverModal = false;
+    schemaState.resolverConfigPath = "";
+
     await schemaState.generateAndSaveResolvers();
 
+    expect(schemaState.showResolverModal).toBe(true);
+    expect(schemaState.resolverConfigPath).toBe('/project/db/resolvers.ts');
+
+    await schemaState.saveResolvers();
+
     expect(writeSpy).toHaveBeenCalledWith('/project/db/resolvers.ts', expect.any(String));
-    expect(clipMock).toHaveBeenCalled();
 
     writeSpy.mockRestore();
-    vi.unstubAllGlobals();
   });
 
   it('should call PlatformService.writeText when updateTableMetadata is invoked', async () => {

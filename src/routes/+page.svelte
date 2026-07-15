@@ -43,7 +43,6 @@
   import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
   import Inspector from "$lib/components/Inspector.svelte";
   import Overlays from "$lib/components/Overlays.svelte";
-  import SchemaStats from "$lib/components/SchemaStats.svelte";
   import NewEntityForm from "$lib/components/forms/NewEntityForm.svelte";
   import CodeEditor from "$lib/components/CodeEditor.svelte";
 
@@ -243,7 +242,6 @@
               <SvelteFlowProvider>
                 <DiagramCanvas {onconnect} {onnodedragstop} />
                 <Overlays />
-                <SchemaStats />
               </SvelteFlowProvider>
             </div>
           </Pane>

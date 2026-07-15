@@ -307,6 +307,50 @@ export class SchemaState {
 	/** Whether the project settings modal is visible */
 	showProjectSettingsModal = $state(false);
 
+	/** Whether the 'Resolver Generator' modal is currently visible */
+	showResolverModal = $state(false);
+	resolverConfigPrefix = $state("resolve");
+	resolverConfigDoStyle = $state<'wrapped' | 'raw'>("wrapped");
+	resolverConfigKvRead = $state<'json' | 'text' | 'arrayBuffer'>("json");
+	resolverConfigPath = $state("");
+
+	/** The list of bindings parsed from wrangler.toml */
+	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
+
+	get resolverWarnings() {
+		const warnings: string[] = [];
+		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
+		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
+
+		if (this.wranglerConfigFilePath) {
+			const filename = this.wranglerConfigFilePath.substring(this.wranglerConfigFilePath.lastIndexOf('/') + 1);
+			for (const kv of kvNodes) {
+				if (!this.wranglerBindings.some(b => b.name === kv.id && b.type === 'kv')) {
+					warnings.push(`KV Namespace "${kv.id}" is not configured in your ${filename}.`);
+				}
+			}
+			for (const doNode of doNodes) {
+				if (!this.wranglerBindings.some(b => b.name === doNode.id && b.type === 'do')) {
+					warnings.push(`Durable Object "${doNode.id}" is not configured in your ${filename}.`);
+				}
+			}
+		}
+
+		for (const n of this.nodes) {
+			const strata = (n.data as any)?.strata;
+			if (strata && strata.relations && strata.relations.length > 0) {
+				for (const rel of strata.relations) {
+					const exists = this.nodes.some(node => node.id === rel.to) || this.wranglerBindings.some(b => b.name === rel.to);
+					if (!exists) {
+						warnings.push(`Table "${n.id}" points to a missing synthetic relation target "${rel.to}".`);
+					}
+				}
+			}
+		}
+
+		return warnings;
+	}
+
 	/**
 	 * Force-syncs the UI state with the current file on disk.
 	 * This is the definitive "Ground Truth" sync that bypasses local HTML previews.
@@ -343,6 +387,7 @@ export class SchemaState {
 			
 			// Discover wrangler.toml bindings
 			const { bindings: wranglerBindings, configFilePath } = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
+			this.wranglerBindings = wranglerBindings;
 			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
 			
@@ -728,7 +773,7 @@ export class SchemaState {
 	}
 
 	/**
-	 * Generates a TS resolver helper file next to schema.ts and copies it to the clipboard.
+	 * Opens the TS resolver helper customizer modal.
 	 */
 	async generateAndSaveResolvers() {
 		if (!this.filePath) {
@@ -753,24 +798,42 @@ export class SchemaState {
 			return;
 		}
 
-		try {
-			const code = generateResolverCode(this.nodes);
+		if (!this.resolverConfigPath) {
 			const dir = this.filePath.substring(0, this.filePath.lastIndexOf('/'));
-			const resolverPath = `${dir}/resolvers.ts`;
+			this.resolverConfigPath = `${dir}/resolvers.ts`;
+		}
 
-			await PlatformService.writeText(resolverPath, code);
+		this.showResolverModal = true;
+	}
 
-			if (typeof navigator !== 'undefined' && navigator.clipboard) {
-				await navigator.clipboard.writeText(code);
-			}
+	get generatedResolversCode() {
+		return generateResolverCode(this.nodes, {
+			prefix: this.resolverConfigPrefix,
+			doStyle: this.resolverConfigDoStyle,
+			kvRead: this.resolverConfigKvRead
+		});
+	}
 
-			toast.success("Resolvers generated successfully", {
-				description: `Saved to resolvers.ts and copied to clipboard.`
+	async saveResolvers(customPath?: string) {
+		const targetPath = customPath || this.resolverConfigPath;
+		if (!targetPath) {
+			toast.error("No save path configured", {
+				description: "Please enter a valid path to save the resolver file."
+			});
+			return;
+		}
+
+		try {
+			const code = this.generatedResolversCode;
+			await PlatformService.writeText(targetPath, code);
+
+			toast.success("Resolvers saved successfully", {
+				description: `File saved to ${targetPath.substring(targetPath.lastIndexOf('/') + 1)}.`
 			});
 		} catch (e: any) {
-			console.error("[Strata] Failed to generate resolvers:", e);
-			toast.error("Resolver generation failed", {
-				description: e.message || "Could not write resolvers.ts to disk."
+			console.error("[Strata] Failed to save resolvers:", e);
+			toast.error("Resolver save failed", {
+				description: e.message || "Could not write resolvers file to disk."
 			});
 		}
 	}
@@ -910,7 +973,17 @@ export function mutateJsonConfig(content: string, action: 'add' | 'remove', bind
 /**
  * Generates TS code for Cloudflare KV and DO resolvers based on synthetic relations.
  */
-export function generateResolverCode(nodes: Node[]): string {
+export interface ResolverConfig {
+	prefix?: string;
+	doStyle?: 'wrapped' | 'raw';
+	kvRead?: 'json' | 'text' | 'arrayBuffer';
+}
+
+export function generateResolverCode(nodes: Node[], config?: ResolverConfig): string {
+	const prefix = config?.prefix || "resolve";
+	const doStyle = config?.doStyle || "wrapped";
+	const kvRead = config?.kvRead || "json";
+
 	let code = `/**
  * Generated by Strata.
  * This file contains typed resolver helpers to bridge D1 database records
@@ -933,17 +1006,25 @@ import type { KVNamespace, DurableObjectNamespace } from '@cloudflare/workers-ty
 		});
 
 		for (const refNode of referringNodes) {
-			const fnName = `resolve${refNode.id}To${name}`;
+			const fnName = `${prefix}${refNode.id}To${name}`;
 			code += `/**
  * Resolves KV values from "${name}" linked by records in "${refNode.id}".
  */
 export async function ${fnName}(kv: KVNamespace, key: string) {
-	try {
+`;
+			if (kvRead === 'json') {
+				code += `	try {
 		return await kv.get(key, { type: 'json' });
 	} catch (e) {
 		return await kv.get(key, { type: 'text' });
 	}
-}
+`;
+			} else if (kvRead === 'arrayBuffer') {
+				code += `	return await kv.get(key, { type: 'arrayBuffer' });\n`;
+			} else {
+				code += `	return await kv.get(key, { type: 'text' });\n`;
+			}
+			code += `}
 
 `;
 		}
@@ -960,7 +1041,7 @@ export async function ${fnName}(kv: KVNamespace, key: string) {
 		});
 
 		for (const refNode of referringNodes) {
-			const fnName = `resolve${refNode.id}To${name}Stub`;
+			const fnName = `${prefix}${refNode.id}To${name}Stub`;
 			code += `/**
  * Resolves the Durable Object stub for "${name}" linked by records in "${refNode.id}".
  */
@@ -972,7 +1053,7 @@ export function ${fnName}(ns: DurableObjectNamespace, idStr: string) {
 `;
 		}
 
-		if (methods.length > 0) {
+		if (doStyle === 'wrapped' && methods.length > 0) {
 			const className = `${name}Client`;
 			code += `/**
  * Typed client wrapper for Durable Object stub "${name}".
