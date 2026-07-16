@@ -100,11 +100,19 @@ export function ensureImports(sf: SourceFile, module: string, names: string[]) {
 
 /**
  * Helper to resolve relative path from base file path.
+ * Normalizes all backslashes to forward slashes for cross-platform portability.
  */
 export function resolveRelativePath(base: string, rel: string): string {
-	const parts = base.split('/');
+	const normalizedBase = base.replace(/\\/g, '/');
+	const normalizedRel = rel.replace(/\\/g, '/');
+
+	if (normalizedRel.startsWith('/') || /^[a-zA-Z]:\//.test(normalizedRel)) {
+		return normalizedRel.endsWith('.ts') ? normalizedRel : normalizedRel + '.ts';
+	}
+
+	const parts = normalizedBase.split('/');
 	parts.pop(); // Remove filename
-	const relParts = rel.split('/');
+	const relParts = normalizedRel.split('/');
 	for (const part of relParts) {
 		if (part === '.') continue;
 		if (part === '..') {
@@ -118,4 +126,31 @@ export function resolveRelativePath(base: string, rel: string): string {
 		resolved += '.ts';
 	}
 	return resolved;
+}
+
+/**
+ * Resolves a path alias (like $lib/* or @/*) to its full resolved path using tsconfig compilerOptions.paths.
+ */
+export function resolvePathAlias(
+	specifier: string,
+	paths: Record<string, string[]>,
+	tsconfigPath: string
+): string | null {
+	const normalizedTsconfig = tsconfigPath.replace(/\\/g, '/');
+	const tsconfigDir = normalizedTsconfig.split('/').slice(0, -1).join('/');
+
+	for (const [pattern, replacements] of Object.entries(paths)) {
+		if (pattern === specifier && replacements.length > 0) {
+			return resolveRelativePath(tsconfigDir + '/dummy.ts', replacements[0]);
+		}
+		if (pattern.endsWith('/*')) {
+			const prefix = pattern.slice(0, -2);
+			if (specifier.startsWith(prefix + '/')) {
+				const subPath = specifier.slice(prefix.length + 1);
+				const replacement = replacements[0].replace(/\*/g, subPath);
+				return resolveRelativePath(tsconfigDir + '/dummy.ts', replacement);
+			}
+		}
+	}
+	return null;
 }

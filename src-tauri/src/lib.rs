@@ -4,8 +4,6 @@ use tauri::{Emitter, Manager, State};
 
 struct WatcherState(Mutex<Option<notify::RecommendedWatcher>>);
 
-
-
 #[tauri::command]
 async fn watch_file<R: tauri::Runtime>(
     handle: tauri::AppHandle<R>,
@@ -67,12 +65,21 @@ pub fn run() {
         }
     }
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .manage(WatcherState(Mutex::new(None)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_fs::init());
+
+    #[cfg(feature = "devtools")]
+    {
+        builder = builder
+            .plugin(tauri_plugin_devtools::init())
+            .plugin(tauri_plugin_devtools_app::init());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             watch_file,
             read_schema_file,
@@ -86,8 +93,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tauri::Manager;
     use tauri::test::{mock_builder, mock_context};
+    use tauri::Manager;
 
     #[test]
     fn test_read_write_schema_file_commands() {
@@ -97,7 +104,10 @@ mod tests {
         let test_content = "export const user = {}";
 
         // Write content using the command
-        let write_res = tauri::async_runtime::block_on(write_schema_file(path.clone(), test_content.to_string()));
+        let write_res = tauri::async_runtime::block_on(write_schema_file(
+            path.clone(),
+            test_content.to_string(),
+        ));
         assert!(write_res.is_ok());
 
         // Read content using the command
@@ -129,12 +139,12 @@ mod tests {
         std::fs::write(&temp_file, "export const t = {}").unwrap();
 
         let path = temp_file.to_str().unwrap().to_string();
-        
+
         let handle = app.handle().clone();
         tauri::async_runtime::block_on(async move {
             let state: State<'_, WatcherState> = handle.state();
             watch_file(handle.clone(), state, path).await.unwrap();
-            
+
             let state_after: State<'_, WatcherState> = handle.state();
             let lock = state_after.0.lock().unwrap();
             assert!(lock.is_some(), "Watcher should be initialized in state");
@@ -177,10 +187,12 @@ mod tests {
         let handle = app.handle().clone();
         tauri::async_runtime::block_on(async move {
             let state: State<'_, WatcherState> = handle.state();
-            
+
             // Watch first file
-            watch_file(handle.clone(), state.clone(), f1_str).await.unwrap();
-            
+            watch_file(handle.clone(), state.clone(), f1_str)
+                .await
+                .unwrap();
+
             // Watch second file (should replace first)
             watch_file(handle.clone(), state, f2_str).await.unwrap();
         });

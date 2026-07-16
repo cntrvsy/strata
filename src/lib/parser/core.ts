@@ -8,8 +8,8 @@
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
 import type { ParseResult } from './types';
-import { project, syncSourceFile } from './project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain } from './helpers';
+import { createIsolatedProject } from './project';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias } from './helpers';
 
 /**
  * Wraps raw code in pre/code tags for UI presentation.
@@ -22,26 +22,42 @@ export function wrapCode(code: string) {
  * Parses a Drizzle schema file into Svelte Flow nodes and edges.
  * Handles D1 (sqliteTable), KV (plain objects), relations, and relative external imports.
  */
-export function parseSchema(code: string, externalFilesMap?: Map<string, string>): ParseResult {
+export function parseSchema(
+	code: string,
+	externalFilesMap?: Map<string, string>,
+	paths?: Record<string, string[]>,
+	tsconfigPath?: string
+): ParseResult {
 	const tempSourceFiles: SourceFile[] = [];
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	try {
-		const sf = syncSourceFile(code);
 		
 		const nodes: Node[] = [];
 		const edges: Edge[] = [];
 		const externalPaths: string[] = [];
 		const warnings: string[] = [];
 		
-		// Find all relative import declarations
+		// Find all relative or aliased import declarations
 		const externalImports: { filePath: string; importNames: string[] }[] = [];
 		const importDecls = sf.getImportDeclarations();
 		for (const imp of importDecls) {
 			const specifier = imp.getModuleSpecifierValue();
-			if (specifier.startsWith('.') || specifier.startsWith('..')) {
+			let isExternal = specifier.startsWith('.') || specifier.startsWith('..');
+			let resolvedPath = specifier;
+
+			if (!isExternal && paths && tsconfigPath) {
+				const resolved = resolvePathAlias(specifier, paths, tsconfigPath);
+				if (resolved) {
+					isExternal = true;
+					resolvedPath = resolved;
+				}
+			}
+
+			if (isExternal) {
 				const names = imp.getNamedImports().map(ni => ni.getName());
 				if (names.length > 0) {
 					externalImports.push({
-						filePath: specifier,
+						filePath: resolvedPath,
 						importNames: names
 					});
 				}
@@ -518,23 +534,18 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 			if (call.getExpression().getText().endsWith('.references')) {
 				const args = call.getArguments();
 				if (args.length > 0) {
-					const match = args[0].getText().match(/=>\s*(\w+)\.(\w+)/);
-					if (match) {
-						const targetTable = match[1];
-						const targetCol = match[2];
-						physicalRelations.add(targetTable);
-						const colName = call.getAncestors().find(a => a.isKind(SyntaxKind.PropertyAssignment))?.asKind(SyntaxKind.PropertyAssignment)?.getName();
-						if (colName) {
-							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', colName, '1:N', colName, targetCol);
-						} else {
-							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
-						}
-					} else {
-						const matchTableOnly = args[0].getText().match(/=>\s*(\w+)\./);
-						if (matchTableOnly) {
-							const targetTable = matchTableOnly[1];
+					const propAccess = args[0].getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)[0];
+					if (propAccess) {
+						const targetTable = propAccess.getExpression().getText();
+						const targetCol = propAccess.getName();
+						if (targetTable) {
 							physicalRelations.add(targetTable);
-							addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
+							const colName = call.getAncestors().find(a => a.isKind(SyntaxKind.PropertyAssignment))?.asKind(SyntaxKind.PropertyAssignment)?.getName();
+							if (colName && targetCol) {
+								addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', colName, '1:N', colName, targetCol);
+							} else {
+								addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
+							}
 						}
 					}
 				}

@@ -7,7 +7,7 @@
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node } from '@xyflow/svelte';
-import { project, syncSourceFile } from './project';
+import { createIsolatedProject } from './project';
 import { 
 	findSqliteTableCall, 
 	isDrizzleTableDeclaration, 
@@ -22,7 +22,7 @@ import { PlatformService } from '../services/platform';
  * Updates a node's position inside its @strata JSDoc metadata.
  */
 export function updateNodePositionInSchema(code: string, tableName: string, x: number, y: number): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	
 	if (decl) {
@@ -36,14 +36,17 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 				const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 				
 				if (strataMatch) {
+					let metadata: any = {};
 					try {
-						const metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-						metadata.x = Math.round(x);
-						metadata.y = Math.round(y);
-						doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
-						strataFound = true;
-						break;
-					} catch (e) { console.error(e); }
+						metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
+					} catch (e) {
+						console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
+					}
+					metadata.x = Math.round(x);
+					metadata.y = Math.round(y);
+					doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+					strataFound = true;
+					break;
 				}
 			}
 
@@ -59,7 +62,7 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
  * Batches updates to node positions inside @strata JSDoc metadata in a single AST pass.
  */
 export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	for (const node of nodes) {
 		const decl = sf.getVariableDeclaration(node.id);
 		if (decl) {
@@ -73,14 +76,17 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 					const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 					
 					if (strataMatch) {
+						let metadata: any = {};
 						try {
-							const metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-							metadata.x = Math.round(node.position.x);
-							metadata.y = Math.round(node.position.y);
-							doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
-							strataFound = true;
-							break;
-						} catch (e) { console.error(e); }
+							metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
+						} catch (e) {
+							console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
+						}
+						metadata.x = Math.round(node.position.x);
+						metadata.y = Math.round(node.position.y);
+						doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+						strataFound = true;
+						break;
 					}
 				}
 
@@ -119,7 +125,7 @@ export function addTableToSchema(
 	target: 'd1' | 'do' | 'kv' | 'r2' = 'd1',
 	extra?: { class?: string; path?: string }
 ): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	
 	if (target === 'd1') {
 		ensureImports(sf, "drizzle-orm/sqlite-core", ["sqliteTable", "integer", "text"]);
@@ -154,7 +160,7 @@ export async function addColumnToSchema(
 	referencesColumn?: string,
 	schemaFilePath?: string
 ): Promise<string> {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
 
@@ -165,8 +171,14 @@ export async function addColumnToSchema(
 			const text = doc.getText();
 			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				let strata: any = null;
 				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch (e) {
+					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+				}
+
+				if (strata) {
 					if (strata.target === 'kv') {
 						if (!strata.schema) strata.schema = {};
 						strata.schema[columnName] = type === 'text' ? 'string' : type;
@@ -213,9 +225,11 @@ export async function addColumnToSchema(
 									const newExtContent = extSf.getFullText();
 									await PlatformService.writeText(resolvedPath, newExtContent);
 								}
-							} catch (err) {
+							} catch (err: any) {
 								console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
+								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 							}
+							return sf.getFullText();
 						} else {
 							if (!strata.methods) strata.methods = [];
 							let methodName = columnName.trim();
@@ -231,7 +245,7 @@ export async function addColumnToSchema(
 						}
 						return sf.getFullText();
 					}
-				} catch (e) {}
+				}
 			}
 		}
 	}
@@ -268,7 +282,7 @@ export async function addColumnToSchema(
  * Detects if it should use Drizzle relations() or Synthetic JSDoc relations.
  */
 export function addEdgeToSchema(code: string, source: string, target: string): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	const targetDecl = sf.getVariableDeclaration(target);
 	if (!sourceDecl || !targetDecl) return code;
@@ -329,7 +343,7 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
  * Removes a table or object entity from the schema.
  */
 export function removeTableFromSchema(code: string, tableName: string): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	
 	// Clean up logical relations blocks referencing this table in other blocks
 	const sourceFileDecls = sf.getVariableDeclarations();
@@ -415,7 +429,7 @@ export function removeTableFromSchema(code: string, tableName: string): string {
  * Removes an edge/relationship from the schema.
  */
 export function removeEdgeFromSchema(code: string, source: string, target: string, name?: string): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	if (!sourceDecl) return code;
 
@@ -509,7 +523,7 @@ export async function removeColumnFromSchema(
 	columnName: string,
 	schemaFilePath?: string
 ): Promise<string> {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
 	
@@ -520,8 +534,14 @@ export async function removeColumnFromSchema(
 			const text = doc.getText();
 			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				let strata: any = null;
 				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch (e) {
+					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+				}
+
+				if (strata) {
 					if (strata.target === 'kv' && strata.schema) {
 						delete strata.schema[columnName];
 						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
@@ -548,9 +568,11 @@ export async function removeColumnFromSchema(
 									const newExtContent = extSf.getFullText();
 									await PlatformService.writeText(resolvedPath, newExtContent);
 								}
-							} catch (err) {
+							} catch (err: any) {
 								console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
+								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 							}
+							return sf.getFullText();
 						} else if (strata.methods) {
 							strata.methods = strata.methods.filter((m: string) => m !== methodName);
 							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
@@ -558,7 +580,7 @@ export async function removeColumnFromSchema(
 						}
 						return sf.getFullText();
 					}
-				} catch (e) {}
+				}
 			}
 		}
 	}
@@ -585,7 +607,7 @@ export async function removeColumnFromSchema(
  * Also updates associated relations() blocks.
  */
 export function renameTableInSchema(code: string, oldName: string, newName: string): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(oldName);
 	
 	if (decl) {
@@ -629,7 +651,7 @@ export async function renameColumnInSchema(
 	newColName: string,
 	schemaFilePath?: string
 ): Promise<string> {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
 
@@ -640,8 +662,14 @@ export async function renameColumnInSchema(
 			const text = doc.getText();
 			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				let strata: any = null;
 				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch (e) {
+					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+				}
+
+				if (strata) {
 					if (strata.target === 'kv' && strata.schema && strata.schema[oldColName]) {
 						const type = strata.schema[oldColName];
 						delete strata.schema[oldColName];
@@ -677,9 +705,11 @@ export async function renameColumnInSchema(
 									const newExtContent = extSf.getFullText();
 									await PlatformService.writeText(resolvedPath, newExtContent);
 								}
-							} catch (err) {
+							} catch (err: any) {
 								console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
+								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 							}
+							return sf.getFullText();
 						} else if (strata.methods && Array.isArray(strata.methods)) {
 							const idx = strata.methods.indexOf(oldMethodName);
 							if (idx !== -1) {
@@ -690,7 +720,7 @@ export async function renameColumnInSchema(
 						}
 						return sf.getFullText();
 					}
-				} catch (e) {}
+				}
 			}
 		}
 	}
@@ -735,7 +765,7 @@ export function updateColumnModifiersInSchema(
 	columnName: string,
 	modifiers: { isPk?: boolean; notNull?: boolean; defaultVal?: string | null; ttl?: number | null; metadata?: string | null }
 ): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
 
@@ -861,7 +891,7 @@ export function updateTableMetadataInSchema(
 	tableName: string,
 	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }
 ): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) return code;
 
@@ -910,7 +940,7 @@ export function updateTableMetadataInSchema(
  * Updates the project-level config block in the schema file.
  */
 export function updateProjectConfigInSchema(code: string, config: { wranglerPath?: string }): string {
-	const sf = syncSourceFile(code);
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration('strataConfig');
 	
 	const strataVal = {

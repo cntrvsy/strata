@@ -11,7 +11,8 @@ export {
 } from './core';
 
 export {
-	resolveRelativePath
+	resolveRelativePath,
+	resolvePathAlias
 } from './helpers';
 
 export { 
@@ -31,4 +32,4 @@ export {
 } from './mutators';
 
 export type { ParseResult } from './types';
-export { project, sourceFile, syncSourceFile } from './project';
+export { createIsolatedProject } from './project';

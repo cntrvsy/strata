@@ -14,6 +14,62 @@ import { toast } from "svelte-sonner";
 
 import { resolveRelativePath } from "../parser";
 
+function parseCleanJson(text: string): any {
+	const cleaned = text
+		.replace(/\/\*[\s\S]*?\*\//g, '')
+		.replace(/(?:^|[^:])\/\/.*$/gm, '')
+		.replace(/,(\s*[}\]])/g, '$1');
+	return JSON.parse(cleaned);
+}
+
+/**
+ * Dynamically resolves tsconfig paths from the workspace by walking up directories.
+ * Resolves extended configurations as well (e.g. SvelteKit extends).
+ */
+async function loadTsconfigPaths(basePath: string): Promise<{ paths: Record<string, string[]>; path: string } | null> {
+	let currentDir = basePath.replace(/\\/g, '/').split('/');
+	currentDir.pop(); // Remove filename
+	
+	let tsconfigPath = '';
+	let tsconfig: any = null;
+	while (currentDir.length > 0) {
+		const checkPath = currentDir.join('/') + '/tsconfig.json';
+		try {
+			const content = await PlatformService.readText(checkPath);
+			tsconfig = parseCleanJson(content);
+			tsconfigPath = checkPath;
+			break;
+		} catch {
+			currentDir.pop();
+		}
+	}
+	
+	if (!tsconfig) return null;
+	
+	let mergedPaths: Record<string, string[]> = {};
+	if (tsconfig.compilerOptions?.paths) {
+		mergedPaths = { ...tsconfig.compilerOptions.paths };
+	}
+	
+	let currentConfig = tsconfig;
+	let currentConfigPath = tsconfigPath;
+	while (currentConfig.extends) {
+		try {
+			const extendsPath = resolveRelativePath(currentConfigPath, currentConfig.extends);
+			const content = await PlatformService.readText(extendsPath);
+			currentConfig = parseCleanJson(content);
+			currentConfigPath = extendsPath;
+			if (currentConfig.compilerOptions?.paths) {
+				mergedPaths = { ...currentConfig.compilerOptions.paths, ...mergedPaths };
+			}
+		} catch {
+			break;
+		}
+	}
+	
+	return { paths: mergedPaths, path: tsconfigPath };
+}
+
 /**
  * Loads external schemas asynchronously based on import path declarations.
  */
@@ -362,8 +418,12 @@ export class SchemaState {
 	private async parseAndApply(code: string): Promise<boolean> {
 		const { parseSchema } = await import("../parser");
 		
+		const tsconfigInfo = this.filePath ? await loadTsconfigPaths(this.filePath) : null;
+		const tsconfigPaths = tsconfigInfo?.paths;
+		const tsconfigPath = tsconfigInfo?.path;
+
 		// 1. Initial parse to find external imports & paths
-		const initialResult = parseSchema(code);
+		const initialResult = parseSchema(code, undefined, tsconfigPaths, tsconfigPath);
 		let externalFilesMap = new Map<string, string>();
 		
 		if ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0)) {
@@ -371,7 +431,7 @@ export class SchemaState {
 		}
 
 		// 2. Final parse with external file contents mapped
-		const result = parseSchema(code, externalFilesMap);
+		const result = parseSchema(code, externalFilesMap, tsconfigPaths, tsconfigPath);
 		
 		if (result.success) {
 			this.wranglerPath = result.wranglerPath;

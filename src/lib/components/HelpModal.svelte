@@ -267,6 +267,20 @@ export const users = sqliteTable("users", {});</pre>
                 <p>If you stop using Strata, your schema remains 100% standard Drizzle code. You can strip the comments or keep them—zero locked configurations, zero dependencies.</p>`,
     },
     {
+      id: "tracking-entities",
+      category: "getting-started",
+      title: "How Strata Tracks Canvas Entities",
+      tags: ["tracking", "ast", "jsdoc", "naming", "unique"],
+      summary:
+        "Strata does not generate artificial IDs; it maps @strata JSDoc blocks directly to your TypeScript variable declarations.",
+      content: `<p class="mb-2">Strata tracks nodes and connections using the Abstract Syntax Tree (AST):</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Variable Names as IDs:</strong> The unique identifier is the variable name (e.g., <code>users</code> in <code>export const users = sqliteTable(...)</code>). Because variable names must be unique within a file, this acts as a robust natural ID.</li>
+                  <li><strong>JSDoc Statement Binding:</strong> JSDocs are syntactically bound to the variable statement immediately following them. If you rename the variable, ts-morph updates all references, and the JSDoc metadata moves with it.</li>
+                  <li><strong>No Sidecars:</strong> This design ensures zero hidden state, no UUID generation, and no proprietary JSON sidecars—your code remains the single source of truth.</li>
+                </ul>`,
+    },
+    {
       id: "wrangler-sync",
       category: "cloudflare",
       title: "Wrangler Configuration Binding Sync",

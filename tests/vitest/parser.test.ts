@@ -13,7 +13,9 @@ import {
   removeEdgeFromSchema,
   wrapCode,
   updateProjectConfigInSchema,
-  updateTableMetadataInSchema
+  updateTableMetadataInSchema,
+  resolveRelativePath,
+  resolvePathAlias
 } from '../../src/lib/parser';
 import { PlatformService } from '../../src/lib/services/platform';
 
@@ -799,6 +801,94 @@ describe('Mutation Logic', () => {
       mutated = updateTableMetadataInSchema(mutated, 'images', { public: false, customDomain: null });
       expect(mutated).not.toContain('public');
       expect(mutated).not.toContain('customDomain');
+    });
+  });
+
+  describe('AST Pipeline Robustness & Recovery', () => {
+    it('should handle malformed @strata JSDoc JSON gracefully and overwrite rather than duplicating', () => {
+      const code = `
+        /** @strata { invalid_json_here } */
+        export const users = sqliteTable("users", {
+          id: integer("id").primaryKey(),
+        });
+      `;
+      // Update position
+      const mutated = updateNodePositionInSchema(code, 'users', 100, 150);
+      
+      // Verify JSON was repaired and the original malformed block is replaced (no duplicate comment blocks)
+      expect(mutated).toContain('"x":100,"y":150');
+      
+      // Parse to ensure only one @strata block exists and position is correct
+      const parsed = parseSchema(mutated);
+      expect(parsed.success).toBe(true);
+      expect(parsed.nodes).toHaveLength(1);
+      expect(parsed.nodes[0].position).toEqual({ x: 100, y: 150 });
+      
+      // Count @strata blocks in the raw mutated text
+      const strataCount = (mutated.match(/@strata/g) || []).length;
+      expect(strataCount).toBe(1);
+    });
+
+    it('should parse physical relationships with various arrow function shapes', () => {
+      const code = `
+        export const users = sqliteTable("users", {
+          id: integer("id").primaryKey(),
+        });
+        
+        export const posts = sqliteTable("posts", {
+          id: integer("id").primaryKey(),
+          // Shape 1: Standard parenthesized
+          userId1: integer("user_id_1").references(() => users.id),
+          // Shape 2: No parentheses around arg (Drizzle standard with param)
+          userId2: integer("user_id_2").references((col) => users.id),
+          // Shape 3: No parenthesization, parameter only
+          userId3: integer("user_id_3").references(c => users.id),
+          // Shape 4: Block body with return
+          userId4: integer("user_id_4").references((col) => { return users.id; }),
+        });
+      `;
+
+      const result = parseSchema(code);
+      expect(result.success).toBe(true);
+      
+      // We expect four unique edges from posts -> users
+      const postToUserEdges = result.edges.filter(e => e.source === 'posts' && e.target === 'users');
+      expect(postToUserEdges).toHaveLength(4);
+    });
+
+    it('should normalize Windows backslash paths correctly', () => {
+      const resolved = resolveRelativePath('C:\\projects\\strata\\schema.ts', '.\\models\\users');
+      expect(resolved).toBe('C:/projects/strata/models/users.ts');
+    });
+
+    it('should resolve custom path aliases using tsconfig paths', () => {
+      const paths = {
+        "@/*": ["./src/*"],
+        "$lib/*": ["./src/lib/*"]
+      };
+      const tsconfigPath = '/projects/strata/tsconfig.json';
+      
+      const resolvedLib = resolvePathAlias('$lib/db/schema', paths, tsconfigPath);
+      expect(resolvedLib).toBe('/projects/strata/src/lib/db/schema.ts');
+
+      const resolvedAt = resolvePathAlias('@/components/button', paths, tsconfigPath);
+      expect(resolvedAt).toBe('/projects/strata/src/components/button.ts');
+    });
+
+    it('should throw a structured error when writing an external file fails (write lock / permission error)', async () => {
+      const schemaCode = `
+        /** @strata { "target": "do", "class": "Counter", "path": "./Counter.ts" } */
+        export const myDo = {};
+      `;
+      const readSpy = vi.spyOn(PlatformService, 'readText').mockResolvedValue('class Counter {}');
+      const writeSpy = vi.spyOn(PlatformService, 'writeText').mockRejectedValue(new Error('Permission Denied'));
+
+      await expect(
+        addColumnToSchema(schemaCode, 'myDo', 'increment(by: number)', 'Promise<void>', undefined, undefined, '/projects/schema.ts')
+      ).rejects.toThrow('Failed to write to external file');
+
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
     });
   });
 });
