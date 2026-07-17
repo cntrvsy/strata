@@ -15,14 +15,19 @@ jobs:
         include:
           - platform: "macos-latest"
             args: "--target universal-apple-darwin"
+            productName: "strata"
           - platform: "ubuntu-22.04"
             args: "--no-bundle" # Free version (tar.gz only)
+            productName: "strata"
           - platform: "ubuntu-22.04"
-            args: "--no-bundle --features updater --config '{\"productName\": \"strata-paid\"}'" # Paid version (tar.gz only)
+            args: "--no-bundle --features updater" # Paid version (tar.gz only)
+            productName: "strata-paid"
           - platform: "windows-latest"
             args: "" # Free version (.msi)
+            productName: "strata"
           - platform: "windows-latest"
-            args: "--features updater --config '{\"bundle\": {\"createUpdaterArtifacts\": true}, \"productName\": \"strata-paid\"}'" # Paid version (.msi with updater)
+            args: "--features updater --config '{\"bundle\": {\"createUpdaterArtifacts\": true}}'" # Paid version (.msi with updater)
+            productName: "strata-paid"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -32,6 +37,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Customize productName for paid version
+        if: matrix.productName != 'strata'
+        run: |
+          node -e "
+            const fs = require('fs');
+            const file = 'src-tauri/tauri.conf.json';
+            const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+            config.productName = '${{ matrix.productName }}';
+            fs.writeFileSync(file, JSON.stringify(config, null, 2));
+          "
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
