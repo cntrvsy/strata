@@ -5,8 +5,22 @@ on:
     tags:
       - "v*"
 
+env:
+  CN_APPLICATION: "frstudios/strata"
+
 jobs:
+  draft:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: create CrabNebula draft release
+        uses: crabnebula-dev/cloud-release@v0
+        with:
+          command: release draft ${{ env.CN_APPLICATION }} --framework tauri
+          api-key: ${{ secrets.CN_API_KEY }}
+
   release:
+    needs: draft
     permissions:
       contents: write
     strategy:
@@ -15,19 +29,14 @@ jobs:
         include:
           - platform: "macos-latest"
             args: "--target universal-apple-darwin"
-            productName: "strata"
           - platform: "ubuntu-22.04"
             args: "--no-bundle" # Free version (tar.gz only)
-            productName: "strata"
           - platform: "ubuntu-22.04"
-            args: "--no-bundle --features updater" # Paid version (tar.gz only)
-            productName: "strata-paid"
+            args: '--no-bundle --features updater --config ''{"productName": "strata-paid"}''' # Paid version (tar.gz only)
           - platform: "windows-latest"
             args: "" # Free version (.msi)
-            productName: "strata"
           - platform: "windows-latest"
-            args: "--features updater --config '{\"bundle\": {\"createUpdaterArtifacts\": true}}'" # Paid version (.msi with updater)
-            productName: "strata-paid"
+            args: '--features updater --config ''{"bundle": {"createUpdaterArtifacts": true}, "productName": "strata-paid"}''' # Paid version (.msi with updater)
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -37,17 +46,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Customize productName for paid version
-        if: matrix.productName != 'strata'
-        run: |
-          node -e "
-            const fs = require('fs');
-            const file = 'src-tauri/tauri.conf.json';
-            const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-            config.productName = '${{ matrix.productName }}';
-            fs.writeFileSync(file, JSON.stringify(config, null, 2));
-          "
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -103,11 +101,24 @@ jobs:
           tar -czf "$ARCHIVE_NAME" -C src-tauri/target/release "$BINARY_NAME"
           gh release upload "v${{ steps.tauri.outputs.appVersion }}" "$ARCHIVE_NAME" --clobber --repo "${{ github.repository }}"
 
-      - name: Publish to CrabNebula
+      - name: Upload assets to CrabNebula
         if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
         uses: crabnebula-dev/cloud-release@v0
         with:
-          command: release upload frstudios/strata "v${{ steps.tauri.outputs.appVersion }}" --assets-dir src-tauri/target/release/bundle
+          command: release upload ${{ env.CN_APPLICATION }} --framework tauri
+          api-key: ${{ secrets.CN_API_KEY }}
+          path: ./src-tauri
+
+  cn_publish:
+    name: Publish CrabNebula Release
+    runs-on: ubuntu-22.04
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+      - name: publish CrabNebula release
+        uses: crabnebula-dev/cloud-release@v0
+        with:
+          command: release publish ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
 
   checksums:
@@ -123,16 +134,16 @@ jobs:
         run: |
           TAG_NAME="${{ github.ref_name }}"
           echo "Tag name: $TAG_NAME"
-          
+
           mkdir -p assets
           cd assets
-          
+
           gh release download "$TAG_NAME" --repo "${{ github.repository }}"
-          
+
           sha256sum * > SHA256SUMS.txt
-          
+
           gh release upload "$TAG_NAME" SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
-          
+
           echo -e "\n### SHA-256 Checksums\n" > table.md
           echo -e "| File | SHA-256 Checksum |" >> table.md
           echo -e "| --- | --- |" >> table.md
@@ -143,11 +154,10 @@ jobs:
               echo "| \`$FILE\` | \`$HASH\` |" >> table.md
             fi
           done < SHA256SUMS.txt
-          
+
           gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json body --jq .body > current_body.md
-          
+
           if ! grep -q "### SHA-256 Checksums" current_body.md; then
             cat current_body.md table.md > new_body.md
             gh release edit "$TAG_NAME" --notes-file new_body.md --repo "${{ github.repository }}"
           fi
-
