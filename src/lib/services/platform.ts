@@ -17,6 +17,23 @@ export class PlatformService {
 		return invoke("write_schema_file", { path, content });
 	}
 
+	static async mutateWranglerConfig(
+		configPath: string,
+		action: "add" | "remove",
+		bindingType: "kv" | "do" | "r2",
+		bindingName: string,
+		extra: any = {}
+	): Promise<void> {
+		const { invoke } = await import("@tauri-apps/api/core");
+		return invoke("mutate_wrangler_config", {
+			configPath,
+			action,
+			bindingType,
+			bindingName,
+			extra
+		});
+	}
+
 	static async selectFile(extensions: string[], defaultPath?: string): Promise<string | null> {
 		const { open } = await import("@tauri-apps/plugin-dialog");
 		const selected = await open({

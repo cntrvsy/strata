@@ -13,12 +13,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # for Silicon and Intel
+          - platform: "macos-latest"
             args: "--target universal-apple-darwin"
-          - platform: "ubuntu-22.04" # for tar.gz
-            args: "--no-bundle"
-          - platform: "windows-latest" # for .exe
-            args: ""
+          - platform: "ubuntu-22.04"
+            args: "--no-bundle" # Free version (tar.gz only)
+          - platform: "ubuntu-22.04"
+            args: "--no-bundle --features updater --config '{\"productName\": \"strata-paid\"}'" # Paid version (tar.gz only)
+          - platform: "windows-latest"
+            args: "" # Free version (.msi)
+          - platform: "windows-latest"
+            args: "--features updater --config '{\"bundle\": {\"createUpdaterArtifacts\": true}, \"productName\": \"strata-paid\"}'" # Paid version (.msi with updater)
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -57,6 +61,8 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
           # FIX: Prevent the bundler from capturing host-breaking graphics/Wayland drivers
           EXCLUDE_APPIMAGE_DSO: "libwayland-client.so.0;libEGL.so.1;libGL.so.1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
           releaseName: "Strata v__VERSION__"
@@ -64,15 +70,33 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
+          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater') }}
 
       - name: Package and upload tar.gz
         if: matrix.platform == 'ubuntu-22.04'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tar -czf strata-linux-x86_64.tar.gz -C src-tauri/target/release strata
-          gh release upload "v${{ steps.tauri.outputs.appVersion }}" strata-linux-x86_64.tar.gz --clobber --repo "${{ github.repository }}"
+          if [ -f src-tauri/target/release/strata-paid ]; then
+            BINARY_NAME="strata-paid"
+            ARCHIVE_NAME="strata-paid-linux-x86_64.tar.gz"
+          else
+            BINARY_NAME="strata"
+            ARCHIVE_NAME="strata-linux-x86_64.tar.gz"
+          fi
+          tar -czf "$ARCHIVE_NAME" -C src-tauri/target/release "$BINARY_NAME"
+          gh release upload "v${{ steps.tauri.outputs.appVersion }}" "$ARCHIVE_NAME" --clobber --repo "${{ github.repository }}"
+
+      - name: Install CrabNebula CLI
+        if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
+        run: npm install -g @crabnebula/cli
+
+      - name: Publish to CrabNebula
+        if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
+        env:
+          CN_API_KEY: ${{ secrets.CN_API_KEY }}
+        run: |
+          cn release upload frstudios/strata "v${{ steps.tauri.outputs.appVersion }}" --assets-dir src-tauri/target/release/bundle
 
   checksums:
     name: Generate Checksums

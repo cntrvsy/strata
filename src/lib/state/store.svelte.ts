@@ -529,6 +529,9 @@ export class SchemaState {
 				this.error = e.message;
 				this.errorType = 'parse';
 				this.machine.send("FAIL");
+				toast.error("File synchronization failed", {
+					description: e.message || String(e)
+				});
 				
 				// If a file read/load fails on a recent file, clean up from history
 				if (this.filePath && typeof window !== 'undefined' && window.localStorage) {
@@ -611,6 +614,9 @@ export class SchemaState {
 				this.error = e.message;
 				this.errorType = 'disk';
 				this.machine.send("FAIL");
+				toast.error(`${operationName} failed`, {
+					description: e.message || String(e)
+				});
 			}
 		});
 	}
@@ -811,23 +817,20 @@ export class SchemaState {
 	) {
 		if (!this.wranglerConfigFilePath) return;
 		try {
-			const content = await PlatformService.readText(this.wranglerConfigFilePath);
-			let updatedContent = '';
-			if (this.wranglerConfigFilePath.endsWith('.toml')) {
-				updatedContent = mutateTomlConfig(content, action, binding);
-			} else {
-				updatedContent = mutateJsonConfig(content, action, binding);
-			}
-			if (updatedContent && updatedContent !== content) {
-				await PlatformService.writeText(this.wranglerConfigFilePath, updatedContent);
-				toast.success(`Wrangler configuration synced`, {
-					description: `${action === 'add' ? 'Added' : 'Removed'} ${binding.type} binding: ${binding.name}`
-				});
-			}
+			await PlatformService.mutateWranglerConfig(
+				this.wranglerConfigFilePath,
+				action,
+				binding.type,
+				binding.name,
+				binding.extra || {}
+			);
+			toast.success(`Wrangler configuration synced`, {
+				description: `${action === 'add' ? 'Added' : 'Removed'} ${binding.type} binding: ${binding.name}`
+			});
 		} catch (err: any) {
 			console.error("[Strata] Failed to sync wrangler config:", err);
 			toast.error(`Wrangler sync failed`, {
-				description: err?.message || "Could not write changes to wrangler config."
+				description: err?.message || String(err)
 			});
 		}
 	}

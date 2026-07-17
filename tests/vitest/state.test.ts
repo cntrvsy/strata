@@ -449,10 +449,8 @@ describe('Wrangler Configuration Sync', () => {
     expect(parsedRemove.kv_namespaces[0].binding).toBe('NEW_KV');
   });
 
-  it('should call PlatformService.writeText when mutate operations trigger syncToWranglerConfig', async () => {
-    const tomlContent = `name = "project"`;
-    const readSpy = vi.spyOn(PlatformService, 'readText').mockResolvedValue(tomlContent);
-    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+  it('should call PlatformService.mutateWranglerConfig when mutate operations trigger syncToWranglerConfig', async () => {
+    const mutateSpy = vi.spyOn(PlatformService, 'mutateWranglerConfig').mockResolvedValue(undefined);
 
     schemaState.wranglerConfigFilePath = '/project/wrangler.toml';
     schemaState.filePath = '/project/schema.ts';
@@ -466,12 +464,16 @@ describe('Wrangler Configuration Sync', () => {
     vi.mocked(invoke).mockResolvedValue('export const dummy = 1;'); // Schema mutation mock success
     await schemaState.deleteTable('my_kv');
 
-    expect(readSpy).toHaveBeenCalledWith('/project/wrangler.toml');
-    expect(writeSpy).toHaveBeenCalled();
+    expect(mutateSpy).toHaveBeenCalledWith(
+      '/project/wrangler.toml',
+      'remove',
+      'kv',
+      'my_kv',
+      {}
+    );
     
     // Clean up spies
-    readSpy.mockRestore();
-    writeSpy.mockRestore();
+    mutateSpy.mockRestore();
   });
 });
 
