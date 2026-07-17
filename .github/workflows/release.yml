@@ -70,7 +70,7 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater') }}
+          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
 
       - name: Package and upload tar.gz
         if: matrix.platform == 'ubuntu-22.04'
@@ -87,16 +87,12 @@ jobs:
           tar -czf "$ARCHIVE_NAME" -C src-tauri/target/release "$BINARY_NAME"
           gh release upload "v${{ steps.tauri.outputs.appVersion }}" "$ARCHIVE_NAME" --clobber --repo "${{ github.repository }}"
 
-      - name: Install CrabNebula CLI
-        if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
-        run: npm install -g @crabnebula/cli
-
       - name: Publish to CrabNebula
         if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
-        env:
-          CN_API_KEY: ${{ secrets.CN_API_KEY }}
-        run: |
-          cn release upload frstudios/strata "v${{ steps.tauri.outputs.appVersion }}" --assets-dir src-tauri/target/release/bundle
+        uses: crabnebula-dev/cloud-release@v0
+        with:
+          command: release upload frstudios/strata "v${{ steps.tauri.outputs.appVersion }}" --assets-dir src-tauri/target/release/bundle
+          api-key: ${{ secrets.CN_API_KEY }}
 
   checksums:
     name: Generate Checksums
