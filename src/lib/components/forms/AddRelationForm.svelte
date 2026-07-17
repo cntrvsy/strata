@@ -1,14 +1,16 @@
+<!--
+  AddRelationForm.svelte
+
+  Summary: Form to create physical SQLite relationships or logical/synthetic relations.
+  Expects: sourceTableName prop and onComplete callback.
+  Output: Dispatches relationship additions to the state engine.
+-->
 <script lang="ts">
-  /**
-   * AddRelationForm Component
-   * Forges relationships between entities.
-   * Logic intelligently switches between Drizzle relations() and Synthetic JSDoc.
-   */
   import * as Form from "formsnap";
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { relationSchema } from "$lib/schemas";
-  import { schemaState } from "../state.svelte";
+  import { schemaState } from "$lib/state";
   import { Link, X } from "lucide-svelte";
 
   const { sourceTableName, onComplete } = $props<{
@@ -48,13 +50,13 @@
   class="flex flex-col gap-5 p-1 animate-in fade-in slide-in-from-top-2 duration-300"
 >
   <div
-    class="flex items-center justify-between border-b border-base-300 pb-3 mb-1"
+    class="flex items-center justify-between border-b border-base-300/60 pb-3 mb-1"
   >
-    <h4 class="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
-      Forge Relation
+    <h4 class="text-[10px] font-bold uppercase tracking-wider opacity-50">
+      Create Relation
     </h4>
-    <button class="btn btn-ghost btn-xs btn-circle" onclick={onComplete}>
-      <X class="w-3 h-3" />
+    <button class="btn btn-ghost btn-xs btn-circle hover:bg-base-200" onclick={onComplete}>
+      <X class="w-3.5 h-3.5 opacity-60" />
     </button>
   </div>
 
@@ -63,13 +65,13 @@
       <Form.Control>
         {#snippet children({ props })}
           <Form.Label
-            class="text-[10px] font-bold opacity-50 mb-1.5 block uppercase"
+            class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >Target Entity</Form.Label
           >
           <select
             {...props}
             bind:value={$formData.target}
-            class="select select-sm select-bordered w-full rounded-xl bg-base-200 focus:border-primary transition-all text-xs"
+            class="select select-sm select-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-xs"
           >
             <option value="" disabled selected>Select target...</option>
             {#each potentialTargets as target}
@@ -84,11 +86,11 @@
     <div class="flex flex-col gap-2 pt-2">
       <button
         type="submit"
-        class="btn btn-primary btn-sm rounded-xl w-full gap-2 shadow-lg shadow-primary/20"
+        class="btn btn-primary btn-sm rounded-xl w-full gap-2 shadow-sm font-semibold"
         disabled={!$formData.target}
       >
-        <Link class="w-3 h-3" />
-        Forge Edge
+        <Link class="w-3.5 h-3.5" />
+        Create Relation
       </button>
       <p class="text-[9px] text-center opacity-40 px-2 leading-tight">
         D1 &rarr; D1: Writes Drizzle relations.<br />

@@ -1,8 +1,15 @@
+<!--
+  CodeEditor.svelte
+
+  Summary: Monaco/CodeMirror based visual schema code editor for editing schema.ts.
+  Expects: None (shares global schemaState).
+  Output: Reactive debounced code parsing and error decoration triggers.
+-->
 <script lang="ts">
   import CodeMirror from "svelte-codemirror-editor";
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import { FileCode } from "lucide-svelte";
   import { parseSchema } from "$lib/parser";
 

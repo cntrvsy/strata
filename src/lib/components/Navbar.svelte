@@ -1,16 +1,25 @@
+<!--
+  Navbar.svelte
+
+  Summary: Top navigation bar rendering filters, view mode selectors, export controls, and file persistence triggers.
+  Expects: None (shares global schemaState).
+  Output: Triggers file opens, layout resets, PNG exports, help modals, and code vs diagram view toggles.
+-->
 <script lang="ts">
   import {
     Camera,
     FolderOpen,
-    RefreshCw,
     BadgeQuestionMark,
     Eye,
     EyeOff,
     Workflow,
     Save,
     Undo,
+    Settings,
+    Menu,
+    Cpu,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";
@@ -110,181 +119,186 @@
 </script>
 
 <div
-  class="w-full h-14 border-b border-base-300 bg-base-100/80 backdrop-blur-xl z-30 flex items-center justify-between px-6 select-none shrink-0"
+  class="navbar w-full h-11 border-b border-base-300/80 bg-base-100/90 backdrop-blur-md z-30 px-4 select-none shrink-0"
   data-testid="navbar"
 >
-  <div class="flex items-center gap-4">
-    <div
-      class="flex items-center gap-2.5 bg-base-200/40 hover:bg-base-200/80 px-3.5 py-1.5 rounded-full border border-base-300 transition-all cursor-help relative group"
+  <!-- Left Side: File Controls (Clean outline button) -->
+  <div class="navbar-start flex items-center gap-2">
+    <button
+      class="btn btn-outline btn-sm border-base-300/85 hover:border-base-300 hover:bg-base-200/60 text-base-content/80 rounded-lg text-xs font-semibold px-3 h-8 min-h-0"
+      onclick={onOpenFile}
+      title="Open Drizzle Schema file"
     >
-      <span
-        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
-        >Code</span
-      >
-      <div class="flex items-center gap-0.5 text-primary">
-        <RefreshCw
-          class="w-3 h-3 animate-spin duration-3000 [animation-duration:8s]"
-        />
-      </div>
-      <span
-        class="text-[9px] font-black uppercase tracking-wider text-base-content/60"
-        >UI</span
-      >
-      <div class="h-3 w-px bg-base-300"></div>
-      <div class="flex items-center gap-1.5">
-        <div
-          class="w-1.5 h-1.5 rounded-full {!schemaState.filePath
-            ? 'bg-warning'
-            : !schemaState.isValid
-              ? 'bg-error animate-ping'
-              : schemaState.hasUnsavedChanges
-                ? 'bg-warning animate-pulse'
-                : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.filePath
-            ? 'text-warning'
-            : !schemaState.isValid
-              ? 'text-error'
-              : schemaState.hasUnsavedChanges
-                ? 'text-warning'
-                : 'text-success'}"
-        ></div>
-        <span
-          class="text-[9px] font-mono uppercase font-bold text-base-content/60"
-        >
-          {!schemaState.filePath
-            ? "No Schema Loaded"
-            : !schemaState.isValid
-              ? "Sync Error"
-              : schemaState.hasUnsavedChanges
-                ? "Unsaved Layout Changes"
-                : "Live Mirror Active"}
-        </span>
-      </div>
-
-      <!-- Detail Card (glorious tooltip) -->
-      <div
-        class="absolute top-12 left-0 w-80 p-5 bg-base-100/98 border border-base-300 rounded-3xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-300 z-50 origin-top-left flex flex-col gap-3 backdrop-blur-md"
-      >
-        <div class="flex items-center gap-2.5">
-          <div class="p-1.5 bg-primary/10 rounded-xl">
-            <RefreshCw class="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <span
-              class="text-[9px] font-black uppercase tracking-widest text-primary/75 block leading-none mb-0.5"
-              >Bi-Directional Engine</span
-            >
-            <span class="font-bold text-xs text-base-content"
-              >Code ⇄ UI Synchronization</span
-            >
-          </div>
-        </div>
-        <p class="text-[11px] leading-relaxed text-base-content/75">
-          Strata keeps your <code
-            class="bg-base-200 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-            >schema.ts</code
-          > file as the absolute single source of truth.
-        </p>
-        <div
-          class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1"
-        >
-          <span
-            >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
-            the file watcher to instantly parse the AST and refresh the diagram.</span
-          >
-          <span
-            >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications surgically
-            patch the AST and write back in real-time.</span
-          >
-        </div>
-        <div class="h-px bg-base-200/80 my-1"></div>
-        <div
-          class="flex items-center justify-between text-[9px] font-mono text-base-content/40"
-        >
-          <span>Drizzle ORM: v0.45.2</span>
-          <span>AST: ts-morph</span>
-          <span>Watcher: notify (Rust)</span>
-        </div>
-      </div>
-    </div>
+      <FolderOpen class="w-3.5 h-3.5 opacity-80" />
+      <span>Open Schema</span>
+    </button>
   </div>
 
-  <div class="flex items-center gap-3">
+  <!-- Center Side: View Mode Segment Switch (Sleek pill switch) -->
+  <div class="navbar-center flex items-center justify-center">
     {#if schemaState.filePath}
+      <div
+        class="join border border-base-300/80 rounded-lg overflow-hidden bg-base-200/40 p-0.5"
+      >
+        <button
+          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isCodeCollapsed
+            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
+            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
+          onclick={() => schemaState.toggleCodePane()}
+          title="Toggle Code Editor View"
+        >
+          Code
+        </button>
+        <button
+          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isDiagramCollapsed
+            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
+            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
+          onclick={() => schemaState.toggleDiagramPane()}
+          title="Toggle Diagram Canvas View"
+        >
+          Diagram
+        </button>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Right Side: Action Tools -->
+  <div class="navbar-end flex items-center justify-end gap-1.5">
+    {#if schemaState.filePath}
+      <!-- Primary Action: New Table (Solid, bold) -->
       <button
-        class="btn btn-primary btn-sm gap-2 rounded-xl shadow-lg shadow-primary/20"
+        class="btn btn-primary btn-sm gap-1 rounded-lg shadow-sm font-semibold h-8 min-h-0 px-3 text-xs"
         onclick={() => (schemaState.showNewTableModal = true)}
         data-testid="new-table-button"
       >
-        <span class="text-lg leading-none">+</span>
-        New Table
+        <span class="text-sm font-bold leading-none">+</span>
+        <span>New Table</span>
       </button>
+
+      {#if schemaState.nodes.length > 0}
+        <div class="h-4 w-px bg-base-300/80 mx-1"></div>
+
+        <!-- Quick Layout & Canvas Actions (Icon-only, uniform h-8/w-8 ghost buttons with tooltips) -->
+        <div
+          class="tooltip tooltip-bottom text-[10px] font-sans"
+          data-tip={schemaState.compactMode
+            ? "Disable Compact View"
+            : "Enable Compact View"}
+        >
+          <button
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
+            onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
+          >
+            {#if schemaState.compactMode}
+              <EyeOff class="w-3.5 h-3.5 text-warning" />
+            {:else}
+              <Eye class="w-3.5 h-3.5" />
+            {/if}
+          </button>
+        </div>
+
+        <div
+          class="tooltip tooltip-bottom text-[10px] font-sans"
+          data-tip="Auto Layout Diagram"
+        >
+          <button
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
+            onclick={onAutoLayout}
+          >
+            <Workflow class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div
+          class="tooltip tooltip-bottom text-[10px] font-sans"
+          data-tip="Generate TS Resolvers"
+        >
+          <button
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
+            onclick={() => schemaState.generateAndSaveResolvers()}
+          >
+            <Cpu class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div
+          class="tooltip tooltip-bottom text-[10px] font-sans"
+          data-tip="Export Diagram as PNG"
+        >
+          <button
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-primary/80 hover:text-primary hover:bg-primary/10"
+            onclick={exportToImage}
+          >
+            <Camera class="w-3.5 h-3.5" />
+          </button>
+        </div>
+      {/if}
+
+      {#if schemaState.hasUnsavedChanges}
+        <div class="h-4 w-px bg-base-300/80 mx-1"></div>
+
+        <!-- Save Action (Solid warning state) -->
+        <button
+          class="btn btn-warning btn-sm gap-1.5 rounded-lg shadow-sm font-semibold text-warning-content h-8 min-h-0 px-3 text-xs animate-pulse hover:animate-none"
+          onclick={() => schemaState.saveToFile()}
+          data-testid="save-layout-button"
+        >
+          <Save class="w-3.5 h-3.5" />
+          <span>Save Layout</span>
+        </button>
+
+        <!-- Discard Action (Ghost action) -->
+        <button
+          class="btn btn-ghost btn-sm rounded-lg hover:bg-error/10 hover:text-error font-semibold h-8 min-h-0 px-2.5 text-xs text-base-content/75"
+          onclick={() => schemaState.syncWithFile()}
+          data-testid="discard-layout-button"
+        >
+          <Undo class="w-3.5 h-3.5 opacity-80" />
+          <span>Discard</span>
+        </button>
+      {/if}
     {/if}
-    {#if schemaState.hasUnsavedChanges}
-      <button
-        class="btn btn-warning btn-sm gap-2 rounded-xl shadow-lg shadow-warning/20 animate-pulse hover:animate-none"
-        onclick={() => schemaState.saveToFile()}
-        data-testid="save-layout-button"
-        title="Save current layout changes to disk"
+
+    <div class="h-4 w-px bg-base-300/80 mx-1"></div>
+
+    <!-- Settings & Help Dropdown -->
+    <div class="dropdown dropdown-end">
+      <div
+        tabindex="0"
+        role="button"
+        class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg hover:bg-base-200/80 flex items-center justify-center"
+        title="Settings & Help"
       >
-        <Save class="w-4 h-4" />
-        Save Layout
-      </button>
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
-        onclick={() => schemaState.syncWithFile()}
-        data-testid="discard-layout-button"
-        title="Discard unsaved layout changes and revert to disk schema"
+        <Menu class="w-3.5 h-3.5 text-base-content/75" />
+      </div>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
       >
-        <Undo class="w-4 h-4 text-base-content/70" />
-        <span class="text-base-content/75">Discard</span>
-      </button>
-    {/if}
-    {#if schemaState.nodes.length > 0}
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl text-primary hover:bg-primary/5"
-        onclick={exportToImage}
-        title="Export as PNG"
-      >
-        <Camera class="w-4 h-4" />
-        Export
-      </button>
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
-        onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
-        title="Toggle Compact View (Keys/References Only)"
-        data-testid="compact-mode-button"
-      >
-        {#if schemaState.compactMode}
-          <EyeOff class="w-4 h-4 text-warning" />
-          <span class="text-warning">Compact Mode</span>
-        {:else}
-          <Eye class="w-4 h-4 text-base-content/70" />
-          <span class="text-base-content/75">Compact Mode</span>
+        {#if schemaState.filePath}
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => (schemaState.showProjectSettingsModal = true)}
+            >
+              <Settings class="w-3.5 h-3.5 text-base-content/70" />
+              <span>Project Settings</span>
+            </button>
+          </li>
+          <div class="h-px bg-base-300/40 my-1"></div>
         {/if}
-      </button>
-      <button
-        class="btn btn-ghost btn-sm gap-2 rounded-xl hover:bg-base-200"
-        onclick={onAutoLayout}
-        title="Arrange tables automatically using ELK layout algorithm"
-        data-testid="auto-layout-button"
-      >
-        <Workflow class="w-4 h-4 text-base-content/70" />
-        <span class="text-base-content/75">Auto Layout</span>
-      </button>
-    {/if}
-    <button class="btn btn-ghost btn-sm gap-2 rounded-xl" onclick={onOpenFile}>
-      <FolderOpen class="w-4 h-4" />
-      Open Schema
-    </button>
-    <button
-      class="btn btn-ghost btn-sm btn-circle"
-      onclick={() => (showHelp = true)}
-      data-testid="help-button"
-    >
-      <BadgeQuestionMark
-        class="w-5 h-5 opacity-40 hover:opacity-100 transition-all"
-      />
-    </button>
+        <li>
+          <button
+            class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+            onclick={() => (showHelp = true)}
+          >
+            <BadgeQuestionMark class="w-3.5 h-3.5 text-base-content/70" />
+            <span>Help & Shortcuts</span>
+          </button>
+        </li>
+      </ul>
+    </div>
   </div>
 </div>
 

@@ -99,7 +99,7 @@ If the AppImage fails to launch, crashes instantly, or hangs on an infinite load
 You can launch the application by forcing it to use your system's native Wayland client and disabling the DMA-BUF renderer:
 
 ```bash
-LD_PRELOAD=/usr/lib64/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./strata_2.0.0_amd64.AppImage
+LD_PRELOAD=/usr/lib64/libwayland-client.so.0 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./strata
 ```
 
 > [!NOTE]

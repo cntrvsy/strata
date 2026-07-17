@@ -1,12 +1,11 @@
+<!--
+  RelationEdge.svelte
+
+  Summary: Custom Svelte Flow edge renderer showing physical or logical relationship connection lines.
+  Expects: Svelte Flow edge layout properties (id, sourceX, sourceY, targetX, targetY, style, markerEnd, etc.).
+  Output: SVG path rendering relationship lines.
+-->
 <script lang="ts">
-  /**
-   * RelationEdge.svelte
-   *
-   * A custom edge component for Svelte Flow that renders relationships between tables.
-   * Supports two styles:
-   * - Solid: Physical Foreign Key relationships.
-   * - Dashed (Animated): Logical Drizzle relations() or synthetic relationships.
-   */
   import {
     BaseEdge,
     EdgeLabel,
@@ -14,7 +13,7 @@
     getSmoothStepPath,
     type EdgeProps,
   } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
 
   let {
     id,

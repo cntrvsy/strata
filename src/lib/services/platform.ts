@@ -1,8 +1,9 @@
 /**
  * platform.ts
- * 
- * Platform Service Adapter Pattern.
- * Isolates Tauri-specific APIs to enable easier unit testing and headless environments.
+ *
+ * Summary: Platform Service Adapter Pattern. Isolates Tauri-specific filesystem and dialog APIs.
+ * Expects: File paths or write content.
+ * Output: Raw file text or Tauri shell trigger actions.
  */
 
 export class PlatformService {
@@ -14,6 +15,23 @@ export class PlatformService {
 	static async writeText(path: string, content: string): Promise<void> {
 		const { invoke } = await import("@tauri-apps/api/core");
 		return invoke("write_schema_file", { path, content });
+	}
+
+	static async mutateWranglerConfig(
+		configPath: string,
+		action: "add" | "remove",
+		bindingType: "kv" | "do" | "r2",
+		bindingName: string,
+		extra: any = {}
+	): Promise<void> {
+		const { invoke } = await import("@tauri-apps/api/core");
+		return invoke("mutate_wrangler_config", {
+			configPath,
+			action,
+			bindingType,
+			bindingName,
+			extra
+		});
 	}
 
 	static async selectFile(extensions: string[], defaultPath?: string): Promise<string | null> {

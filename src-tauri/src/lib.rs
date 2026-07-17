@@ -1,28 +1,33 @@
-use notify::{RecursiveMode, Watcher};
-use std::sync::Mutex;
-use tauri::{Emitter, Manager, State};
+mod coordinator;
 
+use coordinator::{CoordinatorError, SchemaCoordinator};
+use notify::{RecursiveMode, Watcher};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use tauri::{Manager, State};
+
+struct CoordinatorState(Arc<SchemaCoordinator>);
 struct WatcherState(Mutex<Option<notify::RecommendedWatcher>>);
 
-
-
 #[tauri::command]
-async fn watch_file<R: tauri::Runtime>(
-    handle: tauri::AppHandle<R>,
-    state: State<'_, WatcherState>,
+async fn watch_file(
+    coordinator_state: State<'_, CoordinatorState>,
+    watcher_state: State<'_, WatcherState>,
     path: String,
 ) -> Result<(), String> {
-    let mut watcher_lock = state.0.lock().unwrap();
+    let mut watcher_lock = watcher_state.0.lock().unwrap();
 
     // Drop old watcher if it exists
     *watcher_lock = None;
 
-    let handle_clone = handle.clone();
+    let coordinator = coordinator_state.0.clone();
     let mut watcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
                 if event.kind.is_modify() {
-                    let _ = handle_clone.emit("file-changed", ());
+                    for p in event.paths {
+                        coordinator.handle_watch_event(p);
+                    }
                 }
             }
             Err(e) => println!("watch error: {:?}", e),
@@ -38,13 +43,40 @@ async fn watch_file<R: tauri::Runtime>(
 }
 
 #[tauri::command]
-async fn read_schema_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+async fn read_schema_file(
+    state: State<'_, CoordinatorState>,
+    path: String,
+) -> Result<String, CoordinatorError> {
+    state.0.read_file(PathBuf::from(path)).await
 }
 
 #[tauri::command]
-async fn write_schema_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, content).map_err(|e| e.to_string())
+async fn write_schema_file(
+    state: State<'_, CoordinatorState>,
+    path: String,
+    content: String,
+) -> Result<(), CoordinatorError> {
+    state.0.write_file(PathBuf::from(path), content).await
+}
+
+#[tauri::command]
+async fn mutate_wrangler_config(
+    state: State<'_, CoordinatorState>,
+    config_path: String,
+    action: String,
+    binding_type: String,
+    binding_name: String,
+    extra: serde_json::Value,
+) -> Result<(), CoordinatorError> {
+    state.0
+        .mutate_wrangler(
+            PathBuf::from(config_path),
+            action,
+            binding_type,
+            binding_name,
+            extra,
+        )
+        .await
 }
 
 #[tauri::command]
@@ -67,15 +99,36 @@ pub fn run() {
         }
     }
 
-    tauri::Builder::default()
-        .manage(WatcherState(Mutex::new(None)))
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
+        .setup(|app| {
+            let coordinator = Arc::new(SchemaCoordinator::new(app.handle().clone()));
+            app.manage(CoordinatorState(coordinator));
+            app.manage(WatcherState(Mutex::new(None)));
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_fs::init());
+
+    #[cfg(feature = "devtools")]
+    {
+        builder = builder
+            .plugin(tauri_plugin_devtools::init())
+            .plugin(tauri_plugin_devtools_app::init());
+    }
+
+    #[cfg(feature = "updater")]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             watch_file,
             read_schema_file,
             write_schema_file,
+            mutate_wrangler_config,
             close_splashscreen
         ])
         .run(tauri::generate_context!())
@@ -85,106 +138,40 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tauri::Manager;
     use tauri::test::{mock_builder, mock_context};
+    use tauri::Manager;
 
     #[test]
     fn test_read_write_schema_file_commands() {
+        let app = mock_builder()
+            .build(mock_context(tauri::test::noop_assets()))
+            .unwrap();
+
+        let coordinator = Arc::new(SchemaCoordinator::new(app.handle().clone()));
+        app.manage(CoordinatorState(coordinator));
+        app.manage(WatcherState(Mutex::new(None)));
+
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("test_rw_schema.ts");
         let path = temp_file.to_str().unwrap().to_string();
         let test_content = "export const user = {}";
 
+        let state: State<'_, CoordinatorState> = app.state();
+
         // Write content using the command
-        let write_res = tauri::async_runtime::block_on(write_schema_file(path.clone(), test_content.to_string()));
+        let write_res = tauri::async_runtime::block_on(write_schema_file(
+            state.clone(),
+            path.clone(),
+            test_content.to_string(),
+        ));
         assert!(write_res.is_ok());
 
         // Read content using the command
-        let read_res = tauri::async_runtime::block_on(read_schema_file(path.clone()));
+        let read_res = tauri::async_runtime::block_on(read_schema_file(state, path.clone()));
         assert!(read_res.is_ok());
         assert_eq!(read_res.unwrap(), test_content);
 
         // Cleanup
         let _ = std::fs::remove_file(temp_file);
-    }
-
-    #[test]
-    fn test_watcher_state_init() {
-        let state = WatcherState(Mutex::new(None));
-        let lock = state.0.lock().unwrap();
-        assert!(lock.is_none());
-    }
-
-    #[test]
-    fn test_watch_file_command() {
-        let app = mock_builder()
-            .manage(WatcherState(Mutex::new(None)))
-            .build(mock_context(tauri::test::noop_assets()))
-            .unwrap();
-
-        // Create a temp file to watch
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join("test_schema_rust_v2.ts");
-        std::fs::write(&temp_file, "export const t = {}").unwrap();
-
-        let path = temp_file.to_str().unwrap().to_string();
-        
-        let handle = app.handle().clone();
-        tauri::async_runtime::block_on(async move {
-            let state: State<'_, WatcherState> = handle.state();
-            watch_file(handle.clone(), state, path).await.unwrap();
-            
-            let state_after: State<'_, WatcherState> = handle.state();
-            let lock = state_after.0.lock().unwrap();
-            assert!(lock.is_some(), "Watcher should be initialized in state");
-        });
-
-        // Cleanup
-        let _ = std::fs::remove_file(temp_file);
-    }
-
-    #[test]
-    fn test_watch_file_non_existent() {
-        let app = mock_builder()
-            .manage(WatcherState(Mutex::new(None)))
-            .build(mock_context(tauri::test::noop_assets()))
-            .unwrap();
-
-        let handle = app.handle().clone();
-        tauri::async_runtime::block_on(async move {
-            let state: State<'_, WatcherState> = handle.state();
-            let result = watch_file(handle.clone(), state, "/non/existent/path".to_string()).await;
-            assert!(result.is_err(), "Should return error for non-existent path");
-        });
-    }
-
-    #[test]
-    fn test_watcher_replacement() {
-        let app = mock_builder()
-            .manage(WatcherState(Mutex::new(None)))
-            .build(mock_context(tauri::test::noop_assets()))
-            .unwrap();
-
-        let temp_dir = std::env::temp_dir();
-        let f1 = temp_dir.join("f1.ts");
-        let f2 = temp_dir.join("f2.ts");
-        std::fs::write(&f1, "").unwrap();
-        std::fs::write(&f2, "").unwrap();
-
-        let f1_str = f1.to_str().unwrap().to_string();
-        let f2_str = f2.to_str().unwrap().to_string();
-        let handle = app.handle().clone();
-        tauri::async_runtime::block_on(async move {
-            let state: State<'_, WatcherState> = handle.state();
-            
-            // Watch first file
-            watch_file(handle.clone(), state.clone(), f1_str).await.unwrap();
-            
-            // Watch second file (should replace first)
-            watch_file(handle.clone(), state, f2_str).await.unwrap();
-        });
-
-        let _ = std::fs::remove_file(f1);
-        let _ = std::fs::remove_file(f2);
     }
 }

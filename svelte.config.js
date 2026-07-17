@@ -14,7 +14,11 @@ const config = {
     }),
   },
   vitePlugin: {
-    inspector: false,
+    inspector: {
+      toggleKey: "alt+x",
+      toggleButtonPos: "bottom-left",
+      showToggleButton: true,
+    },
   },
 };
 

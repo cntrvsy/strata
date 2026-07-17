@@ -1,6 +1,13 @@
+/**
+ * layout.ts
+ *
+ * Summary: Orchestrates the automatic layout algorithm of ERD nodes using elkjs.
+ * Expects: Array of Svelte Flow nodes and edges.
+ * Output: Positioned nodes with updated x/y coordinates.
+ */
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { Node, Edge } from '@xyflow/svelte';
-import { schemaState } from '$lib/state.svelte';
+import { schemaState } from '$lib/state';
 
 const elk = new ELK();
 

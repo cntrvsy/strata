@@ -1,6 +1,13 @@
+<!--
+  Titlebar.svelte
+
+  Summary: Custom Tauri window title bar for dragging, minimizing, maximizing, and closing the app window.
+  Expects: None (shares global schemaState).
+  Output: Interacts with Tauri window handlers.
+-->
 <script lang="ts">
   import { Minus, Square, X } from "lucide-svelte";
-  import { schemaState } from "$lib/state.svelte";
+  import { schemaState } from "$lib/state";
   import { PlatformService } from "$lib/services/platform";
 
   async function minimizeWindow() {

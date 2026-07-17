@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { schemaState } from '$lib/state.svelte';
+import { schemaState } from '$lib/state';
 import { invoke } from '@tauri-apps/api/core';
+
+// Mock localStorage globally to prevent Node 22+ Experimental Warning/Error conflicts in jsdom
+const mockStorage: Record<string, string> = {};
+Object.defineProperty(window, 'localStorage', {
+  value: {
+    getItem: vi.fn((key: string) => mockStorage[key] || null),
+    setItem: vi.fn((key: string, val: string) => { mockStorage[key] = val; }),
+    removeItem: vi.fn((key: string) => { delete mockStorage[key]; }),
+    clear: vi.fn(() => { for (const k in mockStorage) delete mockStorage[k]; }),
+    length: 0,
+    key: vi.fn(() => null),
+  },
+  writable: true,
+  configurable: true,
+});
+
 
 // Mock Tauri Plugins
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -16,6 +32,9 @@ describe('SchemaState FSM & Reactivity', () => {
     schemaState.reset();
     schemaState.recentFiles = [];
     vi.resetAllMocks();
+    for (const key in mockStorage) {
+      delete mockStorage[key];
+    }
   });
 
   // ==========================================
@@ -315,10 +334,6 @@ describe('SchemaState FSM & Reactivity', () => {
   });
 
   it('should persist external node positions to localStorage and not update schema file for them', async () => {
-    const mockStorage: Record<string, string> = {};
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
-
     vi.mocked(invoke).mockImplementation(async (cmd, args: any) => {
       if (cmd === 'read_schema_file') {
         if (args.path === '/mock/schema.ts') {
@@ -348,10 +363,6 @@ describe('SchemaState FSM & Reactivity', () => {
     // Verify localStorage has the position saved
     const key = `strata_ext_pos_/mock/schema.ts_user`;
     expect(mockStorage[key]).toBe(JSON.stringify({ x: 500, y: 600 }));
-
-    // Cleanup spies
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
   // ==========================================
@@ -359,27 +370,16 @@ describe('SchemaState FSM & Reactivity', () => {
   // ==========================================
 
   it('should append a schema path to recent files list on successful sync', async () => {
-    const mockStorage: Record<string, string> = {};
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
-
     vi.mocked(invoke).mockResolvedValue('export const t = sqliteTable("t", {});');
     schemaState.filePath = '/mock/schema.ts';
     await schemaState.syncWithFile();
 
     expect(schemaState.recentFiles).toContain('/mock/schema.ts');
     expect(mockStorage['strata_recent_files']).toBe(JSON.stringify(['/mock/schema.ts']));
-
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
   it('should handle missing file read failure by removing it from recent files and resetting', async () => {
-    const mockStorage: Record<string, string> = {
-      'strata_recent_files': JSON.stringify(['/mock/missing.ts'])
-    };
-    const storageSpyGet = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => mockStorage[key] || null);
-    const storageSpySet = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, val) => { mockStorage[key] = val; });
+    mockStorage['strata_recent_files'] = JSON.stringify(['/mock/missing.ts']);
 
     vi.mocked(invoke).mockRejectedValue(new Error('Read error'));
 
@@ -391,10 +391,180 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.recentFiles).not.toContain('/mock/missing.ts');
     expect(schemaState.filePath).toBeNull();
     expect(schemaState.machine.current).toBe('EMPTY');
-
-    storageSpyGet.mockRestore();
-    storageSpySet.mockRestore();
   });
 
+});
+
+import { mutateTomlConfig, mutateJsonConfig } from '$lib/state/store.svelte';
+import { PlatformService } from '$lib/services/platform';
+
+describe('Wrangler Configuration Sync', () => {
+  it('should correctly add/remove KV, R2, DO to TOML configuration', () => {
+    const originalToml = `name = "my-worker"\n\n[[kv_namespaces]]\nbinding = "EXISTING_KV"\nid = "123"`;
+
+    // Add KV namespace
+    let mutated = mutateTomlConfig(originalToml, 'add', { type: 'kv', name: 'NEW_KV' });
+    expect(mutated).toContain('binding = "NEW_KV"');
+    expect(mutated).toContain('binding = "EXISTING_KV"');
+
+    // Add DO binding
+    mutated = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
+    expect(mutated).toContain('[[durable_objects.bindings]]');
+    expect(mutated).toContain('class_name = "MyDOClass"');
+
+    // Add existing DO binding (should be idempotent)
+    const idempotent = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
+    expect(idempotent).toBe(mutated);
+
+    // Remove KV namespace
+    const removedKv = mutateTomlConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
+    expect(removedKv).not.toContain('binding = "EXISTING_KV"');
+    expect(removedKv).toContain('binding = "NEW_KV"');
+
+    // Remove DO binding
+    const removedDo = mutateTomlConfig(mutated, 'remove', { type: 'do', name: 'MY_DO' });
+    expect(removedDo).not.toContain('MY_DO');
+    expect(removedDo).toContain('NEW_KV');
+  });
+
+  it('should correctly add/remove KV, R2, DO to JSON configuration', () => {
+    const originalJson = `{\n  "name": "my-worker",\n  "kv_namespaces": [\n    { "binding": "EXISTING_KV" }\n  ]\n}`;
+
+    // Add KV namespace
+    let mutated = mutateJsonConfig(originalJson, 'add', { type: 'kv', name: 'NEW_KV' });
+    const parsedAdd = JSON.parse(mutated);
+    expect(parsedAdd.kv_namespaces).toHaveLength(2);
+    expect(parsedAdd.kv_namespaces[1].binding).toBe('NEW_KV');
+
+    // Add R2 binding
+    mutated = mutateJsonConfig(mutated, 'add', { type: 'r2', name: 'MY_R2' });
+    const parsedR2 = JSON.parse(mutated);
+    expect(parsedR2.r2_buckets).toHaveLength(1);
+    expect(parsedR2.r2_buckets[0].binding).toBe('MY_R2');
+
+    // Remove KV namespace
+    const removed = mutateJsonConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
+    const parsedRemove = JSON.parse(removed);
+    expect(parsedRemove.kv_namespaces).toHaveLength(1);
+    expect(parsedRemove.kv_namespaces[0].binding).toBe('NEW_KV');
+  });
+
+  it('should call PlatformService.mutateWranglerConfig when mutate operations trigger syncToWranglerConfig', async () => {
+    const mutateSpy = vi.spyOn(PlatformService, 'mutateWranglerConfig').mockResolvedValue(undefined);
+
+    schemaState.wranglerConfigFilePath = '/project/wrangler.toml';
+    schemaState.filePath = '/project/schema.ts';
+
+    // Mock active nodes so we can test rename/delete targets
+    schemaState.nodes = [
+      { id: 'my_kv', type: 'table', data: { label: 'my_kv', target: 'kv' }, position: { x: 0, y: 0 } }
+    ];
+
+    // Trigger table delete
+    vi.mocked(invoke).mockResolvedValue('export const dummy = 1;'); // Schema mutation mock success
+    await schemaState.deleteTable('my_kv');
+
+    expect(mutateSpy).toHaveBeenCalledWith(
+      '/project/wrangler.toml',
+      'remove',
+      'kv',
+      'my_kv',
+      {}
+    );
+    
+    // Clean up spies
+    mutateSpy.mockRestore();
+  });
+});
+
+import { generateResolverCode } from '$lib/state/store.svelte';
+
+describe('Resolver Code Generator', () => {
+  it('should generate typed resolver helpers for KV and DO relation bindings', () => {
+    const mockNodes = [
+      {
+        id: 'sessions',
+        type: 'table',
+        data: {
+          label: 'sessions',
+          target: 'd1',
+          strata: {
+            relations: [{ to: 'USERS_KV' }, { to: 'COUNTER_DO' }]
+          }
+        },
+        position: { x: 0, y: 0 }
+      },
+      {
+        id: 'USERS_KV',
+        type: 'table',
+        data: {
+          label: 'USERS_KV',
+          target: 'kv'
+        },
+        position: { x: 0, y: 0 }
+      },
+      {
+        id: 'COUNTER_DO',
+        type: 'table',
+        data: {
+          label: 'COUNTER_DO',
+          target: 'do',
+          columns: [
+            { name: 'increment(by: number)', definition: 'Promise<number>' }
+          ]
+        },
+        position: { x: 0, y: 0 }
+      }
+    ] as any[];
+
+    const generated = generateResolverCode(mockNodes);
+    expect(generated).toContain('export async function resolvesessionsToUSERS_KV');
+    expect(generated).toContain('export function resolvesessionsToCOUNTER_DOStub');
+    expect(generated).toContain('class COUNTER_DOClient');
+    expect(generated).toContain('async increment(by: number): Promise<number>');
+  });
+
+  it('should open customizer modal on generateAndSaveResolvers and write text on saveResolvers call', async () => {
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+
+    schemaState.filePath = '/project/db/schema.ts';
+    schemaState.nodes = [
+      {
+        id: 'USERS_KV',
+        type: 'table',
+        data: { label: 'USERS_KV', target: 'kv' },
+        position: { x: 0, y: 0 }
+      }
+    ] as any[];
+
+    schemaState.showResolverModal = false;
+    schemaState.resolverConfigPath = "";
+
+    await schemaState.generateAndSaveResolvers();
+
+    expect(schemaState.showResolverModal).toBe(true);
+    expect(schemaState.resolverConfigPath).toBe('/project/db/resolvers.ts');
+
+    await schemaState.saveResolvers();
+
+    expect(writeSpy).toHaveBeenCalledWith('/project/db/resolvers.ts', expect.any(String));
+
+    writeSpy.mockRestore();
+  });
+
+  it('should call PlatformService.writeText when updateTableMetadata is invoked', async () => {
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+
+    schemaState.filePath = '/project/db/schema.ts';
+    schemaState.nodes = [
+      { id: 'images', type: 'table', data: { label: 'images', target: 'r2' }, position: { x: 0, y: 0 } }
+    ];
+
+    vi.mocked(invoke).mockResolvedValue('/** @strata { "target": "r2", "folders": {} } */\nexport const images = {};');
+    await schemaState.updateTableMetadata('images', { public: true, customDomain: 'assets.io', cors: true });
+
+    expect(writeSpy).toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
 });
 
