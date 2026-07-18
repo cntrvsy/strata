@@ -32,7 +32,7 @@ jobs:
           - platform: "ubuntu-22.04"
             args: "--no-bundle" # Free version (tar.gz only)
           - platform: "ubuntu-22.04"
-            args: '--no-bundle --features updater --config ''{"productName": "strata-paid"}''' # Paid version (tar.gz only)
+            args: '--features updater --config ''{"bundle": {"targets": ["appimage"], "createUpdaterArtifacts": true}, "productName": "strata-paid"}''' # Paid version (AppImage + updater tar.gz)
           - platform: "windows-latest"
             args: "" # Free version (.msi)
           - platform: "windows-latest"
@@ -84,25 +84,20 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' }}
+          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater') }}
 
-      - name: Package and upload tar.gz
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Package and upload tar.gz (free version only)
+        if: matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -f src-tauri/target/release/strata-paid ]; then
-            BINARY_NAME="strata-paid"
-            ARCHIVE_NAME="strata-paid-linux-x86_64.tar.gz"
-          else
-            BINARY_NAME="strata"
-            ARCHIVE_NAME="strata-linux-x86_64.tar.gz"
-          fi
+          BINARY_NAME="strata"
+          ARCHIVE_NAME="strata-linux-x86_64.tar.gz"
           tar -czf "$ARCHIVE_NAME" -C src-tauri/target/release "$BINARY_NAME"
           gh release upload "v${{ steps.tauri.outputs.appVersion }}" "$ARCHIVE_NAME" --clobber --repo "${{ github.repository }}"
 
       - name: Upload assets to CrabNebula
-        if: contains(matrix.args, 'updater') && matrix.platform != 'ubuntu-22.04'
+        if: contains(matrix.args, 'updater')
         uses: crabnebula-dev/cloud-release@v0
         with:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
