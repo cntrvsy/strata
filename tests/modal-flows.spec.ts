@@ -40,10 +40,13 @@ test.describe('Modal Flows', () => {
   });
 
   test('can open and close the Help Modal', async ({ page }) => {
-    // 1. Help Modal is always accessible from the help button
-    const helpButton = page.getByTestId('help-button');
-    await expect(helpButton).toBeVisible();
+    // 1. Help Modal is accessible from the settings & help dropdown
+    const helpDropdown = page.getByRole('button', { name: 'Settings & Help' });
+    await expect(helpDropdown).toBeVisible();
+    await helpDropdown.click();
 
+    const helpButton = page.getByRole('button', { name: 'Help & Shortcuts' });
+    await expect(helpButton).toBeVisible();
     await helpButton.click();
 
     const helpModal = page.getByTestId('help-modal');

@@ -362,7 +362,7 @@ export const users = sqliteTable("users", {});</pre>
                 <ul class="list-disc pl-4 space-y-1">
                   <li><strong>Zero Overhead:</strong> Saves connections in table JSDoc metadata <code>relations</code> array.</li>
                   <li><strong>Dashed Rendering:</strong> Display logical paths across databases and file binders visually.</li>
-                  <li><strong>Resolver Hooks:</strong> Bridges targets type-safely during application execution.</li>
+                  <li><strong>Direct Binding Sync:</strong> Keeps your worker bindings in sync with schema declarations without boilerplate.</li>
                 </ul>`,
     },
     {
@@ -457,16 +457,17 @@ export const users = sqliteTable("users", {});</pre>
                 </ul>`,
     },
     {
-      id: "ach-relations-resolvers",
+      id: "ach-wrangler-validation",
       category: "achievements",
-      title: "TS Resolvers Code Generation Diagnostics",
+      title: "Wrangler & Schema Alignment Diagnostics",
       summary:
-        "Debug code generation issues when creating type-safe retrieval wrappers or Durable Object proxy stubs.",
-      tags: ["achievements", "relations", "resolvers", "generate", "debug"],
-      content: `<p class="mb-2">Generates resolver stubs automatically next to your Drizzle schemas:</p>
+        "Understand schema-to-wrangler alignment checks, resolver deprecations, and solving binding mismatch warnings.",
+      tags: ["achievements", "wrangler", "validation", "sync", "mismatch"],
+      content: `<p class="mb-2">Strata validates that your schema's JSDoc metadata matches your Wrangler configuration bindings:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Import Warnings:</strong> Resolvers rely on exports declared inside <code>schema.ts</code>. If you rename tables or bindings, refresh resolvers to rebuild the TypeScript imports.</li>
-                  <li><strong>Stub Compilation:</strong> If the compiler complains about missing types, ensure your project's main tsconfig includes the generated file.</li>
+                  <li><strong>No Generated Resolvers:</strong> Legacy TS resolver generation is deprecated and removed. Strata now integrates directly with Wrangler config as the source of truth for Cloudflare bindings.</li>
+                  <li><strong>Mismatch Warnings:</strong> If an entity type (KV, Durable Object, or R2) or name in <code>schema.ts</code> does not match the bindings declared in your Wrangler file, a mismatch warning will be shown in the Bottom Bar.</li>
+                  <li><strong>Resolution:</strong> Keep names aligned between your Drizzle JSDoc metadata and Wrangler bindings. Updating names on the canvas will automatically propagate changes to both.</li>
                 </ul>`,
     },
     {
@@ -639,6 +640,7 @@ Generate only code inside standard markdown codeblocks without conversational fl
       class="bg-base-100 rounded-3xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl border border-base-300 overflow-hidden"
       role="dialog"
       aria-modal="true"
+      data-testid="help-modal"
     >
       <!-- Header -->
       <div

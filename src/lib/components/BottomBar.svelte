@@ -13,6 +13,7 @@
     Layers,
     Cpu,
     Zap,
+    AlertTriangle,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
 
@@ -130,6 +131,42 @@
         >
           {schemaState.filePath}
         </span>
+      </div>
+    {/if}
+
+    <!-- Validation Warnings (Config Mismatch Indicator) -->
+    {#if schemaState.filePath && schemaState.validationWarnings.length > 0}
+      <div class="h-3 w-px bg-base-300/80"></div>
+      <div class="relative group/warn flex items-center gap-1 cursor-help py-0.5">
+        <div class="flex items-center gap-1 text-warning bg-warning/10 border border-warning/20 rounded px-1.5 py-0.5 text-[9px] font-bold">
+          <AlertTriangle class="w-3 h-3 text-warning" />
+          <span>{schemaState.validationWarnings.length} Mismatches</span>
+        </div>
+
+        <!-- Detail Card (glorious tooltip) -->
+        <div
+          class="absolute bottom-7 left-0 w-80 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
+        >
+          <div class="flex items-center gap-2">
+            <div class="p-1 bg-warning/10 rounded-lg text-warning">
+              <AlertTriangle class="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <span class="font-bold text-xs text-base-content uppercase tracking-wider">Configuration Mismatches</span>
+            </div>
+          </div>
+          <p class="text-[10px] leading-relaxed text-base-content/70">
+            The following entities or connections in your schema JSDoc do not match your wrangler configuration:
+          </p>
+          <ul class="list-disc pl-4 space-y-1 text-[10px] leading-relaxed text-warning font-mono">
+            {#each schemaState.validationWarnings as warning}
+              <li>{warning}</li>
+            {/each}
+          </ul>
+          <div class="text-[9px] text-base-content/40 leading-normal border-t border-base-300/40 pt-1.5 font-sans">
+            💡 Update the names in your schema file or in your Wrangler config.
+          </div>
+        </div>
       </div>
     {/if}
   </div>

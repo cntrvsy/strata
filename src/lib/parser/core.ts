@@ -9,7 +9,7 @@ import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
 import type { ParseResult } from './types';
 import { createIsolatedProject } from './project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias } from './helpers';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from './helpers';
 
 /**
  * Wraps raw code in pre/code tags for UI presentation.
@@ -83,16 +83,9 @@ export function parseSchema(
 				};
 				
 				for (const doc of jsDocs) {
-					const fullText = doc.getText();
-					const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-					if (match) {
-						try {
-							const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-							const parsed = JSON.parse(jsonStr);
-							strataData = { ...strataData, ...parsed };
-						} catch (e) {
-							console.warn('Failed to parse @strata JSON:', match[1], e);
-						}
+					const strataExtracted = extractStrataMetadata(doc.getText());
+					if (strataExtracted) {
+						strataData = { ...strataData, ...strataExtracted.data };
 					}
 				}
 
@@ -239,16 +232,9 @@ export function parseSchema(
 								};
 								
 								for (const doc of jsDocs) {
-									const fullText = doc.getText();
-									const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-									if (match) {
-										try {
-											const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-											const parsed = JSON.parse(jsonStr);
-											strataData = { ...strataData, ...parsed };
-										} catch (e) {
-											console.warn('Failed to parse external @strata JSON:', match[1], e);
-										}
+									const strataExtracted = extractStrataMetadata(doc.getText());
+									if (strataExtracted) {
+										strataData = { ...strataData, ...strataExtracted.data };
 									}
 								}
 
@@ -305,16 +291,9 @@ export function parseSchema(
 										};
 										
 										for (const doc of jsDocs) {
-											const fullText = doc.getText();
-											const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-											if (match) {
-												try {
-													const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-													const parsed = JSON.parse(jsonStr);
-													strataData = { ...strataData, ...parsed };
-												} catch (e) {
-													console.warn('Failed to parse external schema @strata JSON:', match[1], e);
-												}
+											const strataExtracted = extractStrataMetadata(doc.getText());
+											if (strataExtracted) {
+												strataData = { ...strataData, ...strataExtracted.data };
 											}
 										}
 										
@@ -358,19 +337,13 @@ export function parseSchema(
 			const statement = decl.getVariableStatement();
 			const jsDocs = statement?.getJsDocs() || [];
 			for (const doc of jsDocs) {
-				const text = doc.getText();
-				const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-				if (match) {
-					try {
-						const strataData = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
-						if (strataData.relations && Array.isArray(strataData.relations)) {
-							for (const rel of strataData.relations) {
-								if (!tableNames.has(rel.to)) {
-									warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
-								}
-							}
+				const strataExtracted = extractStrataMetadata(doc.getText());
+				if (strataExtracted?.data?.relations && Array.isArray(strataExtracted.data.relations)) {
+					for (const rel of strataExtracted.data.relations) {
+						if (!tableNames.has(rel.to)) {
+							warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
 						}
-					} catch (e) {}
+					}
 				}
 			}
 		}

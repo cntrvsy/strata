@@ -154,3 +154,82 @@ export function resolvePathAlias(
 	}
 	return null;
 }
+
+export interface ExtractedStrataMetadata {
+	rawMatch: string;
+	jsonStr: string;
+	data: any;
+}
+
+/**
+ * Robustly extracts balanced JSDoc @strata JSON metadata from text using a character stack parser.
+ * Handles nested objects, arrays, string quotes, escaped characters, and multi-line JSDoc comment asterisks.
+ */
+export function extractStrataMetadata(text: string): ExtractedStrataMetadata | null {
+	const strataIdx = text.indexOf('@strata');
+	if (strataIdx === -1) return null;
+
+	const startBraceIdx = text.indexOf('{', strataIdx);
+	if (startBraceIdx === -1) return null;
+
+	let depth = 0;
+	let inString = false;
+	let quoteChar = '';
+	let endBraceIdx = -1;
+
+	for (let i = startBraceIdx; i < text.length; i++) {
+		const char = text[i];
+		const prevChar = i > 0 ? text[i - 1] : '';
+
+		if (inString) {
+			if (char === '\\' && prevChar !== '\\') {
+				i++; // Skip escaped character
+				continue;
+			}
+			if (char === quoteChar) {
+				inString = false;
+			}
+			continue;
+		}
+
+		if (char === '"' || char === "'") {
+			inString = true;
+			quoteChar = char;
+			continue;
+		}
+
+		if (char === '{') {
+			depth++;
+		} else if (char === '}') {
+			depth--;
+			if (depth === 0) {
+				endBraceIdx = i;
+				break;
+			}
+		}
+	}
+
+	if (endBraceIdx === -1) return null;
+
+	const rawMatch = text.slice(strataIdx, endBraceIdx + 1);
+	const rawJson = text.slice(startBraceIdx, endBraceIdx + 1);
+	// Clean leading JSDoc asterisks from multiline JSON strings
+	const cleanJson = rawJson.replace(/^\s*\*\s?/gm, '');
+
+	try {
+		const data = JSON.parse(cleanJson);
+		return {
+			rawMatch,
+			jsonStr: cleanJson,
+			data
+		};
+	} catch (e) {
+		console.warn('[Strata] Failed to parse @strata JSON payload:', cleanJson, e);
+		return {
+			rawMatch,
+			jsonStr: cleanJson,
+			data: null
+		};
+	}
+}
+

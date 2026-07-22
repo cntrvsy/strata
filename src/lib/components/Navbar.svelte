@@ -17,7 +17,6 @@
     Undo,
     Settings,
     Menu,
-    Cpu,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
@@ -209,17 +208,6 @@
           </button>
         </div>
 
-        <div
-          class="tooltip tooltip-bottom text-[10px] font-sans"
-          data-tip="Generate TS Resolvers"
-        >
-          <button
-            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
-            onclick={() => schemaState.generateAndSaveResolvers()}
-          >
-            <Cpu class="w-3.5 h-3.5" />
-          </button>
-        </div>
 
         <div
           class="tooltip tooltip-bottom text-[10px] font-sans"
@@ -228,6 +216,7 @@
           <button
             class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-primary/80 hover:text-primary hover:bg-primary/10"
             onclick={exportToImage}
+            aria-label="Export"
           >
             <Camera class="w-3.5 h-3.5" />
           </button>

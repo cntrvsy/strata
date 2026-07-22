@@ -3,7 +3,6 @@
 	import Titlebar from '$lib/components/Titlebar.svelte';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import BottomBar from '$lib/components/BottomBar.svelte';
-	import ResolverModal from '$lib/components/ResolverModal.svelte';
 	import { onMount } from 'svelte';
 	import { Toaster } from 'svelte-sonner';
 
@@ -37,4 +36,3 @@
 	<BottomBar />
 </div>
 
-<ResolverModal />

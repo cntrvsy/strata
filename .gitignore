@@ -17,3 +17,10 @@ vite.config.ts.timestamp-*
 
 # Tauri
 /src-tauri/target/
+
+# Keys & Secrets
+strata_key
+strata_key.pub
+*.key
+*.pem
+

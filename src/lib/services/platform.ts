@@ -34,11 +34,11 @@ export class PlatformService {
 		});
 	}
 
-	static async selectFile(extensions: string[], defaultPath?: string): Promise<string | null> {
+	static async selectFile(extensions: string[], defaultPath?: string, filterName: string = "TypeScript"): Promise<string | null> {
 		const { open } = await import("@tauri-apps/plugin-dialog");
 		const selected = await open({
 			multiple: false,
-			filters: [{ name: "TypeScript", extensions }],
+			filters: [{ name: filterName, extensions }],
 			defaultPath
 		});
 		return typeof selected === "string" ? selected : null;

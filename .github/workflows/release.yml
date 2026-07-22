@@ -8,6 +8,10 @@ on:
 env:
   CN_APPLICATION: "frstudios/strata"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   draft:
     runs-on: ubuntu-22.04
@@ -19,26 +23,10 @@ jobs:
           command: release draft ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
 
-  release:
+  build-linux:
+    name: Build AppImage & upload to CrabNebula
     needs: draft
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: "macos-latest"
-            args: "--target universal-apple-darwin"
-          - platform: "ubuntu-22.04"
-            args: "--no-bundle" # Free version (tar.gz only)
-          - platform: "ubuntu-22.04"
-            args: '--features updater --config ''{"bundle": {"targets": ["appimage"], "createUpdaterArtifacts": true}, "productName": "strata-paid"}''' # Paid version (AppImage + updater tar.gz)
-          - platform: "windows-latest"
-            args: "" # Free version (.msi)
-          - platform: "windows-latest"
-            args: '--features updater --config ''{"bundle": {"createUpdaterArtifacts": true}, "productName": "strata-paid"}''' # Paid version (.msi with updater)
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -46,68 +34,94 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "npm"
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          # Those targets are only used on macos
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> src-tauri/target"
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: install linux system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xdg-utils libfuse2
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xdg-utils libfuse2
 
       - name: install frontend dependencies
         run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
-        id: tauri
+      # updater feature + createUpdaterArtifacts produces the signed .AppImage.tar.gz + .sig
+      # pair CrabNebula's auto-update flow expects. Key is passphrase-protected.
+      - name: build AppImage
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: true
           APPIMAGE_EXTRACT_AND_RUN: 1
-          # FIX: Prevent the bundler from capturing host-breaking graphics/Wayland drivers
-          EXCLUDE_APPIMAGE_DSO: "libwayland-client.so.0;libEGL.so.1;libGL.so.1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: "Strata v__VERSION__"
-          releaseBody: "See the assets below to download the latest version of Strata."
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-          uploadPlainBinary: ${{ matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater') }}
+        run: >-
+          npm run tauri build --
+          --features updater
+          --config '{"bundle":{"targets":["appimage"],"createUpdaterArtifacts":true}}'
 
-      - name: Package and upload tar.gz (free version only)
-        if: matrix.platform == 'ubuntu-22.04' && !contains(matrix.args, 'updater')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BINARY_NAME="strata"
-          ARCHIVE_NAME="strata-linux-x86_64.tar.gz"
-          tar -czf "$ARCHIVE_NAME" -C src-tauri/target/release "$BINARY_NAME"
-          gh release upload "v${{ steps.tauri.outputs.appVersion }}" "$ARCHIVE_NAME" --clobber --repo "${{ github.repository }}"
-
-      - name: Upload assets to CrabNebula
-        if: contains(matrix.args, 'updater')
+      - name: upload AppImage to CrabNebula
         uses: crabnebula-dev/cloud-release@v0
         with:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
           path: ./src-tauri
 
-  cn_publish:
-    name: Publish CrabNebula Release
+  build-windows:
+    name: Build MSI (Store + CrabNebula fallback) & upload to CrabNebula
+    needs: draft
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> src-tauri/target"
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      # Same signing identity as Linux: this MSI is the exact artifact submitted to the
+      # Microsoft Store, and ALSO the one sold directly via CrabNebula/your webpage if the
+      # Store rejects it or as an ongoing alternative channel — that copy has no storefront
+      # managing updates for it, so it needs the updater wired in same as Linux.
+      # Offline WebView2 installer mode is required either way for Store submission.
+      - name: build MSI
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: >-
+          npm run tauri build --
+          --features updater
+          --config '{"bundle":{"targets":["msi"],"createUpdaterArtifacts":true,"windows":{"webviewInstallMode":{"type":"offlineInstaller"}}}}'
+
+      - name: upload MSI to CrabNebula
+        uses: crabnebula-dev/cloud-release@v0
+        with:
+          command: release upload ${{ env.CN_APPLICATION }} --framework tauri
+          api-key: ${{ secrets.CN_API_KEY }}
+          path: ./src-tauri
+
+  publish:
+    name: Publish CrabNebula release
+    needs: [build-linux, build-windows]
     runs-on: ubuntu-22.04
-    needs: release
     steps:
       - uses: actions/checkout@v4
       - name: publish CrabNebula release
@@ -115,44 +129,3 @@ jobs:
         with:
           command: release publish ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
-
-  checksums:
-    name: Generate Checksums
-    runs-on: ubuntu-22.04
-    needs: release
-    permissions:
-      contents: write
-    steps:
-      - name: Fetch and hash release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME="${{ github.ref_name }}"
-          echo "Tag name: $TAG_NAME"
-
-          mkdir -p assets
-          cd assets
-
-          gh release download "$TAG_NAME" --repo "${{ github.repository }}"
-
-          sha256sum * > SHA256SUMS.txt
-
-          gh release upload "$TAG_NAME" SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
-
-          echo -e "\n### SHA-256 Checksums\n" > table.md
-          echo -e "| File | SHA-256 Checksum |" >> table.md
-          echo -e "| --- | --- |" >> table.md
-          while read -r line; do
-            HASH=$(echo "$line" | awk '{print $1}')
-            FILE=$(echo "$line" | awk '{print $2}')
-            if [ "$FILE" != "SHA256SUMS.txt" ]; then
-              echo "| \`$FILE\` | \`$HASH\` |" >> table.md
-            fi
-          done < SHA256SUMS.txt
-
-          gh release view "$TAG_NAME" --repo "${{ github.repository }}" --json body --jq .body > current_body.md
-
-          if ! grep -q "### SHA-256 Checksums" current_body.md; then
-            cat current_body.md table.md > new_body.md
-            gh release edit "$TAG_NAME" --notes-file new_body.md --repo "${{ github.repository }}"
-          fi

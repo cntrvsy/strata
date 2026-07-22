@@ -14,7 +14,8 @@ import {
 	parseColumnChain, 
 	buildColumnChain, 
 	ensureImports,
-	resolveRelativePath
+	resolveRelativePath,
+	extractStrataMetadata
 } from './helpers';
 import { PlatformService } from '../services/platform';
 
@@ -33,18 +34,13 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 
 			for (const doc of jsDocs) {
 				const text = doc.getText();
-				const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				const extracted = extractStrataMetadata(text);
 				
-				if (strataMatch) {
-					let metadata: any = {};
-					try {
-						metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-					} catch (e) {
-						console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
-					}
+				if (extracted) {
+					const metadata = extracted.data || {};
 					metadata.x = Math.round(x);
 					metadata.y = Math.round(y);
-					doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+					doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
 					strataFound = true;
 					break;
 				}
@@ -73,18 +69,13 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 
 				for (const doc of jsDocs) {
 					const text = doc.getText();
-					const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+					const extracted = extractStrataMetadata(text);
 					
-					if (strataMatch) {
-						let metadata: any = {};
-						try {
-							metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-						} catch (e) {
-							console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
-						}
+					if (extracted) {
+						const metadata = extracted.data || {};
 						metadata.x = Math.round(node.position.x);
 						metadata.y = Math.round(node.position.y);
-						doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+						doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
 						strataFound = true;
 						break;
 					}

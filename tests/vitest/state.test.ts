@@ -477,81 +477,7 @@ describe('Wrangler Configuration Sync', () => {
   });
 });
 
-import { generateResolverCode } from '$lib/state/store.svelte';
-
-describe('Resolver Code Generator', () => {
-  it('should generate typed resolver helpers for KV and DO relation bindings', () => {
-    const mockNodes = [
-      {
-        id: 'sessions',
-        type: 'table',
-        data: {
-          label: 'sessions',
-          target: 'd1',
-          strata: {
-            relations: [{ to: 'USERS_KV' }, { to: 'COUNTER_DO' }]
-          }
-        },
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'USERS_KV',
-        type: 'table',
-        data: {
-          label: 'USERS_KV',
-          target: 'kv'
-        },
-        position: { x: 0, y: 0 }
-      },
-      {
-        id: 'COUNTER_DO',
-        type: 'table',
-        data: {
-          label: 'COUNTER_DO',
-          target: 'do',
-          columns: [
-            { name: 'increment(by: number)', definition: 'Promise<number>' }
-          ]
-        },
-        position: { x: 0, y: 0 }
-      }
-    ] as any[];
-
-    const generated = generateResolverCode(mockNodes);
-    expect(generated).toContain('export async function resolvesessionsToUSERS_KV');
-    expect(generated).toContain('export function resolvesessionsToCOUNTER_DOStub');
-    expect(generated).toContain('class COUNTER_DOClient');
-    expect(generated).toContain('async increment(by: number): Promise<number>');
-  });
-
-  it('should open customizer modal on generateAndSaveResolvers and write text on saveResolvers call', async () => {
-    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
-
-    schemaState.filePath = '/project/db/schema.ts';
-    schemaState.nodes = [
-      {
-        id: 'USERS_KV',
-        type: 'table',
-        data: { label: 'USERS_KV', target: 'kv' },
-        position: { x: 0, y: 0 }
-      }
-    ] as any[];
-
-    schemaState.showResolverModal = false;
-    schemaState.resolverConfigPath = "";
-
-    await schemaState.generateAndSaveResolvers();
-
-    expect(schemaState.showResolverModal).toBe(true);
-    expect(schemaState.resolverConfigPath).toBe('/project/db/resolvers.ts');
-
-    await schemaState.saveResolvers();
-
-    expect(writeSpy).toHaveBeenCalledWith('/project/db/resolvers.ts', expect.any(String));
-
-    writeSpy.mockRestore();
-  });
-
+describe('Schema Actions and Validation Warnings', () => {
   it('should call PlatformService.writeText when updateTableMetadata is invoked', async () => {
     const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
 
@@ -565,6 +491,24 @@ describe('Resolver Code Generator', () => {
 
     expect(writeSpy).toHaveBeenCalled();
     writeSpy.mockRestore();
+  });
+
+  it('should populate validationWarnings for mismatching bindings or synthetic targets', () => {
+    schemaState.wranglerConfigFilePath = '/project/wrangler.jsonc';
+    schemaState.wranglerBindings = [
+      { type: 'kv', name: 'KNOWN_KV', extra: {} }
+    ];
+    schemaState.nodes = [
+      {
+        id: 'UNKNOWN_KV',
+        type: 'table',
+        data: { label: 'UNKNOWN_KV', target: 'kv' },
+        position: { x: 0, y: 0 }
+      }
+    ];
+
+    expect(schemaState.validationWarnings.length).toBeGreaterThan(0);
+    expect(schemaState.validationWarnings[0]).toContain('KV Namespace "UNKNOWN_KV" is not configured');
   });
 });
 

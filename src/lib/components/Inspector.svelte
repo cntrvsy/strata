@@ -34,7 +34,7 @@
   /** Whether the user is confirming a destructive deletion */
   let isConfirmingDelete = $state(false);
 
-  let activeTab = $state<'fields' | 'relations'>('fields');
+  let activeTab = $state<"fields" | "relations">("fields");
 
   let editingTableName = $state<string | null>(null);
   let newTableName = $state("");
@@ -125,283 +125,342 @@
       isConfirmingDelete = false;
       editingTableName = null;
       editingColumnName = null;
-      activeTab = 'fields';
+      activeTab = "fields";
     }
   });
 
-  const selectedNode = $derived(schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId));
+  const selectedNode = $derived(
+    schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId),
+  );
   const isReadOnly = $derived(
-    !!selectedNode && (
-      (selectedNode.data as any)?.isExternal || 
-      (selectedNode.data as any)?.target === "do" || 
-      (selectedNode.data as any)?.target === "kv" || 
-      (selectedNode.data as any)?.target === "r2"
-    )
+    !!selectedNode &&
+      ((selectedNode.data as any)?.isExternal ||
+        (selectedNode.data as any)?.target === "do" ||
+        (selectedNode.data as any)?.target === "kv" ||
+        (selectedNode.data as any)?.target === "r2"),
   );
 </script>
 
 {#if schemaState.activeInspectorNodeId}
-  {@const selectedNode = schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId)}
+  {@const selectedNode = schemaState.nodes.find(
+    (n) => n.id === schemaState.activeInspectorNodeId,
+  )}
   {#if selectedNode}
     {@const data = selectedNode.data as any}
     {@const config =
       targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
-  <div
-    class="w-full h-full max-h-full bg-base-100/85 backdrop-blur-md border-r border-base-300/60 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
-    data-testid="inspector-panel"
-  >
-    <!-- Header -->
     <div
-      class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/20"
+      class="w-full h-full max-h-full bg-base-100/85 backdrop-blur-md border-r border-base-300/60 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
+      data-testid="inspector-panel"
     >
-      <div class="flex items-center gap-3">
-        <div class="p-2 {config.bg} rounded-xl">
-          <config.icon class="w-4 h-4 {config.text}" />
-        </div>
-        <div class="flex flex-col grow">
-          {#if editingTableName === selectedNode.id}
-            <div class="flex items-center gap-1">
-              <input
-                bind:value={newTableName}
-                class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all"
-                onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
-              />
-              <button
-                class="btn btn-primary btn-xs btn-circle"
-                onclick={submitRenameTable}><Check class="w-3 h-3" /></button
-              >
-            </div>
-          {:else}
-            <div class="flex items-center gap-2 group/header">
-              <h3 class="font-bold text-sm tracking-tight leading-none">
-                {selectedNode.id}
-              </h3>
-              {#if !isReadOnly}
-                <button
-                  class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5 hover:bg-base-200"
-                  onclick={() => {
-                    editingTableName = selectedNode.id;
-                    newTableName = selectedNode.id;
-                  }}
-                >
-                  <Pencil class="w-3 h-3 opacity-60" />
-                </button>
-              {/if}
-            </div>
-          {/if}
-          <span
-            class="text-[9px] uppercase tracking-wider font-bold opacity-40 mt-0.5"
-            >{config.label}</span
-          >
-        </div>
-      </div>
-      <div class="flex items-center gap-1">
-        {#if !isReadOnly}
-          {#if !isConfirmingDelete}
-            <button
-              class="btn btn-ghost btn-xs btn-circle hover:text-error hover:bg-error/10 opacity-50 hover:opacity-100 transition-all"
-              onclick={() => (isConfirmingDelete = true)}
-              title="Delete Entity"
-              data-testid="delete-entity-button"
-            >
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
-          {:else}
-            <div
-              class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
-            >
-              <button
-                class="btn btn-error btn-xs rounded-lg px-2 text-[10px] text-error-content"
-                onclick={() => deleteTable(selectedNode.id)}>Confirm</button
-              >
-              <button
-                class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px] hover:bg-base-200"
-                onclick={() => (isConfirmingDelete = false)}>Cancel</button
-              >
-            </div>
-          {/if}
-        {/if}
-        <button
-          class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
-          onclick={dismiss}
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Tabs Navigation -->
-    <div class="tabs tabs-boxed rounded-xl bg-base-200/40 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/40">
-      <button 
-        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'fields' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/85'}"
-        onclick={() => (activeTab = 'fields')}
+      <!-- Header -->
+      <div
+        class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/20"
       >
-        Fields ({data.columns.length})
-      </button>
-      <button 
-        class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab === 'relations' ? 'tab-active bg-base-100 shadow-sm font-bold text-primary' : 'opacity-65 hover:opacity-100 text-base-content/85'}"
-        onclick={() => (activeTab = 'relations')}
-      >
-        Relationships ({schemaState.edges.filter(e => e.source === selectedNode.id || e.target === selectedNode.id).length})
-      </button>
-    </div>
-
-    <!-- Content -->
-    <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
-      {#if isReadOnly}
-        <div class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed">
-          <span>ℹ️</span>
-          <span>This entity's structure is read-only (parsed dynamically from external source code or wrangler.toml configuration). Modifying its fields is disabled.</span>
-        </div>
-      {/if}
-
-      {#if isAddingField}
-        <AddFieldForm
-          tableName={selectedNode.id}
-          onComplete={() => (isAddingField = false)}
-        />
-      {:else if isCreatingRelation}
-        <AddRelationForm
-          sourceTableName={selectedNode.id}
-          onComplete={() => (isCreatingRelation = false)}
-        />
-      {:else if activeTab === 'fields'}
-        <div class="flex flex-col gap-3">
-          <div class="flex items-center justify-between px-1">
-            <span
-              class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
-              >Structure</span
-            >
+        <div class="flex items-center gap-3">
+          <div class="p-2 {config.bg} rounded-xl">
+            <config.icon class="w-4 h-4 {config.text}" />
           </div>
-
-          <div class="flex flex-col gap-2">
-            {#if data.target === "d1" || !data.target}
-              <D1Inspector tableName={selectedNode.id} {data} {isReadOnly} />
-            {:else if data.target === "kv"}
-              <KVInspector tableName={selectedNode.id} {data} {isReadOnly} />
-            {:else if data.target === "do"}
-              <DOInspector tableName={selectedNode.id} {data} {isReadOnly} />
-            {:else if data.target === "r2"}
-              <R2Inspector tableName={selectedNode.id} {data} {isReadOnly} />
-            {/if}
-
-            {#if !isReadOnly}
-              <div class="grid grid-cols-2 gap-2 mt-2">
+          <div class="flex flex-col grow">
+            {#if editingTableName === selectedNode.id}
+              <div class="flex items-center gap-1">
+                <input
+                  bind:value={newTableName}
+                  class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all"
+                  onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
+                />
                 <button
-                  class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-primary/60 hover:bg-primary/5 transition-all"
-                  onclick={() => (isAddingField = true)}
-                  data-testid="add-field-button"
+                  class="btn btn-primary btn-xs btn-circle"
+                  onclick={submitRenameTable}><Check class="w-3 h-3" /></button
                 >
-                  <span class="text-xs font-semibold uppercase tracking-wider">+ Field</span>
-                </button>
-                <button
-                  class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all"
-                  onclick={() => (isCreatingRelation = true)}
-                  data-testid="add-relation-button"
-                >
-                  <span class="text-xs font-semibold uppercase tracking-wider">+ Relation</span>
-                </button>
+              </div>
+            {:else}
+              <div class="flex items-center gap-2 group/header">
+                <h3 class="font-bold text-sm tracking-tight leading-none">
+                  {selectedNode.id}
+                </h3>
+                {#if !isReadOnly}
+                  <button
+                    class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5 hover:bg-base-200"
+                    onclick={() => {
+                      editingTableName = selectedNode.id;
+                      newTableName = selectedNode.id;
+                    }}
+                  >
+                    <Pencil class="w-3 h-3 opacity-60" />
+                  </button>
+                {/if}
               </div>
             {/if}
-          </div>
-        </div>
-      {:else if activeTab === 'relations'}
-        {@const tableEdges = schemaState.edges.filter((e: any) => e.source === selectedNode.id || e.target === selectedNode.id)}
-        <div class="flex flex-col gap-3">
-          <div class="flex items-center justify-between px-1">
             <span
-              class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
-              >Defined Connections</span
+              class="text-[9px] uppercase tracking-wider font-bold opacity-40 mt-0.5"
+              >{config.label}</span
             >
           </div>
-
-          {#if tableEdges.length === 0}
-            <div class="text-center py-8 opacity-40 text-xs text-base-content/50">
-              No relationships defined for this entity.
-            </div>
-          {:else}
-            <div class="flex flex-col gap-2">
-              {#each tableEdges as edge}
-                {@const isSource = edge.source === selectedNode.id}
-                {@const otherNode = isSource ? edge.target : edge.source}
-                {@const isVirtual = edge.data?.isVirtual}
-                {@const card = edge.data?.cardinality || 'unknown'}
-                <div
-                  class="bg-base-200/30 p-3.5 rounded-2xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
+        </div>
+        <div class="flex items-center gap-1">
+          {#if !isReadOnly}
+            {#if !isConfirmingDelete}
+              <button
+                class="btn btn-ghost btn-xs btn-circle hover:text-error hover:bg-error/10 opacity-50 hover:opacity-100 transition-all"
+                onclick={() => (isConfirmingDelete = true)}
+                title="Delete Entity"
+                data-testid="delete-entity-button"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            {:else}
+              <div
+                class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
+              >
+                <button
+                  class="btn btn-error btn-xs rounded-lg px-2 text-[10px] text-error-content"
+                  onclick={() => deleteTable(selectedNode.id)}>Confirm</button
                 >
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs font-mono font-bold {isSource ? 'text-primary' : 'text-secondary'}">
-                        {isSource ? '→' : '←'}
-                      </span>
-                      <span class="font-bold text-xs text-base-content/90">{otherNode}</span>
-                    </div>
-                    
-                    <span class="badge badge-outline badge-xs text-[9px] uppercase font-mono opacity-50 px-1 py-0.5 rounded leading-none">
-                      {card}
-                    </span>
-                  </div>
+                <button
+                  class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px] hover:bg-base-200"
+                  onclick={() => (isConfirmingDelete = false)}>Cancel</button
+                >
+              </div>
+            {/if}
+          {/if}
+          <button
+            class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
+            onclick={dismiss}
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
-                  <div class="flex items-center justify-between mt-1 text-[10px] text-base-content/60">
-                    <div class="flex items-center gap-1.5">
-                      <span class="px-1.5 py-0.5 rounded bg-base-200 font-mono text-[9px] font-semibold text-base-content/60 border border-base-300/60">
-                        {isVirtual ? 'Logical' : 'Physical'}
+      <!-- Tabs Navigation -->
+      <div
+        class="tabs tabs-boxed rounded-xl bg-base-200/40 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/40"
+      >
+        <button
+          class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab ===
+          'fields'
+            ? 'tab-active bg-base-100 shadow-sm font-bold text-primary'
+            : 'opacity-65 hover:opacity-100 text-base-content/85'}"
+          onclick={() => (activeTab = "fields")}
+        >
+          Fields ({data.columns.length})
+        </button>
+        <button
+          class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab ===
+          'relations'
+            ? 'tab-active bg-base-100 shadow-sm font-bold text-primary'
+            : 'opacity-65 hover:opacity-100 text-base-content/85'}"
+          onclick={() => (activeTab = "relations")}
+        >
+          Relationships ({schemaState.edges.filter(
+            (e) => e.source === selectedNode.id || e.target === selectedNode.id,
+          ).length})
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
+        {#if isReadOnly}
+          <div
+            class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed"
+          >
+            <span>ℹ️</span>
+            <span
+              >This entity's structure is read-only (parsed dynamically from
+              external source code or wrangler.toml configuration). Modifying
+              its fields is disabled.</span
+            >
+          </div>
+        {/if}
+
+        {#if isAddingField}
+          <AddFieldForm
+            tableName={selectedNode.id}
+            onComplete={() => (isAddingField = false)}
+          />
+        {:else if isCreatingRelation}
+          <AddRelationForm
+            sourceTableName={selectedNode.id}
+            onComplete={() => (isCreatingRelation = false)}
+          />
+        {:else if activeTab === "fields"}
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center justify-between px-1">
+              <span
+                class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
+                >Structure</span
+              >
+            </div>
+
+            <div class="flex flex-col gap-2">
+              {#if data.target === "d1" || !data.target}
+                <D1Inspector tableName={selectedNode.id} {data} {isReadOnly} />
+              {:else if data.target === "kv"}
+                <KVInspector tableName={selectedNode.id} {data} {isReadOnly} />
+              {:else if data.target === "do"}
+                <DOInspector tableName={selectedNode.id} {data} {isReadOnly} />
+              {:else if data.target === "r2"}
+                <R2Inspector tableName={selectedNode.id} {data} {isReadOnly} />
+              {/if}
+
+              {#if !isReadOnly}
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                  <button
+                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-primary/60 hover:bg-primary/5 transition-all"
+                    onclick={() => (isAddingField = true)}
+                    data-testid="add-field-button"
+                  >
+                    <span class="text-xs font-semibold uppercase tracking-wider"
+                      >+ Field</span
+                    >
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all"
+                    onclick={() => (isCreatingRelation = true)}
+                    data-testid="add-relation-button"
+                  >
+                    <span class="text-xs font-semibold uppercase tracking-wider"
+                      >+ Relation</span
+                    >
+                  </button>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {:else if activeTab === "relations"}
+          {@const tableEdges = schemaState.edges.filter(
+            (e: any) =>
+              e.source === selectedNode.id || e.target === selectedNode.id,
+          )}
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center justify-between px-1">
+              <span
+                class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
+                >Defined Connections</span
+              >
+            </div>
+
+            {#if tableEdges.length === 0}
+              <div
+                class="text-center py-8 opacity-40 text-xs text-base-content/50"
+              >
+                No relationships defined for this entity.
+              </div>
+            {:else}
+              <div class="flex flex-col gap-2">
+                {#each tableEdges as edge}
+                  {@const isSource = edge.source === selectedNode.id}
+                  {@const otherNode = isSource ? edge.target : edge.source}
+                  {@const isVirtual = edge.data?.isVirtual}
+                  {@const card = edge.data?.cardinality || "unknown"}
+                  <div
+                    class="bg-base-200/30 p-3.5 rounded-2xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
+                  >
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="text-xs font-mono font-bold {isSource
+                            ? 'text-primary'
+                            : 'text-secondary'}"
+                        >
+                          {isSource ? "→" : "←"}
+                        </span>
+                        <span class="font-bold text-xs text-base-content/90"
+                          >{otherNode}</span
+                        >
+                      </div>
+
+                      <span
+                        class="badge badge-outline badge-xs text-[9px] uppercase font-mono opacity-50 px-1 py-0.5 rounded leading-none"
+                      >
+                        {card}
                       </span>
-                      {#if edge.label}
-                        <span class="font-mono text-xs opacity-75">{edge.label}</span>
+                    </div>
+
+                    <div
+                      class="flex items-center justify-between mt-1 text-[10px] text-base-content/60"
+                    >
+                      <div class="flex items-center gap-1.5">
+                        <span
+                          class="px-1.5 py-0.5 rounded bg-base-200 font-mono text-[9px] font-semibold text-base-content/60 border border-base-300/60"
+                        >
+                          {isVirtual ? "Logical" : "Physical"}
+                        </span>
+                        {#if edge.label}
+                          <span class="font-mono text-xs opacity-75"
+                            >{edge.label}</span
+                          >
+                        {/if}
+                      </div>
+
+                      {#if !isReadOnly}
+                        <button
+                          class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
+                          onclick={() => {
+                            if (
+                              confirm(`Delete relationship with ${otherNode}?`)
+                            ) {
+                              schemaState.deleteRelation(
+                                edge.source,
+                                edge.target,
+                                edge.label,
+                              );
+                            }
+                          }}
+                        >
+                          <Trash2 class="w-3.5 h-3.5" />
+                        </button>
                       {/if}
                     </div>
-
-                    {#if !isReadOnly}
-                      <button
-                        class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-                        onclick={() => {
-                          if (confirm(`Delete relationship with ${otherNode}?`)) {
-                            schemaState.deleteRelation(edge.source, edge.target, edge.label);
-                          }
-                        }}
-                      >
-                        <Trash2 class="w-3.5 h-3.5" />
-                      </button>
-                    {/if}
                   </div>
-                </div>
-              {/each}
-            </div>
-          {/if}
+                {/each}
+              </div>
+            {/if}
 
-          <!-- footnote banner -->
-          <div class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-2xl flex flex-col gap-1.5 text-[10px]">
-            <span class="font-bold text-base-content/85 flex items-center gap-1">
-              💡 Handle Fallbacks
-            </span>
-            <p class="leading-relaxed opacity-65 font-medium">
-              Physical foreign key references connect directly to the column rows. Logical relations and synthetic references fall back to entity-level handles on the sides of the node cards.
-            </p>
-          </div>
-          
-          {#if !isReadOnly}
-            <button
-              class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all mt-2"
-              onclick={() => (isCreatingRelation = true)}
+            <!-- footnote banner -->
+            <div
+              class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-2xl flex flex-col gap-1.5 text-[10px]"
             >
-              <span class="text-xs font-semibold uppercase tracking-wider">+ Create Relation</span>
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </div>
+              <span
+                class="font-bold text-base-content/85 flex items-center gap-1"
+              >
+                💡 Handle Fallbacks
+              </span>
+              <p class="leading-relaxed opacity-65 font-medium">
+                Physical foreign key references connect directly to the column
+                rows. Logical relations and synthetic references fall back to
+                entity-level handles on the sides of the node cards.
+              </p>
+            </div>
 
-    <!-- Footer Stats/Hint -->
-    <div class="p-6 bg-base-200/30 border-t border-base-300/60">
-      <div class="flex flex-col items-center gap-4">
-        <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
-          Made with<Heart class="w-4 h-4" fill="red" /> from
-          <a href="https://frstudios.co.ke" class="hover:text-primary transition-colors">FRStudios</a>.
-        </p>
+            {#if !isReadOnly}
+              <button
+                class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all mt-2"
+                onclick={() => (isCreatingRelation = true)}
+              >
+                <span class="text-xs font-semibold uppercase tracking-wider"
+                  >+ Create Relation</span
+                >
+              </button>
+            {/if}
+          </div>
+        {/if}
       </div>
-    </div>
+
+      <!-- Footer Stats/Hint -->
+      <div class="p-6 bg-base-200/30 border-t border-base-300/60">
+        <div class="flex flex-col items-center gap-4">
+          <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
+            Made with<Heart class="w-4 h-4" fill="red" /> from
+            <a
+              href="https://frstudios.co.ke"
+              class="hover:text-primary transition-colors">FRstudios</a
+            >.
+          </p>
+        </div>
+      </div>
     </div>
   {/if}
 {/if}
