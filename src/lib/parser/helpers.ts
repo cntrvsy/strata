@@ -110,6 +110,20 @@ export function resolveRelativePath(base: string, rel: string): string {
 		return normalizedRel.endsWith('.ts') ? normalizedRel : normalizedRel + '.ts';
 	}
 
+	// Handle workspace root relative paths (e.g., ./src/... or src/...)
+	if (normalizedRel.startsWith('./src/') || normalizedRel.startsWith('src/')) {
+		const srcIdx = normalizedBase.lastIndexOf('/src/');
+		if (srcIdx !== -1) {
+			const root = normalizedBase.slice(0, srcIdx);
+			const cleanRel = normalizedRel.replace(/^\.\//, '');
+			let resolved = `${root}/${cleanRel}`;
+			if (!resolved.endsWith('.ts')) {
+				resolved += '.ts';
+			}
+			return resolved;
+		}
+	}
+
 	const parts = normalizedBase.split('/');
 	parts.pop(); // Remove filename
 	const relParts = normalizedRel.split('/');

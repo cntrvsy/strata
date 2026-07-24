@@ -10,10 +10,8 @@
     X,
     Share2,
     Sparkles,
-    RefreshCw,
     Database,
     Cpu,
-    Zap,
     BookOpen,
     Check,
     FingerprintPattern,
@@ -21,10 +19,10 @@
     HelpCircle,
     Info,
     AlertTriangle,
-    HardDrive,
     History,
     Braces,
     Wrench,
+    Copy,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
 
@@ -33,6 +31,30 @@
   let activeTab = $state("all");
   let searchQuery = $state("");
   let copied = $state(false);
+  let copiedTopicId = $state<string | null>(null);
+
+  async function copyCardContent(topic: DocTopic) {
+    try {
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = topic.content;
+      const plainContent = tempDiv.textContent || tempDiv.innerText || "";
+
+      const markdown = `[Strata Documentation: ${topic.title}]
+Category: ${topic.category}
+Summary: ${topic.summary}
+
+Details:
+${plainContent.trim()}
+`;
+      await navigator.clipboard.writeText(markdown);
+      copiedTopicId = topic.id;
+      setTimeout(() => {
+        if (copiedTopicId === topic.id) copiedTopicId = null;
+      }, 2000);
+    } catch (e) {
+      console.error("[Strata] Copy card failed:", e);
+    }
+  }
 
   // JSDoc Builder State
   let builderTarget = $state("d1");
@@ -78,7 +100,11 @@
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
         return `Invalid key name "${key}".`;
       }
-      if (val && !validTypes.includes(val.toLowerCase()) && !val.startsWith("{")) {
+      if (
+        val &&
+        !validTypes.includes(val.toLowerCase()) &&
+        !val.startsWith("{")
+      ) {
         return `Type "${val}" should be string, number, boolean, or any.`;
       }
     }
@@ -115,11 +141,13 @@
       builderY = 150;
       builderDOPath = "./src/do/UserDO.ts";
       builderDOClass = "UserDO";
-      builderDOMethods = "getUser(id: number): Promise<User>, saveUser(data: any): Promise<void>";
+      builderDOMethods =
+        "getUser(id: number): Promise<User>, saveUser(data: any): Promise<void>";
     } else if (builderTarget === "kv") {
       builderX = 580;
       builderY = 280;
-      builderKVMappings = "sessionToken:string, failedAttempts:number, roles:any";
+      builderKVMappings =
+        "sessionToken:string, failedAttempts:number, roles:any";
     } else if (builderTarget === "r2") {
       builderX = 200;
       builderY = 460;
@@ -133,15 +161,15 @@
     const data: any = {
       target: builderTarget,
       x: Number(builderX) || 0,
-      y: Number(builderY) || 0
+      y: Number(builderY) || 0,
     };
 
     if (builderTarget === "d1") {
       if (builderD1Relations.trim() && !relationsError) {
         data.relations = builderD1Relations
           .split(",")
-          .map(r => ({ to: r.trim() }))
-          .filter(r => r.to.length > 0);
+          .map((r) => ({ to: r.trim() }))
+          .filter((r) => r.to.length > 0);
       }
     } else if (builderTarget === "do") {
       data.path = builderDOPath.trim();
@@ -149,13 +177,13 @@
       if (builderDOMethods.trim()) {
         data.methods = builderDOMethods
           .split(",")
-          .map(m => m.trim())
-          .filter(m => m.length > 0);
+          .map((m) => m.trim())
+          .filter((m) => m.length > 0);
       }
     } else if (builderTarget === "kv") {
       if (builderKVMappings.trim() && !kvError) {
         const schemaObj: any = {};
-        builderKVMappings.split(",").forEach(item => {
+        builderKVMappings.split(",").forEach((item) => {
           const parts = item.split(":");
           if (parts.length >= 2) {
             const key = parts[0].trim();
@@ -172,7 +200,7 @@
       data.cors = !!builderR2Cors;
       if (builderR2Folders.trim() && !r2Error) {
         const foldersObj: any = {};
-        builderR2Folders.split(",").forEach(item => {
+        builderR2Folders.split(",").forEach((item) => {
           const parts = item.split(":");
           if (parts.length >= 2) {
             const key = parts[0].trim();
@@ -186,7 +214,7 @@
       }
     }
 
-    return `/**\n * @strata ${JSON.stringify(data, null, 2).split('\n').join('\n * ')}\n */`;
+    return `/**\n * @strata ${JSON.stringify(data, null, 2).split("\n").join("\n * ")}\n */`;
   });
 
   async function copyBuilderJSDoc() {
@@ -209,7 +237,11 @@
     { id: "cloudflare", label: "Cloudflare Bindings", icon: Database },
     { id: "relationships", label: "ERD Relationships", icon: Share2 },
     { id: "troubleshooting", label: "Troubleshooting", icon: AlertTriangle },
-    { id: "achievements", label: "Advanced Guides & Diagnostics", icon: History },
+    {
+      id: "achievements",
+      label: "Advanced Guides & Diagnostics",
+      icon: History,
+    },
     { id: "gotchas", label: "Gotchas & Guardrails", icon: Cpu },
     { id: "ai", label: "AI Co-Design Prompt", icon: Sparkles },
     { id: "jsdoc-builder", label: "JSDoc Metadata Builder", icon: Braces },
@@ -403,57 +435,31 @@ export const users = sqliteTable("users", {});</pre>
       content: `<p>Cloudflare KV requires any configured Expiration TTL values to be at least <strong>60 seconds</strong>. Strata's visual inspector implements client-side validation preventing values below 60s, keeping your configuration deployments clean.</p>`,
     },
     {
+      id: "ach-framework-do-exports",
+      category: "achievements",
+      title: "Framework-Agnostic Durable Object Exports (Hono vs SvelteKit)",
+      tags: ["durable", "objects", "hono", "sveltekit", "exports", "wrangler"],
+      summary:
+        "How Durable Object classes must be exported depending on whether your project uses Hono, plain Cloudflare Workers, or SvelteKit.",
+      content: `<p class="mb-2">Cloudflare Workers requires your Durable Object class to be exported from your worker entrypoint:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class in your <code>main</code> entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>):<br/><code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { TelemetrySessionDO } from './durable-objects/TelemetrySessionDO';</code></li>
+                  <li><strong>SvelteKit:</strong> SvelteKit builds <code>_worker.js</code> dynamically. Ensure <code>vite.config.ts</code> references the correct file path inside <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/durable-objects/TelemetrySessionDO.ts'] })</code>.</li>
+                  <li><strong>Why Dragging Triggers Re-bundling:</strong> When you drag nodes in Strata, JSDocs update in <code>schema.ts</code>. Your dev server (Vite or Wrangler) re-bundles the entrypoint, which triggers error alerts if the DO file or export is missing.</li>
+                </ul>`,
+    },
+    {
       id: "ach-do-mutations",
       category: "achievements",
-      title: "Durable Object AST Mutation Diagnostics",
-      tags: ["achievements", "durable", "objects", "ast", "diagnostics", "debug"],
+      title: "Durable Object AST Mutations & File Path Diagnostics",
+      tags: ["durable", "objects", "ast", "diagnostics", "debug", "paths"],
       summary:
-        "Guidelines on how visual Durable Object methods write back to disk, and how to troubleshoot write/AST parse failures.",
-      content: `<p class="mb-2">Durable Object cards edit either local schema JSDocs or the backing external TypeScript class directly:</p>
+        "How visual Durable Object method edits update code files, and how to troubleshoot file reading or parsing failures.",
+      content: `<p class="mb-2">Durable Object nodes map directly to your TypeScript source files:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>AST Compilation:</strong> Writes are parsed using <code>ts-morph</code>. If the backing file contains syntax syntax errors, writes will be blocked to prevent file corruption.</li>
-                  <li><strong>Troubleshooting path issues:</strong> Ensure the <code>strata.path</code> parameter inside the DO's JSDoc contains a valid, writable path relative to the workspace root.</li>
-                  <li><strong>Method mismatch:</strong> Verify public method names do not conflict with existing standard lifecycle methods (e.g., <code>fetch()</code> or <code>alarm()</code>).</li>
-                </ul>`,
-    },
-    {
-      id: "ach-visual-overhaul",
-      category: "achievements",
-      title: "Recursive Wrangler Config Discovery Guidelines",
-      tags: ["achievements", "ui", "wrangler", "detect", "parent", "folders"],
-      summary:
-        "Learn how Strata locates wrangler configurations recursively, and how to troubleshoot config detection errors.",
-      content: `<p class="mb-2">Strata searches recursively up parent directories to identify binding targets:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Search Depth:</strong> Scans up to 12 parent levels to identify <code>wrangler.toml</code> or <code>wrangler.json</code>.</li>
-                  <li><strong>Permissions Check:</strong> If bindings are not updating, verify the Tauri application has directory reading privileges in parent project folders.</li>
-                  <li><strong>Duplicate Configurations:</strong> Ensure you do not have conflicting <code>wrangler.toml</code> and <code>wrangler.json</code> inside the same parent tree.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-wrangler-sync",
-      category: "achievements",
-      title: "Wrangler TOML/JSON Config Sync Diagnostics",
-      tags: ["achievements", "wrangler", "sync", "toml", "json", "troubleshoot"],
-      summary:
-        "Diagnose synchronization issues between your visual Cloudflare bindings and your project configuration files.",
-      content: `<p class="mb-2">Visual Cloudflare binds synchronize configuration variables instantly:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Formatting Preservation:</strong> TOML and JSON/JSONC parsers preserve code comments.</li>
-                  <li><strong>Sync Failures:</strong> Malformed configs (such as invalid TOML tables or unclosed JSON brackets) block writes. Repair the config syntax in your code editor to restore sync.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-kv-datatypes",
-      category: "achievements",
-      title: "KV Namespace Validation & TTL Constraints",
-      summary:
-        "Validation guidelines for KV namespaces, Expiration TTL ranges, and custom schema configurations.",
-      tags: ["achievements", "kv", "inspector", "ttl", "limit"],
-      content: `<p class="mb-2">KV Namespace configurations follow specific Cloudflare limits:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Expiration TTL:</strong> Must be at least 60 seconds. Values below 60 will fail Cloudflare wrangler deployments.</li>
-                  <li><strong>Type Mapping:</strong> Type assertions (String, Number, Boolean) are logical. If reading records in your worker, verify getters use appropriate casting.</li>
+                  <li><strong>AST Updates:</strong> Edits to public methods parse and modify the target file using <code>ts-morph</code>. If the target file contains syntax errors, writes will be blocked to prevent file corruption.</li>
+                  <li><strong>File Path Resolution:</strong> Verify that the <code>path</code> parameter in JSDoc (e.g. <code>"path": "./src/lib/server/durable-objects/TelemetrySessionDO.ts"</code>) points to a valid file relative to the project root.</li>
+                  <li><strong>Missing File Warnings:</strong> If a DO file is missing or unreadable, Strata displays a diagnostic warning flag on the node.</li>
                 </ul>`,
     },
     {
@@ -461,26 +467,40 @@ export const users = sqliteTable("users", {});</pre>
       category: "achievements",
       title: "Wrangler & Schema Alignment Diagnostics",
       summary:
-        "Understand schema-to-wrangler alignment checks, resolver deprecations, and solving binding mismatch warnings.",
-      tags: ["achievements", "wrangler", "validation", "sync", "mismatch"],
-      content: `<p class="mb-2">Strata validates that your schema's JSDoc metadata matches your Wrangler configuration bindings:</p>
+        "How Strata validates Drizzle JSDoc metadata against your project's wrangler.jsonc or wrangler.toml bindings.",
+      tags: ["wrangler", "validation", "sync", "mismatch", "bindings"],
+      content: `<p class="mb-2">Strata ensures your visual layout aligns directly with Cloudflare Wrangler bindings:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>No Generated Resolvers:</strong> Legacy TS resolver generation is deprecated and removed. Strata now integrates directly with Wrangler config as the source of truth for Cloudflare bindings.</li>
-                  <li><strong>Mismatch Warnings:</strong> If an entity type (KV, Durable Object, or R2) or name in <code>schema.ts</code> does not match the bindings declared in your Wrangler file, a mismatch warning will be shown in the Bottom Bar.</li>
-                  <li><strong>Resolution:</strong> Keep names aligned between your Drizzle JSDoc metadata and Wrangler bindings. Updating names on the canvas will automatically propagate changes to both.</li>
+                  <li><strong>Direct Binding Source:</strong> Strata parses <code>wrangler.jsonc</code> or <code>wrangler.toml</code> directly as the source of truth for KV, DO, D1, and R2 bindings.</li>
+                  <li><strong>Binding Mismatches:</strong> If an entity name in <code>schema.ts</code> JSDoc metadata does not match Wrangler bindings, Strata flags a mismatch warning in the Bottom Bar.</li>
+                  <li><strong>Automatic Sync:</strong> Updating entity names on the visual canvas automatically updates both JSDoc tags and Wrangler configuration files.</li>
+                </ul>`,
+    },
+    {
+      id: "ach-visual-overhaul",
+      category: "achievements",
+      title: "Recursive Wrangler Config Discovery",
+      tags: ["wrangler", "detect", "parent", "folders", "discovery"],
+      summary:
+        "Learn how Strata locates wrangler configurations recursively, and how to troubleshoot config detection errors.",
+      content: `<p class="mb-2">Strata searches recursively up parent directories to identify binding targets:</p>
+                <ul class="list-disc pl-4 space-y-1">
+                  <li><strong>Search Depth:</strong> Scans up to 12 parent levels to identify <code>wrangler.toml</code> or <code>wrangler.json</code>.</li>
+                  <li><strong>Permissions Check:</strong> Verify the application has directory reading privileges in parent project folders if bindings do not sync.</li>
+                  <li><strong>Single Config Source:</strong> Ensure you do not have conflicting <code>wrangler.toml</code> and <code>wrangler.json</code> files in the same directory.</li>
                 </ul>`,
     },
     {
       id: "ach-r2-settings",
       category: "achievements",
-      title: "R2 Access Control & CORS Diagnostics",
+      title: "R2 Access Control & CORS Configuration",
       summary:
         "Troubleshoot R2 configuration writes, bucket visibility settings, CORS rules, and custom domain paths.",
-      tags: ["achievements", "r2", "bucket", "cors", "public", "domain"],
-      content: `<p class="mb-2">Updates bucket metadata inside JSDoc tags without filesystem restructuring:</p>
+      tags: ["r2", "bucket", "cors", "public", "domain"],
+      content: `<p class="mb-2">Model R2 bucket settings directly within JSDoc metadata without database sidecars:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Public access & CORS:</strong> Visual switches write boolean values directly to JSDocs.</li>
-                  <li><strong>Folder MIME filters:</strong> Verify folder syntax rules match standard glob patterns (e.g. <code>image/*</code>) to avoid parsing warnings.</li>
+                  <li><strong>Public access & CORS:</strong> Toggle bucket visibility and CORS headers directly from the visual inspector drawer.</li>
+                  <li><strong>Folder MIME filters:</strong> Map directories to specific MIME-type patterns (e.g. <code>avatars: image/*</code>).</li>
                 </ul>`,
     },
     {
@@ -744,19 +764,33 @@ Generate only code inside standard markdown codeblocks without conversational fl
           {#if activeTab === "jsdoc-builder"}
             <!-- JSDoc Metadata Builder GUI -->
             <div class="flex flex-col gap-4 font-sans text-xs">
-              <div class="flex items-center gap-2 border-b border-base-300 pb-2 mb-2">
+              <div
+                class="flex items-center gap-2 border-b border-base-300 pb-2 mb-2"
+              >
                 <Wrench class="w-4 h-4 text-primary" />
-                <h3 class="font-black text-sm uppercase tracking-wide text-base-content">JSDoc Metadata Builder</h3>
+                <h3
+                  class="font-black text-sm uppercase tracking-wide text-base-content"
+                >
+                  JSDoc Metadata Builder
+                </h3>
               </div>
               <p class="text-base-content/75 leading-relaxed">
-                Use this interactive tool to build standard <code>@strata</code> comments. Paste the generated block directly above your table, object, or connection declarations in your Drizzle <code>schema.ts</code> file.
+                Use this interactive tool to build standard <code>@strata</code>
+                comments. Paste the generated block directly above your table,
+                object, or connection declarations in your Drizzle
+                <code>schema.ts</code> file.
               </p>
 
               <!-- Basic Fields -->
-              <div class="grid grid-cols-3 gap-3 bg-base-200/50 p-4 rounded-2xl border border-base-300/60 mt-1">
+              <div
+                class="grid grid-cols-3 gap-3 bg-base-200/50 p-4 rounded-2xl border border-base-300/60 mt-1"
+              >
                 <label class="flex flex-col gap-1 cursor-pointer">
                   <div class="flex items-center justify-between">
-                    <span class="font-bold text-[10px] uppercase text-base-content/60">Storage Target</span>
+                    <span
+                      class="font-bold text-[10px] uppercase text-base-content/60"
+                      >Storage Target</span
+                    >
                     <button
                       type="button"
                       class="text-[9px] text-primary hover:underline font-bold"
@@ -776,7 +810,10 @@ Generate only code inside standard markdown codeblocks without conversational fl
                   </select>
                 </label>
                 <label class="flex flex-col gap-1 cursor-pointer">
-                  <span class="font-bold text-[10px] uppercase text-base-content/60">Position X (px)</span>
+                  <span
+                    class="font-bold text-[10px] uppercase text-base-content/60"
+                    >Position X (px)</span
+                  >
                   <input
                     type="number"
                     bind:value={builderX}
@@ -784,7 +821,10 @@ Generate only code inside standard markdown codeblocks without conversational fl
                   />
                 </label>
                 <label class="flex flex-col gap-1 cursor-pointer">
-                  <span class="font-bold text-[10px] uppercase text-base-content/60">Position Y (px)</span>
+                  <span
+                    class="font-bold text-[10px] uppercase text-base-content/60"
+                    >Position Y (px)</span
+                  >
                   <input
                     type="number"
                     bind:value={builderY}
@@ -794,14 +834,25 @@ Generate only code inside standard markdown codeblocks without conversational fl
               </div>
 
               <!-- Target Specific Parameters -->
-              <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3">
-                <h4 class="font-bold text-[10px] uppercase tracking-wider text-primary border-b border-base-300/50 pb-1">Target Configurations</h4>
+              <div
+                class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3"
+              >
+                <h4
+                  class="font-bold text-[10px] uppercase tracking-wider text-primary border-b border-base-300/50 pb-1"
+                >
+                  Target Configurations
+                </h4>
 
                 {#if builderTarget === "d1"}
                   <label class="flex flex-col gap-1 cursor-pointer">
                     <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">Synthetic Relations</span>
-                      <span class="text-[9px] opacity-50">Comma-separated target node names</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >Synthetic Relations</span
+                      >
+                      <span class="text-[9px] opacity-50"
+                        >Comma-separated target node names</span
+                      >
                     </div>
                     <input
                       type="text"
@@ -810,15 +861,23 @@ Generate only code inside standard markdown codeblocks without conversational fl
                       class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                     />
                     {#if relationsError}
-                      <span class="text-[9px] text-error font-semibold mt-0.5">{relationsError}</span>
+                      <span class="text-[9px] text-error font-semibold mt-0.5"
+                        >{relationsError}</span
+                      >
                     {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Points to targets in your diagram (e.g. KV namespaces or buckets).</span>
+                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                        >Tip: Points to targets in your diagram (e.g. KV
+                        namespaces or buckets).</span
+                      >
                     {/if}
                   </label>
                 {:else if builderTarget === "do"}
                   <div class="grid grid-cols-2 gap-3">
                     <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">DO Class File Path</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >DO Class File Path</span
+                      >
                       <input
                         type="text"
                         bind:value={builderDOPath}
@@ -827,7 +886,10 @@ Generate only code inside standard markdown codeblocks without conversational fl
                       />
                     </label>
                     <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">DO Class Name</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >DO Class Name</span
+                      >
                       <input
                         type="text"
                         bind:value={builderDOClass}
@@ -838,8 +900,13 @@ Generate only code inside standard markdown codeblocks without conversational fl
                   </div>
                   <label class="flex flex-col gap-1 cursor-pointer">
                     <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">Public Methods</span>
-                      <span class="text-[9px] opacity-50">Comma-separated list</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >Public Methods</span
+                      >
+                      <span class="text-[9px] opacity-50"
+                        >Comma-separated list</span
+                      >
                     </div>
                     <input
                       type="text"
@@ -847,13 +914,22 @@ Generate only code inside standard markdown codeblocks without conversational fl
                       placeholder="e.g. login, logout, getProfile"
                       class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                     />
-                    <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Declare custom method names and signatures (e.g. <code>fetchData(id: string)</code>).</span>
+                    <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                      >Tip: Declare custom method names and signatures (e.g. <code
+                        >fetchData(id: string)</code
+                      >).</span
+                    >
                   </label>
                 {:else if builderTarget === "kv"}
                   <label class="flex flex-col gap-1 cursor-pointer">
                     <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">KV Key Mappings</span>
-                      <span class="text-[9px] opacity-50">Comma-separated key:type mappings</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >KV Key Mappings</span
+                      >
+                      <span class="text-[9px] opacity-50"
+                        >Comma-separated key:type mappings</span
+                      >
                     </div>
                     <input
                       type="text"
@@ -862,26 +938,48 @@ Generate only code inside standard markdown codeblocks without conversational fl
                       class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                     />
                     {#if kvError}
-                      <span class="text-[9px] text-error font-semibold mt-0.5">{kvError}</span>
+                      <span class="text-[9px] text-error font-semibold mt-0.5"
+                        >{kvError}</span
+                      >
                     {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Enter <code>keyName:type</code> pairs (supported types: string, number, boolean, any).</span>
+                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                        >Tip: Enter <code>keyName:type</code> pairs (supported types:
+                        string, number, boolean, any).</span
+                      >
                     {/if}
                   </label>
                 {:else if builderTarget === "r2"}
                   <div class="flex items-center gap-6 py-1">
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none">
-                      <input type="checkbox" bind:checked={builderR2Public} class="checkbox checkbox-xs checkbox-primary rounded" />
+                    <label
+                      class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={builderR2Public}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                      />
                       <span>Public Access Enabled</span>
                     </label>
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none">
-                      <input type="checkbox" bind:checked={builderR2Cors} class="checkbox checkbox-xs checkbox-primary rounded" />
+                    <label
+                      class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={builderR2Cors}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                      />
                       <span>CORS Enabled</span>
                     </label>
                   </div>
                   <label class="flex flex-col gap-1 cursor-pointer">
                     <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">Folder Filters</span>
-                      <span class="text-[9px] opacity-50">Comma-separated folderName:mime/type pairs</span>
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/65"
+                        >Folder Filters</span
+                      >
+                      <span class="text-[9px] opacity-50"
+                        >Comma-separated folderName:mime/type pairs</span
+                      >
                     </div>
                     <input
                       type="text"
@@ -890,18 +988,30 @@ Generate only code inside standard markdown codeblocks without conversational fl
                       class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                     />
                     {#if r2Error}
-                      <span class="text-[9px] text-error font-semibold mt-0.5">{r2Error}</span>
+                      <span class="text-[9px] text-error font-semibold mt-0.5"
+                        >{r2Error}</span
+                      >
                     {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Enter <code>folderName:mime/type</code> (e.g. <code>avatars:image/*</code>).</span>
+                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                        >Tip: Enter <code>folderName:mime/type</code> (e.g.
+                        <code>avatars:image/*</code>).</span
+                      >
                     {/if}
                   </label>
                 {/if}
               </div>
 
               <!-- Output Display -->
-              <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3 mt-1 relative group/output">
-                <div class="flex items-center justify-between border-b border-base-300/50 pb-1.5">
-                  <span class="font-bold text-[10px] uppercase tracking-wider text-success">Generated JSDoc Code</span>
+              <div
+                class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3 mt-1 relative group/output"
+              >
+                <div
+                  class="flex items-center justify-between border-b border-base-300/50 pb-1.5"
+                >
+                  <span
+                    class="font-bold text-[10px] uppercase tracking-wider text-success"
+                    >Generated JSDoc Code</span
+                  >
                   <button
                     class="btn btn-success btn-xs rounded-lg font-bold flex items-center gap-1 hover:shadow-md transition-all active:scale-95 text-success-content"
                     onclick={copyBuilderJSDoc}
@@ -914,7 +1024,8 @@ Generate only code inside standard markdown codeblocks without conversational fl
                     {/if}
                   </button>
                 </div>
-                <pre class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{generatedJSDoc}</pre>
+                <pre
+                  class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{generatedJSDoc}</pre>
               </div>
             </div>
           {:else}
@@ -923,8 +1034,8 @@ Generate only code inside standard markdown codeblocks without conversational fl
                 class="flex items-center justify-between text-xs text-base-content/60 border-b border-base-200 pb-2"
               >
                 <span
-                  >Found <strong>{filteredTopics.length}</strong> matching results
-                  for "{searchQuery}"</span
+                  >Found <strong>{filteredTopics.length}</strong> matching
+                  results for "{searchQuery}"</span
                 >
                 <button
                   class="text-primary font-bold hover:underline"
@@ -939,12 +1050,14 @@ Generate only code inside standard markdown codeblocks without conversational fl
                 class="bg-base-200/40 border border-base-300/60 rounded-2xl p-5 flex flex-col gap-2 transition-all hover:border-base-300 hover:shadow-xs group/card"
                 in:fade={{ duration: 150 }}
               >
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between gap-2">
                   <h4
                     class="font-bold text-xs text-base-content group-hover/card:text-primary transition-colors flex items-center gap-1.5"
                   >
                     {#if topic.category === "troubleshooting"}
-                      <AlertTriangle class="w-3.5 h-3.5 text-warning shrink-0" />
+                      <AlertTriangle
+                        class="w-3.5 h-3.5 text-warning shrink-0"
+                      />
                     {:else if topic.category === "achievements"}
                       <History class="w-3.5 h-3.5 text-success shrink-0" />
                     {:else}
@@ -952,11 +1065,30 @@ Generate only code inside standard markdown codeblocks without conversational fl
                     {/if}
                     {topic.title}
                   </h4>
-                  <span
-                    class="badge badge-outline badge-xs opacity-60 text-[9px] font-mono capitalize"
-                  >
-                    {topic.category.replace("-", " ")}
-                  </span>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button
+                      class="btn btn-ghost btn-xs text-base-content/60 hover:text-primary hover:bg-base-300 rounded-lg flex items-center gap-1 transition-all px-2 py-0.5"
+                      onclick={() => copyCardContent(topic)}
+                      title="Copy guide text for LLM prompt"
+                    >
+                      {#if copiedTopicId === topic.id}
+                        <Check class="w-3 h-3 text-success" />
+                        <span class="text-[9px] font-bold text-success"
+                          >Copied!</span
+                        >
+                      {:else}
+                        <Copy class="w-3 h-3 opacity-70" />
+                        <span class="text-[9px] font-medium">Copy</span>
+                      {/if}
+                    </button>
+                    <span
+                      class="badge badge-outline badge-xs opacity-60 text-[9px] font-mono capitalize"
+                    >
+                      {topic.category === "achievements"
+                        ? "Architecture"
+                        : topic.category.replace("-", " ")}
+                    </span>
+                  </div>
                 </div>
                 <p
                   class="text-xs text-base-content/80 font-medium leading-normal"
@@ -984,7 +1116,8 @@ Generate only code inside standard markdown codeblocks without conversational fl
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <Sparkles class="w-4 h-4 text-primary animate-pulse" />
-                    <span class="font-bold text-xs">Copy AI Architect Prompt</span
+                    <span class="font-bold text-xs"
+                      >Copy AI Architect Prompt</span
                     >
                   </div>
                   <button

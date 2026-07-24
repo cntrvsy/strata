@@ -19,6 +19,19 @@ export function wrapCode(code: string) {
 }
 
 /**
+ * Helper to retrieve external file content with normalized path matching (handles optional ./ prefixes).
+ */
+export function getMapFileContent(map: Map<string, string> | undefined, rawPath: string | undefined): string | undefined {
+	if (!map || !rawPath) return undefined;
+	if (map.has(rawPath)) return map.get(rawPath);
+	const clean = rawPath.replace(/^\.\//, '');
+	if (map.has(clean)) return map.get(clean);
+	const dotSlash = './' + clean;
+	if (map.has(dotSlash)) return map.get(dotSlash);
+	return undefined;
+}
+
+/**
  * Parses a Drizzle schema file into Svelte Flow nodes and edges.
  * Handles D1 (sqliteTable), KV (plain objects), relations, and relative external imports.
  */
@@ -144,13 +157,14 @@ export function parseSchema(
 						}
 					} else if (target === 'do') {
 						let doColumns: any[] = [];
-						if (externalFilesMap && strataData.path && strataData.class) {
-							const fileContent = externalFilesMap.get(strataData.path);
+						let missingFileWarning: string | undefined = undefined;
+						if (strataData.path) {
+							const fileContent = getMapFileContent(externalFilesMap, strataData.path);
 							if (fileContent) {
 								try {
 									const doSf = project.createSourceFile(`temp_do_${tableName}.ts`, fileContent, { overwrite: true });
 									tempSourceFiles.push(doSf);
-									const classDecl = doSf.getClass(strataData.class) || doSf.getClasses()[0];
+									const classDecl = (strataData.class ? doSf.getClass(strataData.class) : undefined) || doSf.getClasses()[0];
 									if (classDecl) {
 										doColumns = classDecl.getMethods()
 											.filter(m => m.getScope() === 'public' || !m.getScope())
@@ -164,11 +178,17 @@ export function parseSchema(
 													isReferences: false
 												};
 											});
+									} else {
+										missingFileWarning = `Durable Object class "${strataData.class || 'default'}" not found in "${strataData.path}"`;
+										warnings.push(missingFileWarning);
 									}
 								} catch (err: any) {
 									console.warn(`Failed to parse DO class methods at ${strataData.path}:`, err);
 									warnings.push(`Failed to parse DO class methods at ${strataData.path}: ${err?.message || String(err)}`);
 								}
+							} else if (externalFilesMap) {
+								missingFileWarning = `Durable Object class file not found at path "${strataData.path}"`;
+								warnings.push(missingFileWarning);
 							}
 						}
 						
@@ -183,6 +203,10 @@ export function parseSchema(
 							}));
 						} else {
 							columns = extractObjectFields(decl);
+						}
+						
+						if (missingFileWarning) {
+							strataData.missingFileWarning = missingFileWarning;
 						}
 					}
 
@@ -214,7 +238,7 @@ export function parseSchema(
 		if (externalFilesMap) {
 			// Process imports
 			for (const extImp of externalImports) {
-				const externalContent = externalFilesMap.get(extImp.filePath);
+				const externalContent = getMapFileContent(externalFilesMap, extImp.filePath);
 				if (externalContent) {
 					try {
 						// Create a temporary source file for the external schema

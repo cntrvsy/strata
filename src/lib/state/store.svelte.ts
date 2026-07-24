@@ -127,6 +127,7 @@ async function loadExternalSchemas(
 		try {
 			const extRaw = await PlatformService.readText(resolvedPath);
 			externalFilesMap.set(imp.filePath, extRaw);
+			externalFilesMap.set(resolvedPath, extRaw);
 		} catch (err: any) {
 			console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
 			toast.error(`Failed to read import: ${imp.filePath}`, {
@@ -140,6 +141,7 @@ async function loadExternalSchemas(
 		try {
 			const extRaw = await PlatformService.readText(resolvedPath);
 			externalFilesMap.set(p, extRaw);
+			externalFilesMap.set(resolvedPath, extRaw);
 		} catch (err: any) {
 			console.warn(`[Strata] Failed to read external path at ${resolvedPath}:`, err);
 			toast.error(`Failed to read path: ${p}`, {
