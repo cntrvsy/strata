@@ -7,9 +7,9 @@
  */
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
-import type { ParseResult } from './types';
-import { createIsolatedProject } from './project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from './helpers';
+import type { ParseResult } from '$lib/parser/types';
+import { createIsolatedProject } from '$lib/parser/project';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from '$lib/parser/helpers';
 
 /**
  * Wraps raw code in pre/code tags for UI presentation.

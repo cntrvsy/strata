@@ -512,3 +512,25 @@ describe('Schema Actions and Validation Warnings', () => {
   });
 });
 
+describe('Playground Sandbox Demo Mode', () => {
+  it('should load sandbox templates into memory without requiring a disk file path', async () => {
+    await schemaState.loadSandboxDemo('fullstack');
+
+    expect(schemaState.isSandboxMode).toBe(true);
+    expect(schemaState.filePath).toBeNull();
+    expect(schemaState.nodes.length).toBeGreaterThan(0);
+    expect(schemaState.isValid).toBe(true);
+  });
+
+  it('should prevent disk saves when in sandbox mode', async () => {
+    const writeSpy = vi.spyOn(PlatformService, 'writeText').mockResolvedValue(undefined);
+    await schemaState.loadSandboxDemo('basic');
+
+    await schemaState.saveToFile();
+
+    expect(writeSpy).not.toHaveBeenCalled();
+    writeSpy.mockRestore();
+  });
+});
+
+

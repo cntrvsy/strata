@@ -78,14 +78,15 @@
         selected: n.id === targetId
       }));
     } else if (action === "rename_table" && targetId) {
-      const newName = prompt("Enter new name for the entity:", targetId);
-      if (newName && newName !== targetId) {
-        schemaState.renameTable(targetId, newName);
-      }
+      schemaState.promptRenameEntity(targetId);
     } else if (action === "delete_table" && targetId) {
-      if (confirm(`Are you sure you want to delete the entity "${targetId}"?`)) {
-        schemaState.deleteTable(targetId);
-      }
+      schemaState.promptConfirm({
+        title: "Delete Entity",
+        message: `Are you sure you want to delete entity "${targetId}" from your schema? This will remove its column definitions and relationship declarations.`,
+        confirmLabel: "Delete Entity",
+        isDanger: true,
+        onConfirm: () => schemaState.deleteTable(targetId),
+      });
     }
   }
 </script>

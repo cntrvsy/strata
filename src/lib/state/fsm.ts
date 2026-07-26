@@ -6,7 +6,7 @@
  * Output: Initialized FiniteStateMachine instance from runed.
  */
 import { FiniteStateMachine } from "runed";
-import type { States, Events } from "./types";
+import type { States, Events } from "$lib/state/types";
 
 export function createStateMachine(initialState: States) {
 	return new FiniteStateMachine<States, Events>(

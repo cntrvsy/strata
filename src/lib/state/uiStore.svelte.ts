@@ -30,6 +30,24 @@ export class UIState {
 	showHelpModal = $state(false);
 	showExportToast = $state(false);
 
+	/** Rename Entity Modal State */
+	showRenameModal = $state(false);
+	renameEntityTargetId = $state<string | null>(null);
+
+	/** Confirmation Dialog Modal State */
+	showConfirmModal = $state(false);
+	confirmModalData = $state<{
+		title: string;
+		message: string;
+		confirmLabel: string;
+		isDanger?: boolean;
+		onConfirm: () => void;
+	} | null>(null);
+
+	/** Sandbox / Playground Mode State */
+	isSandboxMode = $state(false);
+	sandboxTemplateKey = $state<string>('fullstack');
+
 	/** Panel collapse states */
 	isCodeCollapsed = $state(false);
 	isDiagramCollapsed = $state(false);

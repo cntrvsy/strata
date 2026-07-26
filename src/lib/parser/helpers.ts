@@ -6,7 +6,7 @@
  * Output: Resolved Drizzle function calls, column chains, and relation declarations.
  */
 import { VariableDeclaration, SyntaxKind, SourceFile, Node as ASTNode } from 'ts-morph';
-import type { ChainElement } from './types';
+import type { ChainElement } from '$lib/parser/types';
 
 /**
  * Resolves the underlying drizzle sqliteTable CallExpression node from an initializer.

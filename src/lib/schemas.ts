@@ -28,7 +28,7 @@ export const columnSchema = v.object({
     v.minLength(1, "Column name is required"),
     v.regex(/^[a-z_][a-z0-9_]*$/, "Use snake_case")
   ),
-  type: v.optional(v.picklist(["text", "integer", "blob", "real", "string", "number", "boolean", "any"]), "text"),
+  type: v.optional(v.picklist(["text", "integer", "timestamp", "boolean_int", "blob", "real", "string", "number", "boolean", "any"]), "text"),
   isPk: v.optional(v.boolean(), false),
   notNull: v.optional(v.boolean(), true),
   referencesTable: v.optional(v.string()),

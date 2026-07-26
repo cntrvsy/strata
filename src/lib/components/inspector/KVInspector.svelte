@@ -7,7 +7,7 @@
 <script lang="ts">
   import { Pencil, Trash2, Check, SlidersHorizontal } from "lucide-svelte";
   import { toast } from "svelte-sonner";
-  import { schemaState } from "../../state";
+  import { schemaState } from "$lib/state";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -48,14 +48,15 @@
   async function saveKeySettings(colName: string) {
     if (selectedTtl !== null && selectedTtl !== undefined && selectedTtl < 60) {
       toast.error("Invalid expiration TTL", {
-        description: "Cloudflare KV expiration TTL must be at least 60 seconds."
+        description:
+          "Cloudflare KV expiration TTL must be at least 60 seconds.",
       });
       return;
     }
     await schemaState.updateColumnModifiers(tableName, colName, {
       defaultVal: selectedType,
       ttl: selectedTtl,
-      metadata: selectedMetadata
+      metadata: selectedMetadata,
     });
     expandedKey = null;
   }
@@ -85,7 +86,9 @@
             </div>
           {:else}
             <div class="flex items-center gap-2 group/col-title">
-              <span class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85">
+              <span
+                class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
+              >
                 {col.name}
               </span>
               {#if !isReadOnly}
@@ -104,16 +107,23 @@
         </div>
         <div class="flex items-center gap-1.5">
           {#if col.ttl !== undefined && col.ttl !== null}
-            <span class="badge badge-xs bg-info/10 text-info border-info/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono">
+            <span
+              class="badge badge-xs bg-info/10 text-info border-info/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono"
+            >
               TTL: {col.ttl}s
             </span>
           {/if}
           {#if col.metadata}
-            <span class="badge badge-xs bg-success/10 text-success border-success/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono truncate max-w-[80px]" title={col.metadata}>
+            <span
+              class="badge badge-xs bg-success/10 text-success border-success/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono truncate max-w-20"
+              title={col.metadata}
+            >
               Meta: {col.metadata}
             </span>
           {/if}
-          <span class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-bold">
+          <span
+            class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-bold"
+          >
             {col.definition}
           </span>
           {#if !isReadOnly}
@@ -136,10 +146,14 @@
       </div>
 
       {#if expandedKey === col.name && !isReadOnly}
-        <div class="border-t border-base-300/40 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200">
+        <div
+          class="border-t border-base-300/40 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200"
+        >
           <div class="grid grid-cols-2 gap-2">
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-40">Value Type</span>
+              <span class="text-[9px] font-bold uppercase opacity-40"
+                >Value Type</span
+              >
               <select
                 bind:value={selectedType}
                 class="select select-xs select-bordered w-full rounded-lg bg-base-100 border-base-300/60 focus:select-primary transition-all text-[10px]"
@@ -151,7 +165,9 @@
               </select>
             </div>
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-40">Expiration TTL (s)</span>
+              <span class="text-[9px] font-bold uppercase opacity-40"
+                >Expiration TTL (s)</span
+              >
               <input
                 type="number"
                 bind:value={selectedTtl}
@@ -163,7 +179,9 @@
           </div>
 
           <div class="flex flex-col gap-1">
-            <span class="text-[9px] font-bold uppercase opacity-40">Metadata String / Description</span>
+            <span class="text-[9px] font-bold uppercase opacity-40"
+              >Metadata String / Description</span
+            >
             <input
               type="text"
               bind:value={selectedMetadata}
@@ -175,7 +193,7 @@
           <div class="flex justify-end gap-1.5">
             <button
               class="btn btn-ghost btn-xs rounded-lg px-3 text-[10px]"
-              onclick={() => expandedKey = null}
+              onclick={() => (expandedKey = null)}
             >
               Cancel
             </button>

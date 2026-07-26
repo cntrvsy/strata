@@ -11,20 +11,19 @@
     Cpu,
     Zap,
     X,
-    Key,
     Trash2,
     Check,
     Pencil,
     Heart,
     HardDrive,
   } from "lucide-svelte";
-  import { schemaState } from "../state";
-  import AddFieldForm from "./forms/AddFieldForm.svelte";
-  import AddRelationForm from "./forms/AddRelationForm.svelte";
-  import D1Inspector from "./inspector/D1Inspector.svelte";
-  import KVInspector from "./inspector/KVInspector.svelte";
-  import DOInspector from "./inspector/DOInspector.svelte";
-  import R2Inspector from "./inspector/R2Inspector.svelte";
+  import { schemaState } from "$lib/state";
+  import AddFieldForm from "$lib/components/forms/AddFieldForm.svelte";
+  import AddRelationForm from "$lib/components/forms/AddRelationForm.svelte";
+  import D1Inspector from "$lib/components/inspector/D1Inspector.svelte";
+  import KVInspector from "$lib/components/inspector/KVInspector.svelte";
+  import DOInspector from "$lib/components/inspector/DOInspector.svelte";
+  import R2Inspector from "$lib/components/inspector/R2Inspector.svelte";
 
   // --- Local UI State ---
   /** Whether the user is currently filling out the 'Add Field' form */
@@ -399,15 +398,19 @@
                         <button
                           class="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
                           onclick={() => {
-                            if (
-                              confirm(`Delete relationship with ${otherNode}?`)
-                            ) {
-                              schemaState.deleteRelation(
-                                edge.source,
-                                edge.target,
-                                edge.label,
-                              );
-                            }
+                            schemaState.promptConfirm({
+                              title: "Delete Relationship",
+                              message: `Are you sure you want to delete relationship connection with "${otherNode}"?`,
+                              confirmLabel: "Delete Relationship",
+                              isDanger: true,
+                              onConfirm: () => {
+                                schemaState.deleteRelation(
+                                  edge.source,
+                                  edge.target,
+                                  edge.label,
+                                );
+                              },
+                            });
                           }}
                         >
                           <Trash2 class="w-3.5 h-3.5" />

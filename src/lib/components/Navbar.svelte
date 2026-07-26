@@ -17,14 +17,19 @@
     Undo,
     Settings,
     Menu,
+    GitCompare,
+    RotateCcw,
+    Sparkles,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";
+  import DiffPreviewModal from "$lib/components/DiffPreviewModal.svelte";
   import { arrangeLayout } from "$lib/services/layout";
 
   let showHelp = $state(false);
+  let showDiffPreview = $state(false);
 
   /**
    * Opens a native file dialog to select a Drizzle schema file.
@@ -121,7 +126,7 @@
   class="navbar w-full h-11 border-b border-base-300/80 bg-base-100/90 backdrop-blur-md z-30 px-4 select-none shrink-0"
   data-testid="navbar"
 >
-  <!-- Left Side: File Controls (Clean outline button) -->
+  <!-- Left Side: File Controls & Sandbox Actions -->
   <div class="navbar-start flex items-center gap-2">
     <button
       class="btn btn-outline btn-sm border-base-300/85 hover:border-base-300 hover:bg-base-200/60 text-base-content/80 rounded-lg text-xs font-semibold px-3 h-8 min-h-0"
@@ -131,11 +136,66 @@
       <FolderOpen class="w-3.5 h-3.5 opacity-80" />
       <span>Open Schema</span>
     </button>
+
+    {#if schemaState.isSandboxMode}
+      <button
+        class="btn btn-secondary btn-sm gap-1.5 rounded-lg text-xs font-semibold px-3 h-8 min-h-0 shadow-sm"
+        onclick={() => schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
+        title="Reset sandbox schema template to initial state"
+        data-testid="reset-sandbox-button"
+      >
+        <RotateCcw class="w-3.5 h-3.5" />
+        <span>Reset Schema</span>
+      </button>
+
+      <div class="dropdown dropdown-bottom">
+        <div
+          tabindex="0"
+          role="button"
+          class="btn btn-ghost btn-xs rounded-lg gap-1 text-[10px] text-base-content/75 hover:bg-base-200/80 px-2"
+          title="Switch Sandbox Template"
+        >
+          <Sparkles class="w-3 h-3 text-secondary" />
+          <span class="capitalize font-bold">{schemaState.sandboxTemplateKey}</span>
+        </div>
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <ul
+          tabindex="0"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-44 p-1.5 shadow-2xl mt-1 text-xs"
+        >
+          <li class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1">Starter Templates</li>
+          <li>
+            <button
+              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'basic' ? 'active font-bold' : ''}"
+              onclick={() => schemaState.loadSandboxDemo('basic')}
+            >
+              Basic D1
+            </button>
+          </li>
+          <li>
+            <button
+              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'ecommerce' ? 'active font-bold' : ''}"
+              onclick={() => schemaState.loadSandboxDemo('ecommerce')}
+            >
+              E-Commerce
+            </button>
+          </li>
+          <li>
+            <button
+              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'fullstack' ? 'active font-bold' : ''}"
+              onclick={() => schemaState.loadSandboxDemo('fullstack')}
+            >
+              Full Stack
+            </button>
+          </li>
+        </ul>
+      </div>
+    {/if}
   </div>
 
   <!-- Center Side: View Mode Segment Switch (Sleek pill switch) -->
   <div class="navbar-center flex items-center justify-center">
-    {#if schemaState.filePath}
+    {#if schemaState.filePath || schemaState.isSandboxMode}
       <div
         class="join border border-base-300/80 rounded-lg overflow-hidden bg-base-200/40 p-0.5"
       >
@@ -163,7 +223,7 @@
 
   <!-- Right Side: Action Tools -->
   <div class="navbar-end flex items-center justify-end gap-1.5">
-    {#if schemaState.filePath}
+    {#if schemaState.filePath || schemaState.isSandboxMode}
       <!-- Primary Action: New Table (Solid, bold) -->
       <button
         class="btn btn-primary btn-sm gap-1 rounded-lg shadow-sm font-semibold h-8 min-h-0 px-3 text-xs"
@@ -223,8 +283,18 @@
         </div>
       {/if}
 
-      {#if schemaState.hasUnsavedChanges}
+      {#if schemaState.hasUnsavedChanges && schemaState.filePath}
         <div class="h-4 w-px bg-base-300/80 mx-1"></div>
+
+        <!-- Diff Preview Action -->
+        <button
+          class="btn btn-outline btn-warning btn-sm gap-1.5 rounded-lg font-semibold h-8 min-h-0 px-2.5 text-xs hover:bg-warning/20"
+          onclick={() => (showDiffPreview = true)}
+          title="Preview AST Code Changes"
+        >
+          <GitCompare class="w-3.5 h-3.5" />
+          <span>Preview Diff</span>
+        </button>
 
         <!-- Save Action (Solid warning state) -->
         <button
@@ -265,7 +335,7 @@
         tabindex="0"
         class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
       >
-        {#if schemaState.filePath}
+        {#if schemaState.filePath || schemaState.isSandboxMode}
           <li>
             <button
               class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
@@ -292,3 +362,4 @@
 </div>
 
 <HelpModal bind:show={showHelp} />
+<DiffPreviewModal bind:show={showDiffPreview} />

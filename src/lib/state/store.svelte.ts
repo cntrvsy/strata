@@ -6,14 +6,13 @@
  * Output: Synchronized database schema file state and Svelte Flow configurations.
  */
 import { type Node, type Edge } from '@xyflow/svelte';
-import { PlatformService } from "../services/platform";
-import type { States, Events } from "./types";
-import { createStateMachine } from "./fsm";
-import { OperationQueue } from "./queue";
+import { PlatformService } from "$lib/services/platform";
+import { createStateMachine } from "$lib/state/fsm";
+import { OperationQueue } from "$lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath } from "../parser";
-import { uiState } from "./uiStore.svelte";
+import { resolveRelativePath } from "$lib/parser";
+import { uiState } from "$lib/state/uiStore.svelte";
 
 /**
  * State-machine JSONC parser.
@@ -406,6 +405,39 @@ export class SchemaState {
 	get activeFilter() { return uiState.activeFilter; }
 	set activeFilter(val: 'd1' | 'do' | 'kv' | 'r2' | null) { uiState.activeFilter = val; }
 
+	/** Sandbox / Playground Mode State */
+	get isSandboxMode() { return uiState.isSandboxMode; }
+	set isSandboxMode(val: boolean) { uiState.isSandboxMode = val; }
+
+	get sandboxTemplateKey() { return uiState.sandboxTemplateKey; }
+	set sandboxTemplateKey(val: string) { uiState.sandboxTemplateKey = val; }
+
+	/** Rename Entity Modal State */
+	get showRenameModal() { return uiState.showRenameModal; }
+	set showRenameModal(val: boolean) { uiState.showRenameModal = val; }
+
+	get renameEntityTargetId() { return uiState.renameEntityTargetId; }
+	set renameEntityTargetId(val: string | null) { uiState.renameEntityTargetId = val; }
+
+	/** Confirmation Dialog Modal State */
+	get showConfirmModal() { return uiState.showConfirmModal; }
+	set showConfirmModal(val: boolean) { uiState.showConfirmModal = val; }
+
+	get confirmModalData() { return uiState.confirmModalData; }
+	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
+
+	/** Triggers the styled Rename Entity Modal */
+	promptRenameEntity(targetId: string) {
+		uiState.renameEntityTargetId = targetId;
+		uiState.showRenameModal = true;
+	}
+
+	/** Triggers the styled Confirmation Modal */
+	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void }) {
+		uiState.confirmModalData = data;
+		uiState.showConfirmModal = true;
+	}
+
 	/** Whether the 'New Table' modal is currently visible */
 	get showNewTableModal() { return uiState.showNewTableModal; }
 	set showNewTableModal(val: boolean) { uiState.showNewTableModal = val; }
@@ -485,8 +517,8 @@ export class SchemaState {
 		const initialResult = parseSchema(code, undefined, tsconfigPaths, tsconfigPath);
 		let externalFilesMap = new Map<string, string>();
 		
-		if ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0)) {
-			externalFilesMap = await loadExternalSchemas(this.filePath!, initialResult.externalImports, initialResult.externalPaths);
+		if (this.filePath && ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0))) {
+			externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports, initialResult.externalPaths);
 		}
 
 		// 2. Final parse with external file contents mapped
@@ -505,7 +537,9 @@ export class SchemaState {
 			}
 			
 			// Discover wrangler.toml bindings
-			const { bindings: wranglerBindings, configFilePath } = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
+			const { bindings: wranglerBindings, configFilePath } = this.filePath 
+				? await discoverWranglerBindings(this.filePath, this.wranglerPath)
+				: { bindings: [], configFilePath: null };
 			this.wranglerBindings = wranglerBindings;
 			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
@@ -535,7 +569,7 @@ export class SchemaState {
 
 			// Preserve selection state
 			const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath!, selectedNodeIds, this.nodes);
+			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath || 'sandbox', selectedNodeIds, this.nodes);
 			this.edges = result.edges;
 			this.rawCode = code;
 			this.isValid = true;
@@ -621,9 +655,33 @@ export class SchemaState {
 	}
 
 	/**
+	 * Loads a starter schema template into zero-risk in-memory sandbox mode.
+	 */
+	async loadSandboxDemo(templateKey: string = 'fullstack') {
+		const { SAMPLE_TEMPLATES } = await import("$lib/mock");
+		const template = SAMPLE_TEMPLATES[templateKey] || SAMPLE_TEMPLATES.fullstack;
+
+		this.isSandboxMode = true;
+		this.sandboxTemplateKey = templateKey;
+		this.filePath = null;
+		this.machine.send("OPEN");
+
+		const success = await this.parseAndApply(template.code);
+		if (success) {
+			this.machine.send("SUCCESS");
+			toast.success(`Loaded ${template.name}`, {
+				description: "Playground mode active: Edits run strictly in-memory."
+			});
+		} else {
+			this.machine.send("FAIL");
+		}
+	}
+
+	/**
 	 * Opens a schema file directly from recent history.
 	 */
 	async openFileDirectly(path: string) {
+		this.isSandboxMode = false;
 		this.filePath = path;
 		this.machine.send("OPEN");
 		await this.syncWithFile();
@@ -637,6 +695,7 @@ export class SchemaState {
 			const defaultPath = this.getDefaultDialogPath();
 			const selected = await PlatformService.selectFile(["ts"], defaultPath);
 			if (selected) {
+				this.isSandboxMode = false;
 				this.filePath = selected;
 				this.machine.send("OPEN");
 				await this.syncWithFile();
@@ -654,13 +713,15 @@ export class SchemaState {
 		mutateFn: (code: string) => string | Promise<string>
 	): Promise<void> {
 		await this.queue.enqueue(async () => {
-			if (!this.filePath) return;
+			if (!this.filePath && !this.isSandboxMode) return;
 			this.machine.send("SAVE");
 			try {
 				const newCode = await mutateFn(this.rawCode);
-				this.ignoreNextWatch = true;
-				this.lastWriteTime = Date.now();
-				await PlatformService.writeText(this.filePath, newCode);
+				if (!this.isSandboxMode && this.filePath) {
+					this.ignoreNextWatch = true;
+					this.lastWriteTime = Date.now();
+					await PlatformService.writeText(this.filePath, newCode);
+				}
 				
 				const success = await this.parseAndApply(newCode);
 				if (success) {
@@ -671,7 +732,7 @@ export class SchemaState {
 			} catch (e: any) {
 				console.error(`[Strata] ${operationName} failed:`, e);
 				this.error = e.message;
-				this.errorType = 'disk';
+				this.errorType = this.isSandboxMode ? 'parse' : 'disk';
 				this.machine.send("FAIL");
 				toast.error(`${operationName} failed`, {
 					description: e.message || String(e)
@@ -697,7 +758,7 @@ export class SchemaState {
 	/**
 	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
 	 */
-	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }) {
+	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }) {
 		const { updateTableMetadataInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table metadata update", (code) => 
 			updateTableMetadataInSchema(code, tableName, metadata)
@@ -748,6 +809,13 @@ export class SchemaState {
 	 * Persists the current rawCode to disk, including any pending node position updates.
 	 */
 	async saveToFile() {
+		if (this.isSandboxMode) {
+			toast.info("Playground Sandbox Active", {
+				description: "Playground edits run in-memory. Click 'Open Schema' to edit a real file on disk."
+			});
+			return;
+		}
+
 		if (!this.filePath || this.machine.current === "BUSY") return;
 		
 		await this.executeSchemaMutation("Save", async (code) => {
@@ -868,12 +936,55 @@ export class SchemaState {
 	}
 
 	/**
-	 * Synchronizes a canvas mutation (add/remove/rename) back to wrangler.toml or json config
+	 * Automatically syncs all missing KV, DO, or R2 target bindings to the project's wrangler configuration file.
+	 */
+	async syncMissingWranglerBindings() {
+		if (this.isSandboxMode) {
+			toast.info("Sandbox Playground Active", {
+				description: "Wrangler binding files (wrangler.toml/jsonc) operate in-memory while in Sandbox Mode. All node operations work seamlessly!"
+			});
+			return;
+		}
+
+		if (!this.wranglerConfigFilePath) {
+			toast.error("No Wrangler Config Detected", {
+				description: "Create a wrangler.toml or wrangler.jsonc file in your project root."
+			});
+			return;
+		}
+
+		const unconfiguredNodes = this.nodes.filter(n => {
+			const target = (n.data as any)?.target;
+			if (!target || target === 'd1') return false;
+			return !this.wranglerBindings.some(b => b.name === n.id && b.type === target);
+		});
+
+		if (unconfiguredNodes.length === 0) {
+			toast.success("Wrangler Config Aligned", {
+				description: "All entity targets are configured."
+			});
+			return;
+		}
+
+		for (const node of unconfiguredNodes) {
+			const target = (node.data as any).target;
+			const extra = (node.data as any).strata || {};
+			await this.syncToWranglerConfig('add', { type: target, name: node.id, extra });
+		}
+
+		toast.success("Wrangler Configuration Updated", {
+			description: `Added ${unconfiguredNodes.length} missing binding configuration(s).`
+		});
+	}
+
+	/**
+	 * Synchronizes target modifications (KV/DO/R2 additions or deletions) directly to wrangler.toml or wrangler.jsonc.
 	 */
 	async syncToWranglerConfig(
 		action: 'add' | 'remove',
 		binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }
 	) {
+		if (this.isSandboxMode) return;
 		if (!this.wranglerConfigFilePath) return;
 		try {
 			await PlatformService.mutateWranglerConfig(

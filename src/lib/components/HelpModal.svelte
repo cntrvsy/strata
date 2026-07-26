@@ -16,15 +16,17 @@
     Check,
     FingerprintPattern,
     Search,
-    HelpCircle,
+    CircleQuestionMark,
     Info,
-    AlertTriangle,
+    TriangleAlert,
     History,
     Braces,
     Wrench,
     Copy,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
+  import { schemaState } from "$lib/state";
+  import { SAMPLE_TEMPLATES } from "$lib/mock";
 
   let { show = $bindable(false) } = $props();
 
@@ -32,6 +34,11 @@
   let searchQuery = $state("");
   let copied = $state(false);
   let copiedTopicId = $state<string | null>(null);
+
+  function loadStarterTemplate(key: string) {
+    schemaState.loadSandboxDemo(key);
+    show = false;
+  }
 
   async function copyCardContent(topic: DocTopic) {
     try {
@@ -230,13 +237,18 @@ ${plainContent.trim()}
   const categories = [
     { id: "all", label: "All Documentation", icon: BookOpen },
     {
+      id: "starter-templates",
+      label: "Starter Templates",
+      icon: Sparkles,
+    },
+    {
       id: "getting-started",
       label: "Getting Started",
       icon: FingerprintPattern,
     },
     { id: "cloudflare", label: "Cloudflare Bindings", icon: Database },
     { id: "relationships", label: "ERD Relationships", icon: Share2 },
-    { id: "troubleshooting", label: "Troubleshooting", icon: AlertTriangle },
+    { id: "troubleshooting", label: "Troubleshooting", icon: TriangleAlert },
     {
       id: "achievements",
       label: "Advanced Guides & Diagnostics",
@@ -645,6 +657,7 @@ Generate only code inside standard markdown codeblocks without conversational fl
   // Count topics helper for badges
   function getTopicCount(catId: string) {
     if (catId === "all") return docTopics.length;
+    if (catId === "starter-templates") return Object.keys(SAMPLE_TEMPLATES).length;
     if (catId === "ai") return 1;
     if (catId === "jsdoc-builder") return 1;
     return docTopics.filter((t) => t.category === catId).length;
@@ -668,7 +681,7 @@ Generate only code inside standard markdown codeblocks without conversational fl
       >
         <div class="flex items-center gap-3">
           <div class="p-2.5 bg-primary/10 rounded-2xl text-primary">
-            <HelpCircle class="w-5 h-5" />
+            <CircleQuestionMark class="w-5 h-5" />
           </div>
           <div>
             <h2
@@ -683,12 +696,21 @@ Generate only code inside standard markdown codeblocks without conversational fl
           </div>
         </div>
 
-        <button
-          class="btn btn-ghost btn-sm btn-circle text-base-content/65 hover:text-base-content hover:bg-base-300 transition-colors"
-          onclick={() => (show = false)}
-        >
-          <X class="w-4 h-4" />
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            class="btn btn-secondary btn-xs rounded-xl font-bold gap-1.5 px-3 shadow-xs"
+            onclick={() => (activeTab = "starter-templates")}
+          >
+            <Sparkles class="w-3 h-3" />
+            Starter Templates
+          </button>
+          <button
+            class="btn btn-ghost btn-sm btn-circle text-base-content/65 hover:text-base-content hover:bg-base-300 transition-colors"
+            onclick={() => (show = false)}
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <!-- Search Box & Filter Tabs Layout -->
@@ -761,7 +783,61 @@ Generate only code inside standard markdown codeblocks without conversational fl
 
         <!-- Help Documentation Content Area -->
         <div class="w-2/3 p-8 overflow-y-auto flex flex-col gap-5 bg-base-100">
-          {#if activeTab === "jsdoc-builder"}
+          {#if activeTab === "starter-templates"}
+            <!-- Interactive Starter Templates View -->
+            <div class="flex flex-col gap-4 font-sans text-xs">
+              <div
+                class="flex items-center justify-between border-b border-base-300 pb-2 mb-1"
+              >
+                <div class="flex items-center gap-2">
+                  <Sparkles class="w-4 h-4 text-secondary" />
+                  <h3
+                    class="font-black text-sm uppercase tracking-wide text-base-content"
+                  >
+                    Interactive Starter Templates
+                  </h3>
+                </div>
+                <span class="badge badge-sm badge-secondary font-mono text-[10px]">
+                  Zero-Risk Sandbox Mode
+                </span>
+              </div>
+              <p class="text-base-content/75 leading-relaxed">
+                Explore pre-built Cloudflare D1, KV, Durable Object, and R2 schema architectures. Loading a template populates the visual canvas and CodeMirror editor instantly.
+              </p>
+
+              <div class="grid grid-cols-1 gap-3.5 mt-1">
+                {#each Object.values(SAMPLE_TEMPLATES) as tpl}
+                  <div
+                    class="bg-base-200/40 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-2.5 hover:border-secondary/50 transition-all group"
+                  >
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="font-bold text-sm text-base-content group-hover:text-secondary transition-colors"
+                        >
+                          {tpl.name}
+                        </span>
+                        <span
+                          class="badge badge-sm badge-outline font-mono text-[10px] opacity-75"
+                        >
+                          {tpl.badge}
+                        </span>
+                      </div>
+                      <button
+                        class="btn btn-secondary btn-xs rounded-xl font-bold px-3 shadow-xs gap-1"
+                        onclick={() => loadStarterTemplate(tpl.key)}
+                      >
+                        Load Template ➔
+                      </button>
+                    </div>
+                    <p class="text-[11px] text-base-content/70 leading-relaxed font-sans">
+                      {tpl.description}
+                    </p>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {:else if activeTab === "jsdoc-builder"}
             <!-- JSDoc Metadata Builder GUI -->
             <div class="flex flex-col gap-4 font-sans text-xs">
               <div
@@ -776,8 +852,8 @@ Generate only code inside standard markdown codeblocks without conversational fl
               </div>
               <p class="text-base-content/75 leading-relaxed">
                 Use this interactive tool to build standard <code>@strata</code>
-                comments. Paste the generated block directly above your table,
-                object, or connection declarations in your Drizzle
+                comments. Paste the generated block directly above your table, object,
+                or connection declarations in your Drizzle
                 <code>schema.ts</code> file.
               </p>
 
@@ -1055,7 +1131,7 @@ Generate only code inside standard markdown codeblocks without conversational fl
                     class="font-bold text-xs text-base-content group-hover/card:text-primary transition-colors flex items-center gap-1.5"
                   >
                     {#if topic.category === "troubleshooting"}
-                      <AlertTriangle
+                      <TriangleAlert
                         class="w-3.5 h-3.5 text-warning shrink-0"
                       />
                     {:else if topic.category === "achievements"}

@@ -80,7 +80,7 @@
           >Schema Mirror</span
         >
         <span class="text-xs font-bold text-white/60"
-          >{schemaState.filePath?.split("/").pop()}</span
+          >{schemaState.filePath?.split("/").pop() || "sandbox.ts"}</span
         >
       </div>
     </div>

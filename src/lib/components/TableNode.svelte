@@ -118,7 +118,7 @@
 </script>
 
 <div
-  class="relative group/node min-w-[220px] transition-all duration-300 {opacityClass}"
+  class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
   data-testid="table-node"
   data-table-name={data.label}
   role="button"
@@ -138,9 +138,13 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {data.isExternal ? 'border-t-neutral-400 opacity-80' : config.borderTop} {data.isExternal ? 'border-dashed border-base-300' : selected
-      ? `border-${config.color} ring-2 ring-${config.color}/30`
-      : `border-base-300 ${config.border}`} {dragging
+    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {data.isExternal
+      ? 'border-t-neutral-400 opacity-80'
+      : config.borderTop} {data.isExternal
+      ? 'border-dashed border-base-300'
+      : selected
+        ? `border-${config.color} ring-2 ring-${config.color}/30`
+        : `border-base-300 ${config.border}`} {dragging
       ? 'shadow-2xl scale-[1.02]'
       : 'shadow-md'}"
   >
@@ -150,15 +154,28 @@
     >
       <div class="flex items-center gap-2">
         <div
-          class="p-1.5 {data.isExternal ? 'bg-base-300' : config.bg} rounded-lg {data.isExternal ? '' : config.bgHover} transition-colors"
+          class="p-1.5 {data.isExternal
+            ? 'bg-base-300'
+            : config.bg} rounded-lg {data.isExternal
+            ? ''
+            : config.bgHover} transition-colors"
         >
-          <config.icon class="w-4 h-4 {data.isExternal ? 'text-base-content/50' : config.text}" />
+          <config.icon
+            class="w-4 h-4 {data.isExternal
+              ? 'text-base-content/50'
+              : config.text}"
+          />
         </div>
-        <span class="font-bold text-xs tracking-wide uppercase {data.isExternal ? 'text-base-content/60' : ''}"
-          >{data.label}</span
+        <span
+          class="font-bold text-xs tracking-wide uppercase {data.isExternal
+            ? 'text-base-content/60'
+            : ''}">{data.label}</span
         >
         {#if data.isExternal}
-          <span class="badge badge-neutral badge-xs font-semibold uppercase text-[8px] opacity-75">External</span>
+          <span
+            class="badge badge-neutral badge-xs font-semibold uppercase text-[8px] opacity-75"
+            >External</span
+          >
         {/if}
       </div>
       <div
@@ -178,27 +195,31 @@
             ? 'bg-amber-500/5'
             : ''} {isFk ? 'bg-secondary/5' : ''}"
         >
-          <!-- Row Handles -->
-          {#if isPk}
-            <Handle
-              id={col.name}
-              type="target"
-              position={Position.Left}
-              isConnectable={true}
-              class="absolute! left-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
-              style="background: var(--color-accent); border: 1.5px solid var(--color-base-100);"
-            />
-          {/if}
-          {#if isFk}
-            <Handle
-              id={col.name}
-              type="source"
-              position={Position.Right}
-              isConnectable={true}
-              class="absolute! right-[-12px]! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20"
-              style="background: var(--color-secondary); border: 1.5px solid var(--color-base-100);"
-            />
-          {/if}
+          <!-- Row Handles for Column Targeting -->
+          <Handle
+            id={col.name}
+            type="target"
+            position={Position.Left}
+            isConnectable={true}
+            class="absolute! -left-3! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20 {isPk
+              ? 'opacity-100'
+              : 'opacity-30 group-hover/row:opacity-100'}"
+            style="background: {isPk
+              ? 'var(--color-warning)'
+              : 'var(--color-primary)'}; border: 1.5px solid var(--color-base-100);"
+          />
+          <Handle
+            id={col.name}
+            type="source"
+            position={Position.Right}
+            isConnectable={true}
+            class="absolute! -right-3! top-1/2! -translate-y-1/2 w-2! h-2! transition-transform! hover:scale-135! duration-150 cursor-crosshair z-20 {isFk
+              ? 'opacity-100'
+              : 'opacity-30 group-hover/row:opacity-100'}"
+            style="background: {isFk
+              ? 'var(--color-secondary)'
+              : 'var(--color-primary)'}; border: 1.5px solid var(--color-base-100);"
+          />
 
           <div class="flex items-center gap-3">
             <div class="w-4 flex justify-center">

@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { Key, Pencil, Trash2, Check } from "lucide-svelte";
-  import { schemaState } from "../../state";
+  import { schemaState } from "$lib/state";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -55,7 +55,9 @@
             </div>
           {:else}
             <div class="flex items-center gap-2 group/col-title">
-              <span class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85">
+              <span
+                class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
+              >
                 {col.name}
               </span>
               {#if !isReadOnly}
@@ -73,7 +75,9 @@
           {/if}
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold">
+          <span
+            class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold"
+          >
             {col.definition.split("(")[0]}
           </span>
           {#if !isReadOnly}
@@ -90,13 +94,17 @@
       {#if col.isReferences}
         <div class="flex items-center gap-1.5 mt-0.5">
           <div class="w-1 h-1 rounded-full bg-secondary"></div>
-          <span class="text-[9px] text-secondary font-semibold uppercase tracking-tighter">
+          <span
+            class="text-[9px] text-secondary font-semibold uppercase tracking-tighter"
+          >
             Foreign Key Reference
           </span>
         </div>
       {/if}
 
-      <div class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/40 text-[10px]">
+      <div
+        class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/40 text-[10px]"
+      >
         <label class="flex items-center gap-1.5 cursor-pointer select-none">
           <input
             type="checkbox"

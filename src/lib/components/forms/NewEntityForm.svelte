@@ -10,14 +10,14 @@
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
-  import { schemaState } from "../../state";
+  import { schemaState } from "$lib/state";
   import { Database, X, Cpu, Zap, HardDrive } from "lucide-svelte";
 
   const form = superForm(defaults(valibot(tableSchema)), {
     SPA: true,
     validators: valibot(tableSchema),
     async onUpdate({ form }) {
-      if (form.valid && schemaState.filePath) {
+      if (form.valid && (schemaState.filePath || schemaState.isSandboxMode)) {
         // If target is "do", we also pass class and path
         const extra =
           form.data.target === "do"

@@ -13,7 +13,7 @@
     Layers,
     Cpu,
     Zap,
-    AlertTriangle,
+    TriangleAlert,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
 
@@ -46,28 +46,26 @@
     <div class="relative group flex items-center gap-2 cursor-help py-0.5">
       <div class="flex items-center gap-1.5">
         <div
-          class="w-1.5 h-1.5 rounded-full transition-all {!schemaState.filePath
-            ? 'bg-warning'
-            : !schemaState.isValid
-              ? 'bg-error animate-ping'
-              : schemaState.hasUnsavedChanges
-                ? 'bg-warning animate-pulse'
-                : 'bg-success'} shadow-[0_0_8px_currentColor] {!schemaState.filePath
-            ? 'text-warning'
-            : !schemaState.isValid
-              ? 'text-error'
-              : schemaState.hasUnsavedChanges
-                ? 'text-warning'
-                : 'text-success'}"
+          class="w-1.5 h-1.5 rounded-full transition-all {schemaState.isSandboxMode
+            ? 'bg-secondary animate-pulse text-secondary'
+            : !schemaState.filePath
+              ? 'bg-warning text-warning'
+              : !schemaState.isValid
+                ? 'bg-error animate-ping text-error'
+                : schemaState.hasUnsavedChanges
+                  ? 'bg-warning animate-pulse text-warning'
+                  : 'bg-success text-success'} shadow-[0_0_8px_currentColor]"
         ></div>
         <span class="font-bold text-base-content/75 uppercase tracking-wider">
-          {!schemaState.filePath
-            ? "No Schema"
-            : !schemaState.isValid
-              ? "Sync Error"
-              : schemaState.hasUnsavedChanges
-                ? "Unsaved Layout"
-                : "Live Mirror"}
+          {schemaState.isSandboxMode
+            ? "Playground Sandbox"
+            : !schemaState.filePath
+              ? "No Schema"
+              : !schemaState.isValid
+                ? "Sync Error"
+                : schemaState.hasUnsavedChanges
+                  ? "Unsaved Layout"
+                  : "Live Mirror"}
         </span>
       </div>
 
@@ -84,31 +82,40 @@
           <div>
             <span
               class="text-[9px] font-bold uppercase tracking-wider text-primary/75 block leading-none mb-0.5"
-              >Bi-Directional Engine</span
+              >{schemaState.isSandboxMode ? "In-Memory Engine" : "Bi-Directional Engine"}</span
             >
             <span class="font-bold text-xs text-base-content"
-              >Code ⇄ UI Synchronization</span
+              >{schemaState.isSandboxMode ? "Playground Sandbox Active" : "Code ⇄ UI Synchronization"}</span
             >
           </div>
         </div>
-        <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
-          Strata keeps your <code
-            class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
-            >schema.ts</code
-          > file as the absolute single source of truth.
-        </p>
-        <div
-          class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1 font-sans"
-        >
-          <span
-            >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
-            the file watcher to instantly parse the AST and refresh the diagram.</span
+        {#if schemaState.isSandboxMode}
+          <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
+            You are in zero-risk <strong>Playground Sandbox Mode</strong>. Edits operate strictly in memory and will not modify files on disk.
+          </p>
+          <div class="text-[10px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-secondary/50 font-sans">
+            Click <strong>Open Schema</strong> in the navbar to connect to a real <code class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[9px]">schema.ts</code> file on disk.
+          </div>
+        {:else}
+          <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
+            Strata keeps your <code
+              class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
+              >schema.ts</code
+            > file as the absolute single source of truth.
+          </p>
+          <div
+            class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1 font-sans"
           >
-          <span
-            >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications surgically
-            patch the AST and write back in real-time.</span
-          >
-        </div>
+            <span
+              >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
+              the file watcher to instantly parse the AST and refresh the diagram.</span
+            >
+            <span
+              >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications surgically
+              patch the AST and write back in real-time.</span
+            >
+          </div>
+        {/if}
         <div class="h-px bg-base-200/80 my-1"></div>
         <div
           class="flex items-center justify-between text-[9px] font-mono text-base-content/40"
@@ -118,15 +125,21 @@
       </div>
     </div>
 
-    <!-- Active File Path -->
-    {#if schemaState.filePath}
+    <!-- Active File Path or Sandbox Badge -->
+    {#if schemaState.isSandboxMode}
+      <div class="h-3 w-px bg-base-300/80"></div>
+      <div class="flex items-center gap-1.5 opacity-90 text-secondary font-semibold text-[10px]">
+        <FileText class="w-3.5 h-3.5" />
+        <span>[Sandbox Memory Mode]</span>
+      </div>
+    {:else if schemaState.filePath}
       <div class="h-3 w-px bg-base-300/80"></div>
       <div
         class="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity"
       >
         <FileText class="w-3.5 h-3.5" />
         <span
-          class="truncate max-w-[280px] sm:max-w-[450px]"
+          class="truncate max-w-70 sm:max-w-112.5"
           title={schemaState.filePath}
         >
           {schemaState.filePath}
@@ -135,36 +148,61 @@
     {/if}
 
     <!-- Validation Warnings (Config Mismatch Indicator) -->
-    {#if schemaState.filePath && schemaState.validationWarnings.length > 0}
+    {#if (schemaState.filePath || schemaState.isSandboxMode) && schemaState.validationWarnings.length > 0}
       <div class="h-3 w-px bg-base-300/80"></div>
-      <div class="relative group/warn flex items-center gap-1 cursor-help py-0.5">
-        <div class="flex items-center gap-1 text-warning bg-warning/10 border border-warning/20 rounded px-1.5 py-0.5 text-[9px] font-bold">
-          <AlertTriangle class="w-3 h-3 text-warning" />
+      <div
+        class="relative group/warn flex items-center gap-1 cursor-help py-0.5"
+      >
+        <div
+          class="flex items-center gap-1 text-warning bg-warning/10 border border-warning/20 rounded px-1.5 py-0.5 text-[9px] font-bold"
+        >
+          <TriangleAlert class="w-3 h-3 text-warning" />
           <span>{schemaState.validationWarnings.length} Mismatches</span>
         </div>
 
         <!-- Detail Card (glorious tooltip) -->
         <div
-          class="absolute bottom-7 left-0 w-80 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
+          class="absolute bottom-7 left-0 w-84 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 group-hover/warn:pointer-events-auto pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
         >
-          <div class="flex items-center gap-2">
-            <div class="p-1 bg-warning/10 rounded-lg text-warning">
-              <AlertTriangle class="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span class="font-bold text-xs text-base-content uppercase tracking-wider">Configuration Mismatches</span>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="p-1 bg-warning/10 rounded-lg text-warning">
+                <TriangleAlert class="w-3.5 h-3.5" />
+              </div>
+              <span
+                class="font-bold text-xs text-base-content uppercase tracking-wider"
+                >Configuration Mismatches</span
+              >
             </div>
           </div>
           <p class="text-[10px] leading-relaxed text-base-content/70">
-            The following entities or connections in your schema JSDoc do not match your wrangler configuration:
+            The following entities or connections in your schema JSDoc do not
+            match your wrangler configuration:
           </p>
-          <ul class="list-disc pl-4 space-y-1 text-[10px] leading-relaxed text-warning font-mono">
+          <ul
+            class="list-disc pl-4 space-y-1 text-[10px] leading-relaxed text-warning font-mono"
+          >
             {#each schemaState.validationWarnings as warning}
               <li>{warning}</li>
             {/each}
           </ul>
-          <div class="text-[9px] text-base-content/40 leading-normal border-t border-base-300/40 pt-1.5 font-sans">
-            💡 Update the names in your schema file or in your Wrangler config.
+
+          <div class="pt-2 border-t border-base-300/40 flex flex-col gap-2">
+            {#if schemaState.isSandboxMode}
+              <div class="text-[10px] text-base-content/65 font-sans">
+                <strong>Sandbox Note:</strong> Disk Wrangler config files are bypassed in-memory while testing in Sandbox Mode.
+              </div>
+            {:else}
+              <button
+                class="btn btn-warning btn-xs rounded-xl font-semibold gap-1 text-[10px] shadow-sm w-full"
+                onclick={() => schemaState.syncMissingWranglerBindings()}
+              >
+                ⚡ Fix & Sync to Wrangler Config
+              </button>
+              <div class="text-[9px] text-base-content/40 leading-normal font-sans">
+                💡 Automatically writes missing binding headers into your <code>{schemaState.wranglerConfigFilePath?.split("/").pop() || "wrangler.toml"}</code> file.
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -173,7 +211,7 @@
 
   <!-- Right Side: Stats & Coordinates -->
   <div class="flex items-center gap-3">
-    {#if schemaState.filePath && stats.total > 0}
+    {#if (schemaState.filePath || schemaState.isSandboxMode) && stats.total > 0}
       <!-- Quick Entity Count + Popover wrapper -->
       <div class="relative group flex items-center gap-2 cursor-help py-0.5">
         <div class="flex items-center gap-1.5">
@@ -268,7 +306,7 @@
               >
                 <span class="opacity-60 flex-1">Coordinates</span>
                 <span
-                  class="font-bold text-secondary truncate max-w-[100px] text-right"
+                  class="font-bold text-secondary truncate max-w-25 text-right"
                 >
                   {Math.round(schemaState.activeCoordinates.x)}, {Math.round(
                     schemaState.activeCoordinates.y,

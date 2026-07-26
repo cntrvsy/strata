@@ -5,7 +5,7 @@
  * Expects: None.
  * Output: Shared SchemaState instance.
  */
-import { SchemaState } from "./store.svelte";
+import { SchemaState } from "$lib/state/store.svelte";
 
 export const schemaState = new SchemaState();
 
