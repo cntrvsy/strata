@@ -7,15 +7,28 @@
  */
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
-import type { ParseResult } from './types';
-import { createIsolatedProject } from './project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias } from './helpers';
+import type { ParseResult } from '$lib/parser/types';
+import { createIsolatedProject } from '$lib/parser/project';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from '$lib/parser/helpers';
 
 /**
  * Wraps raw code in pre/code tags for UI presentation.
  */
 export function wrapCode(code: string) {
 	return `<pre><code>${code}</code></pre>`;
+}
+
+/**
+ * Helper to retrieve external file content with normalized path matching (handles optional ./ prefixes).
+ */
+export function getMapFileContent(map: Map<string, string> | undefined, rawPath: string | undefined): string | undefined {
+	if (!map || !rawPath) return undefined;
+	if (map.has(rawPath)) return map.get(rawPath);
+	const clean = rawPath.replace(/^\.\//, '');
+	if (map.has(clean)) return map.get(clean);
+	const dotSlash = './' + clean;
+	if (map.has(dotSlash)) return map.get(dotSlash);
+	return undefined;
 }
 
 /**
@@ -54,13 +67,12 @@ export function parseSchema(
 			}
 
 			if (isExternal) {
-				const names = imp.getNamedImports().map(ni => ni.getName());
-				if (names.length > 0) {
-					externalImports.push({
-						filePath: resolvedPath,
-						importNames: names
-					});
-				}
+				const names = imp.getNamedImports().map(ni => ni.getAliasNode()?.getText() || ni.getName());
+				// Handle named imports or default/namespace imports
+				externalImports.push({
+					filePath: resolvedPath,
+					importNames: names.length > 0 ? names : ['*']
+				});
 			}
 		}
 
@@ -83,16 +95,9 @@ export function parseSchema(
 				};
 				
 				for (const doc of jsDocs) {
-					const fullText = doc.getText();
-					const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-					if (match) {
-						try {
-							const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-							const parsed = JSON.parse(jsonStr);
-							strataData = { ...strataData, ...parsed };
-						} catch (e) {
-							console.warn('Failed to parse @strata JSON:', match[1], e);
-						}
+					const strataExtracted = extractStrataMetadata(doc.getText());
+					if (strataExtracted) {
+						strataData = { ...strataData, ...strataExtracted.data };
 					}
 				}
 
@@ -151,13 +156,14 @@ export function parseSchema(
 						}
 					} else if (target === 'do') {
 						let doColumns: any[] = [];
-						if (externalFilesMap && strataData.path && strataData.class) {
-							const fileContent = externalFilesMap.get(strataData.path);
+						let missingFileWarning: string | undefined = undefined;
+						if (strataData.path) {
+							const fileContent = getMapFileContent(externalFilesMap, strataData.path);
 							if (fileContent) {
 								try {
 									const doSf = project.createSourceFile(`temp_do_${tableName}.ts`, fileContent, { overwrite: true });
 									tempSourceFiles.push(doSf);
-									const classDecl = doSf.getClass(strataData.class) || doSf.getClasses()[0];
+									const classDecl = (strataData.class ? doSf.getClass(strataData.class) : undefined) || doSf.getClasses()[0];
 									if (classDecl) {
 										doColumns = classDecl.getMethods()
 											.filter(m => m.getScope() === 'public' || !m.getScope())
@@ -171,11 +177,17 @@ export function parseSchema(
 													isReferences: false
 												};
 											});
+									} else {
+										missingFileWarning = `Durable Object class "${strataData.class || 'default'}" not found in "${strataData.path}"`;
+										warnings.push(missingFileWarning);
 									}
 								} catch (err: any) {
 									console.warn(`Failed to parse DO class methods at ${strataData.path}:`, err);
 									warnings.push(`Failed to parse DO class methods at ${strataData.path}: ${err?.message || String(err)}`);
 								}
+							} else if (externalFilesMap) {
+								missingFileWarning = `Durable Object class file not found at path "${strataData.path}"`;
+								warnings.push(missingFileWarning);
 							}
 						}
 						
@@ -190,6 +202,10 @@ export function parseSchema(
 							}));
 						} else {
 							columns = extractObjectFields(decl);
+						}
+						
+						if (missingFileWarning) {
+							strataData.missingFileWarning = missingFileWarning;
 						}
 					}
 
@@ -221,54 +237,61 @@ export function parseSchema(
 		if (externalFilesMap) {
 			// Process imports
 			for (const extImp of externalImports) {
-				const externalContent = externalFilesMap.get(extImp.filePath);
+				const externalContent = getMapFileContent(externalFilesMap, extImp.filePath);
 				if (externalContent) {
 					try {
 						// Create a temporary source file for the external schema
 						const extSf = project.createSourceFile(`temp_${extImp.filePath.replace(/[\/.]/g, '_')}.ts`, externalContent, { overwrite: true });
 						tempSourceFiles.push(extSf);
-						for (const name of extImp.importNames) {
-							const decl = extSf.getVariableDeclaration(name);
-							if (decl && isDrizzleTableDeclaration(decl)) {
-								const statement = decl.getVariableStatement();
-								const jsDocs = statement?.getJsDocs() || [];
-								let strataData: any = {
-									x: Math.round(Math.random() * 200),
-									y: Math.round(Math.random() * 200),
-									target: 'd1'
-								};
-								
-								for (const doc of jsDocs) {
-									const fullText = doc.getText();
-									const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-									if (match) {
-										try {
-											const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-											const parsed = JSON.parse(jsonStr);
-											strataData = { ...strataData, ...parsed };
-										} catch (e) {
-											console.warn('Failed to parse external @strata JSON:', match[1], e);
-										}
-									}
-								}
-
-								// Register external node (marked with isExternal: true)
-								nodes.push({
-									id: name,
-									type: 'table',
-									data: {
-										label: name,
-										columns: extractColumns(decl),
-										target: strataData.target || 'd1',
-										strata: strataData,
-										isExternal: true
-									},
-									position: { x: strataData.x, y: strataData.y }
-								});
-								
-								// Register declaration so we can scan relationships from main schema pointing here
-								tableDeclarations.set(name, decl);
+						const targetDecls: VariableDeclaration[] = [];
+						if (extImp.importNames.includes('*')) {
+							for (const d of extSf.getVariableDeclarations()) {
+								if (isDrizzleTableDeclaration(d)) targetDecls.push(d);
 							}
+						} else {
+							for (const name of extImp.importNames) {
+								const decl = extSf.getVariableDeclaration(name);
+								if (decl && isDrizzleTableDeclaration(decl)) {
+									targetDecls.push(decl);
+								}
+							}
+						}
+
+						for (const decl of targetDecls) {
+							const name = decl.getName();
+							if (nodes.some(n => n.id === name)) continue;
+
+							const statement = decl.getVariableStatement();
+							const jsDocs = statement?.getJsDocs() || [];
+							let strataData: any = {
+								x: Math.round(Math.random() * 200),
+								y: Math.round(Math.random() * 200),
+								target: 'd1'
+							};
+							
+							for (const doc of jsDocs) {
+								const strataExtracted = extractStrataMetadata(doc.getText());
+								if (strataExtracted) {
+									strataData = { ...strataData, ...strataExtracted.data };
+								}
+							}
+
+							// Register external node (marked with isExternal: true)
+							nodes.push({
+								id: name,
+								type: 'table',
+								data: {
+									label: name,
+									columns: extractColumns(decl),
+									target: strataData.target || 'd1',
+									strata: strataData,
+									isExternal: true
+								},
+								position: { x: strataData.x, y: strataData.y }
+							});
+							
+							// Register declaration so we can scan relationships from main schema pointing here
+							tableDeclarations.set(name, decl);
 						}
 					} catch (err) {
 						console.warn(`Failed to parse external file ${extImp.filePath} safely:`, err);
@@ -305,16 +328,9 @@ export function parseSchema(
 										};
 										
 										for (const doc of jsDocs) {
-											const fullText = doc.getText();
-											const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-											if (match) {
-												try {
-													const jsonStr = match[1].replace(/^\s*\*\s?/gm, '');
-													const parsed = JSON.parse(jsonStr);
-													strataData = { ...strataData, ...parsed };
-												} catch (e) {
-													console.warn('Failed to parse external schema @strata JSON:', match[1], e);
-												}
+											const strataExtracted = extractStrataMetadata(doc.getText());
+											if (strataExtracted) {
+												strataData = { ...strataData, ...strataExtracted.data };
 											}
 										}
 										
@@ -358,19 +374,13 @@ export function parseSchema(
 			const statement = decl.getVariableStatement();
 			const jsDocs = statement?.getJsDocs() || [];
 			for (const doc of jsDocs) {
-				const text = doc.getText();
-				const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-				if (match) {
-					try {
-						const strataData = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
-						if (strataData.relations && Array.isArray(strataData.relations)) {
-							for (const rel of strataData.relations) {
-								if (!tableNames.has(rel.to)) {
-									warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
-								}
-							}
+				const strataExtracted = extractStrataMetadata(doc.getText());
+				if (strataExtracted?.data?.relations && Array.isArray(strataExtracted.data.relations)) {
+					for (const rel of strataExtracted.data.relations) {
+						if (!tableNames.has(rel.to)) {
+							warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
 						}
-					} catch (e) {}
+					}
 				}
 			}
 		}

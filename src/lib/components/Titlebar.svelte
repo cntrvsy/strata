@@ -44,7 +44,7 @@
     <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 leading-none">Strata</span>
     <span class="text-[9px] opacity-30">/</span>
     <span class="text-[10px] font-bold opacity-60 leading-none">
-      {schemaState.filePath?.split("/").pop() || "No Schema"}
+      {schemaState.filePath?.split("/").pop() || (schemaState.isSandboxMode ? "Sandbox Demo" : "No Schema")}
     </span>
     {#if schemaState.hasUnsavedChanges}
       <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_currentColor] text-amber-500 animate-pulse" title="Unsaved Changes"></span>

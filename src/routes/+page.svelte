@@ -38,33 +38,68 @@
       }
     };
   });
- 
+
   // --- Components ---
   import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
   import Inspector from "$lib/components/Inspector.svelte";
   import Overlays from "$lib/components/Overlays.svelte";
   import NewEntityForm from "$lib/components/forms/NewEntityForm.svelte";
   import CodeEditor from "$lib/components/CodeEditor.svelte";
+  import ConnectionPickerModal from "$lib/components/ConnectionPickerModal.svelte";
+  import CanvasSearchPalette from "$lib/components/CanvasSearchPalette.svelte";
+
+  let pendingConnection = $state<Connection | null>(null);
+  let showSearchPalette = $state(false);
 
   /**
    * Handles Svelte Flow connection events (dragging a line between nodes).
-   * Persists the new relationship as either a Drizzle relation() or a synthetic JSDoc relation.
+   * Opens the ConnectionPickerModal to select relationship intent and field targets.
    */
   async function onconnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
+    pendingConnection = connection;
+  }
+
+  async function handleConfirmConnection(
+    type: "foreign_key" | "drizzle_relation" | "synthetic",
+    details: { sourceCol?: string; targetCol?: string },
+  ) {
+    if (
+      !pendingConnection ||
+      !pendingConnection.source ||
+      !pendingConnection.target
+    )
+      return;
+    const conn = pendingConnection;
+    pendingConnection = null;
 
     // Optimistic UI update for immediate feedback
     schemaState.edges = addEdge(
       {
-        ...connection,
-        animated: true,
-        style: "stroke: var(--color-primary); stroke-width: 2.25; opacity: 0.95;",
+        ...conn,
+        sourceHandle: details.sourceCol || conn.sourceHandle,
+        targetHandle: details.targetCol || conn.targetHandle,
+        animated: type === "drizzle_relation",
+        style:
+          type === "synthetic"
+            ? "stroke: var(--color-accent); stroke-dasharray: 5 5; stroke-width: 2; opacity: 0.9;"
+            : "stroke: var(--color-primary); stroke-width: 2.25; opacity: 0.95;",
         type: "smoothstep",
       },
       schemaState.edges,
     );
 
-    await schemaState.addRelation(connection.source, connection.target);
+    if (type === "foreign_key" && details.sourceCol && details.targetCol) {
+      await schemaState.addColumn(
+        conn.source,
+        details.sourceCol,
+        "integer",
+        conn.target,
+        details.targetCol,
+      );
+    } else {
+      await schemaState.addRelation(conn.source, conn.target);
+    }
   }
 
   let saveTimeout: any;
@@ -102,9 +137,38 @@
    * Global Keyboard Shortcut Handler.
    */
   function handleKeyDown(e: KeyboardEvent) {
+    const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(
+      (e.target as HTMLElement)?.tagName,
+    );
+
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
       saveDiagramChanges();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      showSearchPalette = true;
+    } else if (e.key === "?" && !isInput) {
+      e.preventDefault();
+      schemaState.showHelpModal = true;
+    } else if (e.key === "Escape") {
+      if (showSearchPalette) {
+        showSearchPalette = false;
+      } else if (schemaState.activeInspectorNodeId) {
+        schemaState.activeInspectorNodeId = null;
+      }
+    } else if ((e.key === "Delete" || e.key === "Backspace") && !isInput) {
+      const selectedNode = schemaState.nodes.find((n) => n.selected);
+      if (selectedNode) {
+        e.preventDefault();
+        const targetId = selectedNode.id;
+        schemaState.promptConfirm({
+          title: "Delete Entity",
+          message: `Are you sure you want to delete entity "${targetId}" from your schema? This will remove its column definitions and relationship declarations.`,
+          confirmLabel: "Delete Entity",
+          isDanger: true,
+          onConfirm: () => schemaState.deleteTable(targetId),
+        });
+      }
     }
   }
 
@@ -125,7 +189,9 @@
               return;
             }
             if (Date.now() - schemaState.lastWriteTime < 800) {
-              console.log("[Strata] Ignoring file watch event: recently written by UI");
+              console.log(
+                "[Strata] Ignoring file watch event: recently written by UI",
+              );
               return;
             }
             if (
@@ -176,7 +242,7 @@
 </script>
 
 <div class="h-full w-full relative overflow-hidden flex bg-base-200">
-  {#if !schemaState.filePath}
+  {#if !schemaState.filePath && !schemaState.isSandboxMode}
     <Overlays />
   {:else}
     <!-- Floating expand triggers when panes are collapsed -->
@@ -210,12 +276,14 @@
         onCollapse={() => (schemaState.isCodeCollapsed = true)}
         onExpand={() => (schemaState.isCodeCollapsed = false)}
       >
-        <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+        <div
+          class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
+        >
           <CodeEditor />
         </div>
       </Pane>
-      <PaneResizer 
-        class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" 
+      <PaneResizer
+        class="w-0.75 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
         ondblclick={resetLayout}
       />
       <Pane
@@ -231,17 +299,24 @@
         <PaneGroup direction="horizontal" class="w-full h-full">
           {#if schemaState.activeInspectorNodeId}
             <Pane minSize={15} defaultSize={25} order={0}>
-              <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+              <div
+                class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
+              >
                 <Inspector />
               </div>
             </Pane>
-            <PaneResizer class="w-[3px] bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10" />
+            <PaneResizer
+              class="w-0.75 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
+            />
           {/if}
           <Pane order={1}>
-            <div class="h-full w-full flex flex-col min-h-0 overflow-hidden relative">
+            <div
+              class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
+            >
               <SvelteFlowProvider>
                 <DiagramCanvas {onconnect} {onnodedragstop} />
                 <Overlays />
+                <CanvasSearchPalette bind:show={showSearchPalette} />
               </SvelteFlowProvider>
             </div>
           </Pane>
@@ -253,4 +328,12 @@
 
 {#if schemaState.showNewTableModal}
   <NewEntityForm />
+{/if}
+
+{#if pendingConnection}
+  <ConnectionPickerModal
+    connection={pendingConnection}
+    onConfirm={handleConfirmConnection}
+    onCancel={() => (pendingConnection = null)}
+  />
 {/if}

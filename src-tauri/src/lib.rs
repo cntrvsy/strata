@@ -6,8 +6,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, State};
 
-struct CoordinatorState(Arc<SchemaCoordinator>);
-struct WatcherState(Mutex<Option<notify::RecommendedWatcher>>);
+struct CoordinatorState {
+    coordinator: Arc<SchemaCoordinator>,
+}
+struct WatcherState {
+    watcher: Mutex<Option<notify::RecommendedWatcher>>,
+}
 
 #[tauri::command]
 async fn watch_file(
@@ -15,12 +19,12 @@ async fn watch_file(
     watcher_state: State<'_, WatcherState>,
     path: String,
 ) -> Result<(), String> {
-    let mut watcher_lock = watcher_state.0.lock().unwrap();
+    let mut watcher_lock = watcher_state.watcher.lock().unwrap();
 
     // Drop old watcher if it exists
     *watcher_lock = None;
 
-    let coordinator = coordinator_state.0.clone();
+    let coordinator = coordinator_state.coordinator.clone();
     let mut watcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
@@ -47,7 +51,7 @@ async fn read_schema_file(
     state: State<'_, CoordinatorState>,
     path: String,
 ) -> Result<String, CoordinatorError> {
-    state.0.read_file(PathBuf::from(path)).await
+    state.coordinator.read_file(PathBuf::from(path)).await
 }
 
 #[tauri::command]
@@ -56,7 +60,7 @@ async fn write_schema_file(
     path: String,
     content: String,
 ) -> Result<(), CoordinatorError> {
-    state.0.write_file(PathBuf::from(path), content).await
+    state.coordinator.write_file(PathBuf::from(path), content).await
 }
 
 #[tauri::command]
@@ -68,7 +72,8 @@ async fn mutate_wrangler_config(
     binding_name: String,
     extra: serde_json::Value,
 ) -> Result<(), CoordinatorError> {
-    state.0
+    state
+        .coordinator
         .mutate_wrangler(
             PathBuf::from(config_path),
             action,
@@ -103,8 +108,10 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .setup(|app| {
             let coordinator = Arc::new(SchemaCoordinator::new(app.handle().clone()));
-            app.manage(CoordinatorState(coordinator));
-            app.manage(WatcherState(Mutex::new(None)));
+            app.manage(CoordinatorState { coordinator });
+            app.manage(WatcherState {
+                watcher: Mutex::new(None),
+            });
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -148,8 +155,10 @@ mod tests {
             .unwrap();
 
         let coordinator = Arc::new(SchemaCoordinator::new(app.handle().clone()));
-        app.manage(CoordinatorState(coordinator));
-        app.manage(WatcherState(Mutex::new(None)));
+        app.manage(CoordinatorState { coordinator });
+        app.manage(WatcherState {
+            watcher: Mutex::new(None),
+        });
 
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("test_rw_schema.ts");

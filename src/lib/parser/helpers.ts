@@ -6,35 +6,44 @@
  * Output: Resolved Drizzle function calls, column chains, and relation declarations.
  */
 import { VariableDeclaration, SyntaxKind, SourceFile, Node as ASTNode } from 'ts-morph';
-import type { ChainElement } from './types';
+import type { ChainElement } from '$lib/parser/types';
 
 /**
- * Resolves the underlying drizzle sqliteTable CallExpression node from an initializer.
+ * Resolves the underlying Drizzle table CallExpression node from an initializer.
+ * Supports sqliteTable, pgTable, mysqlTable, singlestoreTable, and custom wrappers.
  */
 export function findSqliteTableCall(initializer: ASTNode): any {
-	if (initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
-		return initializer;
+	const isTableFn = (name: string) => 
+		['sqliteTable', 'pgTable', 'mysqlTable', 'singlestoreTable'].includes(name) || name.endsWith('Table');
+
+	if (initializer.isKind(SyntaxKind.CallExpression)) {
+		const exprText = initializer.getExpression().getText();
+		if (isTableFn(exprText)) return initializer;
 	}
-	return initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	return initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => {
+		const text = c.getExpression().getText();
+		return isTableFn(text);
+	});
 }
 
 /**
- * Robustly checks if a variable declaration is initialized with a Drizzle sqliteTable.
- * Resolves the sqliteTable symbol to confirm it is imported from a module starting with 'drizzle-orm'.
+ * Robustly checks if a variable declaration is initialized with a Drizzle table.
+ * Resolves the table symbol to confirm it is imported from a Drizzle ORM package.
  */
 export function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
 	const initializer = decl.getInitializer();
 	if (!initializer) return false;
 
 	const tableCall = findSqliteTableCall(initializer);
-
 	if (!tableCall) return false;
 
 	const identifier = tableCall.getExpression();
 	const symbol = identifier.getSymbol();
 	if (!symbol) {
 		// Fallback to text matching if symbol resolution is unavailable
-		return initializer.getText().includes('sqliteTable');
+		const text = initializer.getText();
+		return text.includes('Table') || text.includes('sqliteTable') || text.includes('pgTable') || text.includes('mysqlTable');
 	}
 
 	const declarations = symbol.getDeclarations();
@@ -42,10 +51,16 @@ export function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
 		if (d.isKind(SyntaxKind.ImportSpecifier)) {
 			const importDecl = d.getImportDeclaration();
 			const moduleSpecifier = importDecl.getModuleSpecifierValue();
-			if (moduleSpecifier.startsWith('drizzle-orm')) {
+			if (moduleSpecifier.includes('drizzle-orm')) {
 				return true;
 			}
 		}
+	}
+
+	// Fallback check if it follows table initialization structure (e.g. 2+ arguments with object literal columns)
+	const args = tableCall.getArguments();
+	if (args.length >= 2 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+		return true;
 	}
 
 	return false;
@@ -110,6 +125,20 @@ export function resolveRelativePath(base: string, rel: string): string {
 		return normalizedRel.endsWith('.ts') ? normalizedRel : normalizedRel + '.ts';
 	}
 
+	// Handle workspace root relative paths (e.g., ./src/... or src/...)
+	if (normalizedRel.startsWith('./src/') || normalizedRel.startsWith('src/')) {
+		const srcIdx = normalizedBase.lastIndexOf('/src/');
+		if (srcIdx !== -1) {
+			const root = normalizedBase.slice(0, srcIdx);
+			const cleanRel = normalizedRel.replace(/^\.\//, '');
+			let resolved = `${root}/${cleanRel}`;
+			if (!resolved.endsWith('.ts')) {
+				resolved += '.ts';
+			}
+			return resolved;
+		}
+	}
+
 	const parts = normalizedBase.split('/');
 	parts.pop(); // Remove filename
 	const relParts = normalizedRel.split('/');
@@ -154,3 +183,82 @@ export function resolvePathAlias(
 	}
 	return null;
 }
+
+export interface ExtractedStrataMetadata {
+	rawMatch: string;
+	jsonStr: string;
+	data: any;
+}
+
+/**
+ * Robustly extracts balanced JSDoc @strata JSON metadata from text using a character stack parser.
+ * Handles nested objects, arrays, string quotes, escaped characters, and multi-line JSDoc comment asterisks.
+ */
+export function extractStrataMetadata(text: string): ExtractedStrataMetadata | null {
+	const strataIdx = text.indexOf('@strata');
+	if (strataIdx === -1) return null;
+
+	const startBraceIdx = text.indexOf('{', strataIdx);
+	if (startBraceIdx === -1) return null;
+
+	let depth = 0;
+	let inString = false;
+	let quoteChar = '';
+	let endBraceIdx = -1;
+
+	for (let i = startBraceIdx; i < text.length; i++) {
+		const char = text[i];
+		const prevChar = i > 0 ? text[i - 1] : '';
+
+		if (inString) {
+			if (char === '\\' && prevChar !== '\\') {
+				i++; // Skip escaped character
+				continue;
+			}
+			if (char === quoteChar) {
+				inString = false;
+			}
+			continue;
+		}
+
+		if (char === '"' || char === "'") {
+			inString = true;
+			quoteChar = char;
+			continue;
+		}
+
+		if (char === '{') {
+			depth++;
+		} else if (char === '}') {
+			depth--;
+			if (depth === 0) {
+				endBraceIdx = i;
+				break;
+			}
+		}
+	}
+
+	if (endBraceIdx === -1) return null;
+
+	const rawMatch = text.slice(strataIdx, endBraceIdx + 1);
+	const rawJson = text.slice(startBraceIdx, endBraceIdx + 1);
+	// Clean leading JSDoc asterisks from multiline JSON strings
+	const cleanJson = rawJson.replace(/^\s*\*\s?/gm, '');
+
+	try {
+		const data = JSON.parse(cleanJson);
+		return {
+			rawMatch,
+			jsonStr: cleanJson,
+			data
+		};
+	} catch (e) {
+		console.warn('[Strata] Failed to parse @strata JSON payload:', cleanJson, e);
+		return {
+			rawMatch,
+			jsonStr: cleanJson,
+			data: null
+		};
+	}
+}
+

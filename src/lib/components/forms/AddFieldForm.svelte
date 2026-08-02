@@ -10,7 +10,7 @@
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
-  import { schemaState } from "../../state";
+  import { schemaState } from "$lib/state";
   import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
@@ -18,14 +18,14 @@
     onComplete: () => void;
   }>();
 
-  const node = $derived(schemaState.nodes.find(n => n.id === tableName));
+  const node = $derived(schemaState.nodes.find((n) => n.id === tableName));
   const target = $derived((node?.data as any)?.target || "d1");
 
   const form = superForm(defaults(valibot(columnSchema)), {
     SPA: true,
     validators: valibot(columnSchema),
     async onUpdate({ form }) {
-      if (form.valid && schemaState.filePath) {
+      if (form.valid && (schemaState.filePath || schemaState.isSandboxMode)) {
         await schemaState.addColumn(
           tableName,
           form.data.name,
@@ -42,7 +42,9 @@
 
   // Potential targets for Foreign Keys
   const potentialTargets = $derived(
-    schemaState.nodes.filter((n) => n.id !== tableName && (n.data as any)?.target === "d1").map((n) => n.id),
+    schemaState.nodes
+      .filter((n) => n.id !== tableName && (n.data as any)?.target === "d1")
+      .map((n) => n.id),
   );
 
   // Columns of the selected reference table
@@ -62,9 +64,16 @@
     class="flex items-center justify-between border-b border-base-300/60 pb-3 mb-1"
   >
     <h4 class="text-[10px] font-bold uppercase tracking-wider opacity-50">
-      {target === "r2" ? "Add Folder Path" : target === "do" ? "Add Public Method" : "Add Field"}
+      {target === "r2"
+        ? "Add Folder Path"
+        : target === "do"
+          ? "Add Public Method"
+          : "Add Field"}
     </h4>
-    <button class="btn btn-ghost btn-xs btn-circle hover:bg-base-200" onclick={onComplete}>
+    <button
+      class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
+      onclick={onComplete}
+    >
       <X class="w-3.5 h-3.5 opacity-60" />
     </button>
   </div>
@@ -77,12 +86,20 @@
             <Form.Label
               class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
-              {target === "r2" ? "Folder Name/Prefix" : target === "do" ? "Method Signature" : "Name"}
+              {target === "r2"
+                ? "Folder Name/Prefix"
+                : target === "do"
+                  ? "Method Signature"
+                  : "Name"}
             </Form.Label>
             <input
               {...props}
               bind:value={$formData.name}
-              placeholder={target === "r2" ? "e.g. avatars" : target === "do" ? "e.g. getValue() or getVal(id: number)" : "e.g. id, email"}
+              placeholder={target === "r2"
+                ? "e.g. avatars"
+                : target === "do"
+                  ? "e.g. getValue() or getVal(id: number)"
+                  : "e.g. id, email"}
               class="input input-sm input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all text-xs"
             />
           {/snippet}
@@ -95,7 +112,11 @@
             <Form.Label
               class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
             >
-              {target === "r2" ? "MIME Type Constraint" : target === "do" ? "Return Type" : "Type"}
+              {target === "r2"
+                ? "MIME Type Constraint"
+                : target === "do"
+                  ? "Return Type"
+                  : "Type"}
             </Form.Label>
             {#if target === "r2"}
               <input
@@ -119,15 +140,28 @@
                   <option value="Promise<any>">Promise&lt;any&gt;</option>
                   <option value="Promise<string>">Promise&lt;string&gt;</option>
                   <option value="Promise<number>">Promise&lt;number&gt;</option>
-                  <option value="Promise<boolean>">Promise&lt;boolean&gt;</option>
+                  <option value="Promise<boolean>"
+                    >Promise&lt;boolean&gt;</option
+                  >
                   <option value="Promise<void>">Promise&lt;void&gt;</option>
                 {:else}
-                  <option value="text">Text</option>
-                  <option value="integer">Integer</option>
-                  <option value="blob">Blob</option>
-                  <option value="real">Real</option>
+                  <option value="text">Text (String)</option>
+                  <option value="integer">Integer (Number)</option>
+                  <option value="timestamp">Timestamp (Date → mode: "timestamp")</option>
+                  <option value="boolean_int">Boolean (0/1 → mode: "boolean")</option>
+                  <option value="real">Real (Float)</option>
+                  <option value="blob">Blob (Binary)</option>
                 {/if}
               </select>
+              {#if target === "d1" && $formData.type === "timestamp"}
+                <p class="text-[9.5px] text-primary/80 mt-1 font-sans leading-tight">
+                  💡 <strong>D1 Date:</strong> Generates <code>integer("{$formData.name || 'field'}", &#123; mode: "timestamp" &#125;)</code> for native JS Date mapping.
+                </p>
+              {:else if target === "d1" && $formData.type === "boolean_int"}
+                <p class="text-[9.5px] text-primary/80 mt-1 font-sans leading-tight">
+                  💡 <strong>D1 Boolean:</strong> Generates <code>integer("{$formData.name || 'field'}", &#123; mode: "boolean" &#125;)</code> for 0/1 boolean flags.
+                </p>
+              {/if}
             {/if}
           {/snippet}
         </Form.Control>
@@ -190,7 +224,11 @@
       class="btn btn-primary btn-sm rounded-xl w-full gap-2 mt-2 shadow-sm font-semibold"
     >
       <Check class="w-3.5 h-3.5" />
-      {target === "r2" ? "Add Folder Path" : target === "do" ? "Create Method" : "Create Field"}
+      {target === "r2"
+        ? "Add Folder Path"
+        : target === "do"
+          ? "Create Method"
+          : "Create Field"}
     </button>
   </form>
 </div>

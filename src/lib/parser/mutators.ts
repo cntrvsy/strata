@@ -14,9 +14,10 @@ import {
 	parseColumnChain, 
 	buildColumnChain, 
 	ensureImports,
-	resolveRelativePath
+	resolveRelativePath,
+	extractStrataMetadata
 } from './helpers';
-import { PlatformService } from '../services/platform';
+import { PlatformService } from '$lib/services/platform';
 
 /**
  * Updates a node's position inside its @strata JSDoc metadata.
@@ -33,18 +34,13 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 
 			for (const doc of jsDocs) {
 				const text = doc.getText();
-				const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				const extracted = extractStrataMetadata(text);
 				
-				if (strataMatch) {
-					let metadata: any = {};
-					try {
-						metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-					} catch (e) {
-						console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
-					}
+				if (extracted) {
+					const metadata = extracted.data || {};
 					metadata.x = Math.round(x);
 					metadata.y = Math.round(y);
-					doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+					doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
 					strataFound = true;
 					break;
 				}
@@ -73,18 +69,13 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 
 				for (const doc of jsDocs) {
 					const text = doc.getText();
-					const strataMatch = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+					const extracted = extractStrataMetadata(text);
 					
-					if (strataMatch) {
-						let metadata: any = {};
-						try {
-							metadata = JSON.parse(strataMatch[1].replace(/^\s*\*\s?/gm, ''));
-						} catch (e) {
-							console.warn('[Strata] Invalid JSON in @strata metadata, overwriting:', e);
-						}
+					if (extracted) {
+						const metadata = extracted.data || {};
 						metadata.x = Math.round(node.position.x);
 						metadata.y = Math.round(node.position.y);
-						doc.replaceWithText(text.replace(strataMatch[0], `@strata ${JSON.stringify(metadata)}`));
+						doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
 						strataFound = true;
 						break;
 					}
@@ -258,9 +249,18 @@ export async function addColumnToSchema(
 	if (tableCall) {
 		const args = tableCall.getArguments();
 		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
-			ensureImports(sf, "drizzle-orm/sqlite-core", [type]);
-			
+			let importType = type;
 			let columnDef = `${type}("${columnName}")`;
+			if (type === "timestamp") {
+				importType = "integer";
+				columnDef = `integer("${columnName}", { mode: "timestamp" })`;
+			} else if (type === "boolean_int" || type === "boolean") {
+				importType = "integer";
+				columnDef = `integer("${columnName}", { mode: "boolean" })`;
+			}
+
+			ensureImports(sf, "drizzle-orm/sqlite-core", [importType]);
+
 			if (referencesTable && referencesColumn) {
 				columnDef += `.references(() => ${referencesTable}.${referencesColumn})`;
 			}
@@ -889,7 +889,7 @@ export function updateColumnModifiersInSchema(
 export function updateTableMetadataInSchema(
 	code: string,
 	tableName: string,
-	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }
+	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
@@ -924,6 +924,20 @@ export function updateTableMetadataInSchema(
 							strata.cors = true;
 						} else {
 							delete strata.cors;
+						}
+					}
+					if (metadata.class !== undefined) {
+						if (metadata.class && metadata.class.trim() !== '') {
+							strata.class = metadata.class.trim();
+						} else {
+							delete strata.class;
+						}
+					}
+					if (metadata.path !== undefined) {
+						if (metadata.path && metadata.path.trim() !== '') {
+							strata.path = metadata.path.trim();
+						} else {
+							delete strata.path;
 						}
 					}
 

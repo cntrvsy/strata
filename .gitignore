@@ -9,11 +9,20 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+
 # Testing
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/coverage/
 
 # Tauri
 /src-tauri/target/
+
+# Keys & Secrets
+strata_key
+strata_key.pub
+*.key
+*.pem
+

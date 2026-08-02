@@ -16,8 +16,8 @@ import {
   updateTableMetadataInSchema,
   resolveRelativePath,
   resolvePathAlias
-} from '../../src/lib/parser';
-import { PlatformService } from '../../src/lib/services/platform';
+} from '$lib/parser';
+import { PlatformService } from '$lib/services/platform';
 
 describe('Parser Core', () => {
   it('should parse simple D1 tables', () => {
@@ -593,15 +593,21 @@ describe('Mutation Logic', () => {
   });
 
   describe('Target-Specific Schema CRUD Operations', () => {
-    it('should correctly mutate D1 table columns', async () => {
+    it('should correctly mutate D1 table columns with semantic timestamp and boolean modes', async () => {
       const code = `export const users = sqliteTable("users", { id: integer("id") });`;
       let mutated = await addColumnToSchema(code, 'users', 'email', 'text');
       expect(mutated).toContain('email: text("email")');
-      
+
+      mutated = await addColumnToSchema(mutated, 'users', 'created_at', 'timestamp');
+      expect(mutated).toContain('created_at: integer("created_at", { mode: "timestamp" })');
+
+      mutated = await addColumnToSchema(mutated, 'users', 'is_active', 'boolean_int');
+      expect(mutated).toContain('is_active: integer("is_active", { mode: "boolean" })');
+
       mutated = await renameColumnInSchema(mutated, 'users', 'email', 'userEmail');
       expect(mutated).toContain('userEmail: text("userEmail")');
       expect(mutated).not.toContain('email: text("email")');
-      
+
       mutated = await removeColumnFromSchema(mutated, 'users', 'userEmail');
       expect(mutated).not.toContain('userEmail');
     });

@@ -22,7 +22,7 @@
     SPA: true,
     validators: valibot(relationSchema),
     async onUpdate({ form }) {
-      if (form.valid && schemaState.filePath) {
+      if (form.valid && (schemaState.filePath || schemaState.isSandboxMode)) {
         await schemaState.addRelation(
           form.data.source,
           form.data.target,

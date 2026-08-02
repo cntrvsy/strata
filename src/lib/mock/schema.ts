@@ -1,18 +1,31 @@
-import { sqliteTable, text, integer, blob } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 /**
- * STRATA - EXAMPLE SCHEMA
- * 
- * This file demonstrates how Strata visualizes a hybrid Cloudflare architecture:
- * 1. D1 Databases: Standard relational tables (sqliteTable)
- * 2. KV Storage: High-performance key-value pairs (plain objects)
- * 3. Durable Objects: State-persistent objects (plain objects with target: "do")
+ * ============================================================================
+ * STRATA MASTER ARCHITECTURE BENCHMARK SCHEMA
+ * ============================================================================
+ * Welcome to the Strata Master Benchmark Schema!
+ *
+ * This file demonstrates how Strata visualizes a full Cloudflare hybrid architecture:
+ * 1. D1 Relational SQL Tables (`sqliteTable`)
+ * 2. Drizzle Logical Query Relations (`relations()`)
+ * 3. Cloudflare KV Key-Value Storage (`@strata { "target": "kv" }`)
+ * 4. Cloudflare Durable Objects (`@strata { "target": "do" }`)
+ * 5. Synthetic Cross-Storage Relationships (`"relations": [...]`)
+ *
+ * HOW STRATA WORKS (ZERO SIDE CARS, SINGLE SOURCE OF TRUTH):
+ * - All visual coordinates (x, y) and target metadata are stored cleanly in standard JSDoc `@strata` tags.
+ * - Editing or dragging node entities on the canvas updates the JSDoc comments directly.
+ * - Saving code in VS Code / Cursor updates the ERD canvas in real time.
  */
 
-// --- D1 TABLES (Relational Core) ---
+// ============================================================================
+// SECTION 1: D1 RELATIONAL CORE (SQL TABLES & PHYSICAL FKs)
+// ============================================================================
 
 /** 
+ * Users Table
  * @strata {"x":700,"y":265} 
  */
 export const users = sqliteTable("users", {
@@ -22,6 +35,7 @@ export const users = sqliteTable("users", {
 });
 
 /** 
+ * Organizations Table
  * @strata {"x":700,"y":515} 
  */
 export const organizations = sqliteTable("organizations", {
@@ -32,7 +46,8 @@ export const organizations = sqliteTable("organizations", {
 });
 
 /** 
- * Join table for many-to-many relationship between users and organizations
+ * Join table for Many-to-Many relationship between Users and Organizations.
+ * Uses `.references()` physical foreign keys.
  * @strata {"x":370,"y":306} 
  */
 export const memberships = sqliteTable("memberships", {
@@ -42,6 +57,8 @@ export const memberships = sqliteTable("memberships", {
 });
 
 /** 
+ * Projects Table
+ * Linked to `organizations` via `orgId` physical foreign key.
  * @strata {"x":370,"y":762} 
  */
 export const projects = sqliteTable("projects", {
@@ -51,11 +68,13 @@ export const projects = sqliteTable("projects", {
   status: text("status").default("active"),
 });
 
-// --- KV STORAGE (Key-Value Pairs) ---
+// ============================================================================
+// SECTION 2: CLOUDFLARE KV STORAGE (KEY-VALUE PAIRS)
+// ============================================================================
 
 /** 
- * User sessions stored in Cloudflare KV for global performance.
- * We use @strata relations to link this logical entity to our D1 users.
+ * User sessions stored in Cloudflare KV for sub-millisecond global access.
+ * We use `@strata` synthetic relations to link this entity visually to D1 `users`.
  * @strata {"x":370,"y":40,"target":"kv","relations":[{"to":"users"}]} 
  */
 export const userSessions = {
@@ -66,7 +85,7 @@ export const userSessions = {
 };
 
 /** 
- * Cached billing data to avoid frequent D1 lookups.
+ * Cached billing data to avoid frequent D1 database lookups.
  * @strata {"x":370,"y":534,"target":"kv","relations":[{"to":"organizations"}]} 
  */
 export const billingCache = {
@@ -75,11 +94,13 @@ export const billingCache = {
   lastCheck: "number",
 };
 
-// --- DURABLE OBJECTS (Stateful Entities) ---
+// ============================================================================
+// SECTION 3: CLOUDFLARE DURABLE OBJECTS (STATEFUL REALTIME OBJECTS)
+// ============================================================================
 
 /** 
  * Real-time collaboration state managed by a Durable Object.
- * DOs are perfect for synchronized state like editor presence.
+ * DOs handle stateful WebSockets and presence for active projects.
  * @strata {"x":40,"y":781,"target":"do","relations":[{"to":"projects"}]} 
  */
 export const collaborativeEditor = {
@@ -88,7 +109,9 @@ export const collaborativeEditor = {
   lastEdit: "number",
 };
 
-// --- RELATIONS (Drizzle Logical Layer) ---
+// ============================================================================
+// SECTION 4: DRIZZLE QUERY BUILDER LOGICAL RELATIONS
+// ============================================================================
 
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),

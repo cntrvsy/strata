@@ -6,20 +6,62 @@
  * Output: Synchronized database schema file state and Svelte Flow configurations.
  */
 import { type Node, type Edge } from '@xyflow/svelte';
-import { PlatformService } from "../services/platform";
-import type { States, Events } from "./types";
-import { createStateMachine } from "./fsm";
-import { OperationQueue } from "./queue";
+import { PlatformService } from "$lib/services/platform";
+import { createStateMachine } from "$lib/state/fsm";
+import { OperationQueue } from "$lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath } from "../parser";
+import { resolveRelativePath } from "$lib/parser";
+import { uiState } from "$lib/state/uiStore.svelte";
 
+/**
+ * State-machine JSONC parser.
+ * Strips line comments (//) and block comments (/* *\/) while preserving string literals (e.g. URLs).
+ */
 function parseCleanJson(text: string): any {
-	const cleaned = text
-		.replace(/\/\*[\s\S]*?\*\//g, '')
-		.replace(/(?:^|[^:])\/\/.*$/gm, '')
-		.replace(/,(\s*[}\]])/g, '$1');
-	return JSON.parse(cleaned);
+	let out = '';
+	let inString = false;
+	let quoteChar = '';
+	let i = 0;
+	while (i < text.length) {
+		const char = text[i];
+		const nextChar = text[i + 1];
+		if (inString) {
+			out += char;
+			if (char === '\\') {
+				out += nextChar || '';
+				i += 2;
+				continue;
+			}
+			if (char === quoteChar) {
+				inString = false;
+			}
+			i++;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			inString = true;
+			quoteChar = char;
+			out += char;
+			i++;
+			continue;
+		}
+		if (char === '/' && nextChar === '/') {
+			i += 2;
+			while (i < text.length && text[i] !== '\n' && text[i] !== '\r') i++;
+			continue;
+		}
+		if (char === '/' && nextChar === '*') {
+			i += 2;
+			while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
+			i += 2;
+			continue;
+		}
+		out += char;
+		i++;
+	}
+	const cleanCommas = out.replace(/,(\s*[}\]])/g, '$1');
+	return JSON.parse(cleanCommas);
 }
 
 /**
@@ -84,6 +126,7 @@ async function loadExternalSchemas(
 		try {
 			const extRaw = await PlatformService.readText(resolvedPath);
 			externalFilesMap.set(imp.filePath, extRaw);
+			externalFilesMap.set(resolvedPath, extRaw);
 		} catch (err: any) {
 			console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
 			toast.error(`Failed to read import: ${imp.filePath}`, {
@@ -97,6 +140,7 @@ async function loadExternalSchemas(
 		try {
 			const extRaw = await PlatformService.readText(resolvedPath);
 			externalFilesMap.set(p, extRaw);
+			externalFilesMap.set(resolvedPath, extRaw);
 		} catch (err: any) {
 			console.warn(`[Strata] Failed to read external path at ${resolvedPath}:`, err);
 			toast.error(`Failed to read path: ${p}`, {
@@ -163,11 +207,7 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
 	try {
-		// Simple strip of single line and multi-line comments for JSONC support
-		const cleaned = jsonContent
-			.replace(/\/\*[\s\S]*?\*\//g, '')
-			.replace(/(?:^|[^\\:])\/\/.*$/gm, '');
-		const data = JSON.parse(cleaned);
+		const data = parseCleanJson(jsonContent);
 
 		if (Array.isArray(data.kv_namespaces)) {
 			for (const kv of data.kv_namespaces) {
@@ -298,18 +338,34 @@ export class SchemaState {
 	/** Differentiates between parsing errors and disk write errors */
 	errorType = $state<'parse' | 'disk' | null>(null);
 	/** The ID of the node currently displayed in the inspector panel */
-	activeInspectorNodeId = $state<string | null>(null);
+	get activeInspectorNodeId() { return uiState.activeInspectorNodeId; }
+	set activeInspectorNodeId(val: string | null) { uiState.activeInspectorNodeId = val; }
+
+	/** Convenient getter to retrieve the active inspector node object */
+	get activeInspectorNode() {
+		if (!this.activeInspectorNodeId) return undefined;
+		return this.nodes.find(n => n.id === this.activeInspectorNodeId);
+	}
+
 	/** Selection coordinates of the currently active/dragged node */
-	activeCoordinates = $state<{ x: number; y: number } | null>(null);
+	get activeCoordinates() { return uiState.activeCoordinates; }
+	set activeCoordinates(val: { x: number; y: number } | null) { uiState.activeCoordinates = val; }
+
 	/** The ID of the node currently hovered */
-	hoveredNodeId = $state<string | null>(null);
+	get hoveredNodeId() { return uiState.hoveredNodeId; }
+	set hoveredNodeId(val: string | null) { uiState.hoveredNodeId = val; }
+
 	/** Whether compact mode is currently active (keys only) */
-	compactMode = $state(false);
+	get compactMode() { return uiState.compactMode; }
+	set compactMode(val: boolean) { uiState.compactMode = val; }
 
 	/** Collapsed status of the code panel */
-	isCodeCollapsed = $state(false);
+	get isCodeCollapsed() { return uiState.isCodeCollapsed; }
+	set isCodeCollapsed(val: boolean) { uiState.isCodeCollapsed = val; }
+
 	/** Collapsed status of the diagram panel */
-	isDiagramCollapsed = $state(false);
+	get isDiagramCollapsed() { return uiState.isDiagramCollapsed; }
+	set isDiagramCollapsed(val: boolean) { uiState.isDiagramCollapsed = val; }
 
 	/** Toggle code panel expand/collapse */
 	toggleCodePane = () => {};
@@ -346,34 +402,74 @@ export class SchemaState {
 	
 	/** True momentarily after a successful save operation */
 	isRecentlySaved = $state(false);
+	
 	/** Whether the 'Export Successful' toast is visible */
-	showExportToast = $state(false);
+	get showExportToast() { return uiState.showExportToast; }
+	set showExportToast(val: boolean) { uiState.showExportToast = val; }
 
 	/** Active filter for storage target (d1, do, kv, r2) */
-	activeFilter = $state<'d1' | 'do' | 'kv' | 'r2' | null>(null);
+	get activeFilter() { return uiState.activeFilter; }
+	set activeFilter(val: 'd1' | 'do' | 'kv' | 'r2' | null) { uiState.activeFilter = val; }
+
+	/** Sandbox / Playground Mode State */
+	get isSandboxMode() { return uiState.isSandboxMode; }
+	set isSandboxMode(val: boolean) { uiState.isSandboxMode = val; }
+
+	get sandboxTemplateKey() { return uiState.sandboxTemplateKey; }
+	set sandboxTemplateKey(val: string) { uiState.sandboxTemplateKey = val; }
+
+	/** Rename Entity Modal State */
+	get showRenameModal() { return uiState.showRenameModal; }
+	set showRenameModal(val: boolean) { uiState.showRenameModal = val; }
+
+	get renameEntityTargetId() { return uiState.renameEntityTargetId; }
+	set renameEntityTargetId(val: string | null) { uiState.renameEntityTargetId = val; }
+
+	/** Confirmation Dialog Modal State */
+	get showConfirmModal() { return uiState.showConfirmModal; }
+	set showConfirmModal(val: boolean) { uiState.showConfirmModal = val; }
+
+	get confirmModalData() { return uiState.confirmModalData; }
+	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
+
+	/** Triggers the styled Rename Entity Modal */
+	promptRenameEntity(targetId: string) {
+		uiState.renameEntityTargetId = targetId;
+		uiState.showRenameModal = true;
+	}
+
+	/** Triggers the styled Confirmation Modal */
+	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void }) {
+		uiState.confirmModalData = data;
+		uiState.showConfirmModal = true;
+	}
+
 	/** Whether the 'New Table' modal is currently visible */
-	showNewTableModal = $state(false);
+	get showNewTableModal() { return uiState.showNewTableModal; }
+	set showNewTableModal(val: boolean) { uiState.showNewTableModal = val; }
+
 	/** The current UI view mode: diagram canvas or code editor */
-	viewMode = $state<'diagram' | 'code'>('diagram');
+	get viewMode() { return uiState.viewMode; }
+	set viewMode(val: 'diagram' | 'code') { uiState.viewMode = val; }
 
 	/** Custom relative path to wrangler.toml configured in the schema */
 	wranglerPath = $state<string | undefined>(undefined);
 	/** Absolute path to the resolved wrangler configuration file */
 	wranglerConfigFilePath = $state<string | null>(null);
-	/** Whether the project settings modal is visible */
-	showProjectSettingsModal = $state(false);
 
-	/** Whether the 'Resolver Generator' modal is currently visible */
-	showResolverModal = $state(false);
-	resolverConfigPrefix = $state("resolve");
-	resolverConfigDoStyle = $state<'wrapped' | 'raw'>("wrapped");
-	resolverConfigKvRead = $state<'json' | 'text' | 'arrayBuffer'>("json");
-	resolverConfigPath = $state("");
+	/** Whether the project settings modal is visible */
+	get showProjectSettingsModal() { return uiState.showProjectSettingsModal; }
+	set showProjectSettingsModal(val: boolean) { uiState.showProjectSettingsModal = val; }
+
+	/** Whether the help modal is visible */
+	get showHelpModal() { return uiState.showHelpModal; }
+	set showHelpModal(val: boolean) { uiState.showHelpModal = val; }
 
 	/** The list of bindings parsed from wrangler.toml */
 	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
 
-	get resolverWarnings() {
+	/** Warnings about configuration mismatches between schema and wrangler bindings */
+	get validationWarnings() {
 		const warnings: string[] = [];
 		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
 		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
@@ -407,6 +503,7 @@ export class SchemaState {
 		return warnings;
 	}
 
+
 	/**
 	 * Force-syncs the UI state with the current file on disk.
 	 * This is the definitive "Ground Truth" sync that bypasses local HTML previews.
@@ -426,8 +523,8 @@ export class SchemaState {
 		const initialResult = parseSchema(code, undefined, tsconfigPaths, tsconfigPath);
 		let externalFilesMap = new Map<string, string>();
 		
-		if ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0)) {
-			externalFilesMap = await loadExternalSchemas(this.filePath!, initialResult.externalImports, initialResult.externalPaths);
+		if (this.filePath && ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0))) {
+			externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports, initialResult.externalPaths);
 		}
 
 		// 2. Final parse with external file contents mapped
@@ -446,7 +543,9 @@ export class SchemaState {
 			}
 			
 			// Discover wrangler.toml bindings
-			const { bindings: wranglerBindings, configFilePath } = await discoverWranglerBindings(this.filePath!, this.wranglerPath);
+			const { bindings: wranglerBindings, configFilePath } = this.filePath 
+				? await discoverWranglerBindings(this.filePath, this.wranglerPath)
+				: { bindings: [], configFilePath: null };
 			this.wranglerBindings = wranglerBindings;
 			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
@@ -476,7 +575,7 @@ export class SchemaState {
 
 			// Preserve selection state
 			const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
-			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath!, selectedNodeIds, this.nodes);
+			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath || 'sandbox', selectedNodeIds, this.nodes);
 			this.edges = result.edges;
 			this.rawCode = code;
 			this.isValid = true;
@@ -527,7 +626,8 @@ export class SchemaState {
 			} catch (e: any) {
 				console.error("[Strata] Sync failed:", e);
 				this.error = e.message;
-				this.errorType = 'parse';
+				this.errorType = 'disk';
+				this.isValid = false;
 				this.machine.send("FAIL");
 				toast.error("File synchronization failed", {
 					description: e.message || String(e)
@@ -562,9 +662,33 @@ export class SchemaState {
 	}
 
 	/**
+	 * Loads a starter schema template into zero-risk in-memory sandbox mode.
+	 */
+	async loadSandboxDemo(templateKey: string = 'fullstack') {
+		const { SAMPLE_TEMPLATES } = await import("$lib/mock");
+		const template = SAMPLE_TEMPLATES[templateKey] || SAMPLE_TEMPLATES.fullstack;
+
+		this.isSandboxMode = true;
+		this.sandboxTemplateKey = templateKey;
+		this.filePath = null;
+		this.machine.send("OPEN");
+
+		const success = await this.parseAndApply(template.code);
+		if (success) {
+			this.machine.send("SUCCESS");
+			toast.success(`Loaded ${template.name}`, {
+				description: "Playground mode active: Edits run strictly in-memory."
+			});
+		} else {
+			this.machine.send("FAIL");
+		}
+	}
+
+	/**
 	 * Opens a schema file directly from recent history.
 	 */
 	async openFileDirectly(path: string) {
+		this.isSandboxMode = false;
 		this.filePath = path;
 		this.machine.send("OPEN");
 		await this.syncWithFile();
@@ -578,6 +702,7 @@ export class SchemaState {
 			const defaultPath = this.getDefaultDialogPath();
 			const selected = await PlatformService.selectFile(["ts"], defaultPath);
 			if (selected) {
+				this.isSandboxMode = false;
 				this.filePath = selected;
 				this.machine.send("OPEN");
 				await this.syncWithFile();
@@ -595,13 +720,15 @@ export class SchemaState {
 		mutateFn: (code: string) => string | Promise<string>
 	): Promise<void> {
 		await this.queue.enqueue(async () => {
-			if (!this.filePath) return;
+			if (!this.filePath && !this.isSandboxMode) return;
 			this.machine.send("SAVE");
 			try {
 				const newCode = await mutateFn(this.rawCode);
-				this.ignoreNextWatch = true;
-				this.lastWriteTime = Date.now();
-				await PlatformService.writeText(this.filePath, newCode);
+				if (!this.isSandboxMode && this.filePath) {
+					this.ignoreNextWatch = true;
+					this.lastWriteTime = Date.now();
+					await PlatformService.writeText(this.filePath, newCode);
+				}
 				
 				const success = await this.parseAndApply(newCode);
 				if (success) {
@@ -612,7 +739,7 @@ export class SchemaState {
 			} catch (e: any) {
 				console.error(`[Strata] ${operationName} failed:`, e);
 				this.error = e.message;
-				this.errorType = 'disk';
+				this.errorType = this.isSandboxMode ? 'parse' : 'disk';
 				this.machine.send("FAIL");
 				toast.error(`${operationName} failed`, {
 					description: e.message || String(e)
@@ -638,7 +765,7 @@ export class SchemaState {
 	/**
 	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
 	 */
-	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean }) {
+	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }) {
 		const { updateTableMetadataInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table metadata update", (code) => 
 			updateTableMetadataInSchema(code, tableName, metadata)
@@ -689,6 +816,13 @@ export class SchemaState {
 	 * Persists the current rawCode to disk, including any pending node position updates.
 	 */
 	async saveToFile() {
+		if (this.isSandboxMode) {
+			toast.info("Playground Sandbox Active", {
+				description: "Playground edits run in-memory. Click 'Open Schema' to edit a real file on disk."
+			});
+			return;
+		}
+
 		if (!this.filePath || this.machine.current === "BUSY") return;
 		
 		await this.executeSchemaMutation("Save", async (code) => {
@@ -809,12 +943,55 @@ export class SchemaState {
 	}
 
 	/**
-	 * Synchronizes a canvas mutation (add/remove/rename) back to wrangler.toml or json config
+	 * Automatically syncs all missing KV, DO, or R2 target bindings to the project's wrangler configuration file.
+	 */
+	async syncMissingWranglerBindings() {
+		if (this.isSandboxMode) {
+			toast.info("Sandbox Playground Active", {
+				description: "Wrangler binding files (wrangler.toml/jsonc) operate in-memory while in Sandbox Mode. All node operations work seamlessly!"
+			});
+			return;
+		}
+
+		if (!this.wranglerConfigFilePath) {
+			toast.error("No Wrangler Config Detected", {
+				description: "Create a wrangler.toml or wrangler.jsonc file in your project root."
+			});
+			return;
+		}
+
+		const unconfiguredNodes = this.nodes.filter(n => {
+			const target = (n.data as any)?.target;
+			if (!target || target === 'd1') return false;
+			return !this.wranglerBindings.some(b => b.name === n.id && b.type === target);
+		});
+
+		if (unconfiguredNodes.length === 0) {
+			toast.success("Wrangler Config Aligned", {
+				description: "All entity targets are configured."
+			});
+			return;
+		}
+
+		for (const node of unconfiguredNodes) {
+			const target = (node.data as any).target;
+			const extra = (node.data as any).strata || {};
+			await this.syncToWranglerConfig('add', { type: target, name: node.id, extra });
+		}
+
+		toast.success("Wrangler Configuration Updated", {
+			description: `Added ${unconfiguredNodes.length} missing binding configuration(s).`
+		});
+	}
+
+	/**
+	 * Synchronizes target modifications (KV/DO/R2 additions or deletions) directly to wrangler.toml or wrangler.jsonc.
 	 */
 	async syncToWranglerConfig(
 		action: 'add' | 'remove',
 		binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }
 	) {
+		if (this.isSandboxMode) return;
 		if (!this.wranglerConfigFilePath) return;
 		try {
 			await PlatformService.mutateWranglerConfig(
@@ -835,71 +1012,7 @@ export class SchemaState {
 		}
 	}
 
-	/**
-	 * Opens the TS resolver helper customizer modal.
-	 */
-	async generateAndSaveResolvers() {
-		if (!this.filePath) {
-			toast.error("No active schema file", {
-				description: "Please open a schema file before generating resolvers."
-			});
-			return;
-		}
 
-		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
-		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
-		
-		const hasRelations = this.nodes.some(n => {
-			const strata = (n.data as any)?.strata;
-			return strata && strata.relations && strata.relations.length > 0;
-		});
-
-		if (kvNodes.length === 0 && doNodes.length === 0 && !hasRelations) {
-			toast.warning("No targets for resolvers", {
-				description: "No KV/DO targets or synthetic relations found in the schema."
-			});
-			return;
-		}
-
-		if (!this.resolverConfigPath) {
-			const dir = this.filePath.substring(0, this.filePath.lastIndexOf('/'));
-			this.resolverConfigPath = `${dir}/resolvers.ts`;
-		}
-
-		this.showResolverModal = true;
-	}
-
-	get generatedResolversCode() {
-		return generateResolverCode(this.nodes, {
-			prefix: this.resolverConfigPrefix,
-			doStyle: this.resolverConfigDoStyle,
-			kvRead: this.resolverConfigKvRead
-		});
-	}
-
-	async saveResolvers(customPath?: string) {
-		const targetPath = customPath || this.resolverConfigPath;
-		if (!targetPath) {
-			toast.error("No save path configured", {
-				description: "Please enter a valid path to save the resolver file."
-			});
-			return;
-		}
-
-		try {
-			const code = this.generatedResolversCode;
-			await PlatformService.writeText(targetPath, code);
-
-			toast.success("Resolvers saved successfully", {
-				description: `File saved to ${targetPath.substring(targetPath.lastIndexOf('/') + 1)}.`
-			});
-		} catch (e: any) {
-			console.error("[Strata] Failed to save resolvers:", e);
-			toast.error("Resolver save failed", {
-				description: e.message || "Could not write resolvers file to disk."
-			});
-		}
-	}
 
 	constructor() {
 		if (typeof window !== 'undefined' && window.localStorage) {
@@ -997,10 +1110,7 @@ export function mutateTomlConfig(content: string, action: 'add' | 'remove', bind
  * Mutates JSON/JSONC config string by parsing and regenerating formatting.
  */
 export function mutateJsonConfig(content: string, action: 'add' | 'remove', binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }): string {
-	const cleaned = content
-		.replace(/\/\*[\s\S]*?\*\//g, '')
-		.replace(/(?:^|[^\\:])\/\/.*$/gm, '');
-	const data = JSON.parse(cleaned);
+	const data = parseCleanJson(content);
 	
 	if (action === 'remove') {
 		if (binding.type === 'kv' && Array.isArray(data.kv_namespaces)) {
@@ -1033,117 +1143,7 @@ export function mutateJsonConfig(content: string, action: 'add' | 'remove', bind
 	return JSON.stringify(data, null, 2);
 }
 
-/**
- * Generates TS code for Cloudflare KV and DO resolvers based on synthetic relations.
- */
-export interface ResolverConfig {
-	prefix?: string;
-	doStyle?: 'wrapped' | 'raw';
-	kvRead?: 'json' | 'text' | 'arrayBuffer';
-}
+export { uiState };
 
-export function generateResolverCode(nodes: Node[], config?: ResolverConfig): string {
-	const prefix = config?.prefix || "resolve";
-	const doStyle = config?.doStyle || "wrapped";
-	const kvRead = config?.kvRead || "json";
 
-	let code = `/**
- * Generated by Strata.
- * This file contains typed resolver helpers to bridge D1 database records
- * with Cloudflare KV, Durable Objects, and R2 storage targets.
- */
 
-import type { KVNamespace, DurableObjectNamespace } from '@cloudflare/workers-types';
-
-`;
-
-	const kvNodes = nodes.filter(n => (n.data as any)?.target === 'kv');
-	const doNodes = nodes.filter(n => (n.data as any)?.target === 'do');
-
-	// Process KV Resolvers
-	for (const kv of kvNodes) {
-		const name = kv.id;
-		const referringNodes = nodes.filter(n => {
-			const strata = (n.data as any)?.strata;
-			return strata && strata.relations && strata.relations.some((r: any) => r.to === name);
-		});
-
-		for (const refNode of referringNodes) {
-			const fnName = `${prefix}${refNode.id}To${name}`;
-			code += `/**
- * Resolves KV values from "${name}" linked by records in "${refNode.id}".
- */
-export async function ${fnName}(kv: KVNamespace, key: string) {
-`;
-			if (kvRead === 'json') {
-				code += `	try {
-		return await kv.get(key, { type: 'json' });
-	} catch (e) {
-		return await kv.get(key, { type: 'text' });
-	}
-`;
-			} else if (kvRead === 'arrayBuffer') {
-				code += `	return await kv.get(key, { type: 'arrayBuffer' });\n`;
-			} else {
-				code += `	return await kv.get(key, { type: 'text' });\n`;
-			}
-			code += `}
-
-`;
-		}
-	}
-
-	// Process DO Resolvers
-	for (const doNode of doNodes) {
-		const name = doNode.id;
-		const methods = (doNode.data as any)?.columns || [];
-		
-		const referringNodes = nodes.filter(n => {
-			const strata = (n.data as any)?.strata;
-			return strata && strata.relations && strata.relations.some((r: any) => r.to === name);
-		});
-
-		for (const refNode of referringNodes) {
-			const fnName = `${prefix}${refNode.id}To${name}Stub`;
-			code += `/**
- * Resolves the Durable Object stub for "${name}" linked by records in "${refNode.id}".
- */
-export function ${fnName}(ns: DurableObjectNamespace, idStr: string) {
-	const id = ns.idFromString(idStr);
-	return ns.get(id);
-}
-
-`;
-		}
-
-		if (doStyle === 'wrapped' && methods.length > 0) {
-			const className = `${name}Client`;
-			code += `/**
- * Typed client wrapper for Durable Object stub "${name}".
- */
-export class ${className} {
-	constructor(private stub: any) {}
-
-`;
-			for (const m of methods) {
-				const sig = m.name;
-				const match = sig.match(/^([a-zA-Z0-9_]+)\s*\(([^)]*)\)/);
-				const methodName = match ? match[1] : sig;
-				const args = match ? match[2] : '';
-				const argNames = args.split(',').map((a: string) => {
-					const parts = a.split(':');
-					return parts[0].trim();
-				}).filter(Boolean).join(', ');
-
-				code += `	async ${methodName}(${args}): ${m.definition} {
-		return await this.stub.${methodName}(${argNames});
-	}
-
-`;
-			}
-			code += `}\n\n`;
-		}
-	}
-
-	return code;
-}

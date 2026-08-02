@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { parseSchema, updateNodePositionInSchema } from '../../src/lib/parser';
+import { parseSchema, updateNodePositionInSchema } from '$lib/parser';
 
 describe('Idempotency & Data Integrity', () => {
   it('should maintain stable AST across 100 parse/save cycles', () => {

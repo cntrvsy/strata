@@ -20,6 +20,6 @@ test.describe('Initial State & Navigation', () => {
   });
 
   test('navbar reflects empty state', async ({ page }) => {
-    await expect(page.getByText('No Schema Loaded')).toBeVisible();
+    await expect(page.getByTestId('titlebar').getByText('No Schema')).toBeVisible();
   });
 });

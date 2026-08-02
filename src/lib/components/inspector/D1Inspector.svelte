@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { Key, Pencil, Trash2, Check } from "lucide-svelte";
-  import { schemaState } from "../../state";
+  import { schemaState } from "$lib/state";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -31,7 +31,7 @@
 <div class="flex flex-col gap-2">
   {#each data.columns as col}
     <div
-      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group"
+      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
     >
       <div class="flex items-center justify-between">
@@ -45,17 +45,22 @@
                 bind:value={newColumnName}
                 class="input input-xs input-bordered w-full rounded-lg font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
                 onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
+                data-testid="field-rename-input-{col.name}"
               />
               <button
                 class="btn btn-primary btn-xs btn-circle"
                 onclick={submitRenameColumn}
+                data-testid="field-rename-submit-{col.name}"
               >
                 <Check class="w-3 h-3 text-primary-content" />
               </button>
             </div>
           {:else}
             <div class="flex items-center gap-2 group/col-title">
-              <span class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85">
+              <span
+                class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
+                data-testid="field-name-{col.name}"
+              >
                 {col.name}
               </span>
               {#if !isReadOnly}
@@ -65,6 +70,7 @@
                     editingColumnName = col.name;
                     newColumnName = col.name;
                   }}
+                  data-testid="field-rename-btn-{col.name}"
                 >
                   <Pencil class="w-2.5 h-2.5 opacity-60" />
                 </button>
@@ -73,13 +79,16 @@
           {/if}
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold">
+          <span
+            class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold"
+          >
             {col.definition.split("(")[0]}
           </span>
           {#if !isReadOnly}
             <button
               class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
               onclick={() => deleteColumn(col.name)}
+              data-testid="field-delete-btn-{col.name}"
             >
               <Trash2 class="w-3 h-3" />
             </button>
@@ -90,13 +99,17 @@
       {#if col.isReferences}
         <div class="flex items-center gap-1.5 mt-0.5">
           <div class="w-1 h-1 rounded-full bg-secondary"></div>
-          <span class="text-[9px] text-secondary font-semibold uppercase tracking-tighter">
+          <span
+            class="text-[9px] text-secondary font-semibold uppercase tracking-tighter"
+          >
             Foreign Key Reference
           </span>
         </div>
       {/if}
 
-      <div class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/40 text-[10px]">
+      <div
+        class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/40 text-[10px]"
+      >
         <label class="flex items-center gap-1.5 cursor-pointer select-none">
           <input
             type="checkbox"
