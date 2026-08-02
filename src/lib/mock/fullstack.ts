@@ -1,57 +1,61 @@
-import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real } from "drizzle-orm/sqlite-core";
 
 /**
  * ============================================================================
- * STRATA LESSON 3: HYBRID CLOUDFLARE STACK (D1 + KV + DO + R2)
+ * EDUSTRATA LEVEL 4: FULL-STACK ENTERPRISE CAMPUS ECOSYSTEM
  * ============================================================================
- * Strata isn't just an ERD for SQL databases—it visualizes your ENTIRE Cloudflare architecture!
+ * The flagship EduStrata architecture! Level 4 demonstrates a complete hybrid
+ * Cloudflare stack (D1 + KV + DO + R2) powering interactive campus operations.
  *
- * CONCEPT 1: CLOUDFLARE BINDING TARGETS IN JSDOC
- * - `"target": "d1"` ➔ Relational D1 Database Table
- * - `"target": "kv"` ➔ Cloudflare Key-Value (KV) Storage Namespace
- * - `"target": "do"` ➔ Stateful Durable Object (DO) Class
- * - `"target": "r2"` ➔ Cloudflare R2 Object Storage Bucket
+ * CONCEPT 1: STATEFUL DURABLE OBJECTS (target: "do")
+ * - `ClassroomSmartBoardDO` represents a stateful Cloudflare Durable Object class.
+ * - Strata parses TS class methods (`getBoardState`, `broadcastDrawLine`, `submitExamAnswer`)
+ *   and renders public RPC method signatures in the Inspector drawer.
  *
- * CONCEPT 2: SYNTHETIC JSDOC CROSS-STORAGE RELATIONSHIPS
- * - Non-SQL entities (KV, DO, R2) cannot have database foreign keys.
- * - Strata lets you link SQL tables to KV/DO/R2 targets using `@strata` synthetic relations:
- *   `"relations": [{ "to": "USER_KV" }, { "to": "AVATARS_R2" }]`
- * - This renders clean cross-storage connection lines in your diagram without engine overhead!
+ * CONCEPT 2: FULL HYBRID CLOUDFLARE ARCHITECTURE
+ * - D1 SQL (`tuition_invoices`) handles ACID financial billing records.
+ * - KV (`CAFETERIA_POS_KV`) handles sub-millisecond meal plan balance lookups.
+ * - Durable Object (`ClassroomSmartBoardDO`) handles realtime classroom WebSocket sessions.
+ * - R2 (`LECTURE_MEDIA_R2`) hosts recorded lecture streams and media assets.
+ *
+ * CONCEPT 3: FRAMEWORK AGNOSTIC ECOSYSTEM
+ * - Fully compatible whether your API is built with Hono, React, Remix, SvelteKit, Astro, or Workers!
  *
  * TRY IT IN THE SANDBOX:
- * 1. Click on `USER_KV`, `UserDO`, or `AVATARS_R2` in the diagram to inspect their properties in the visual inspector drawer.
- * 2. Add or remove synthetic targets in `users` JSDoc to add or remove connection lines visually.
- * 3. Inspect public methods on `UserDO` or bucket CORS settings on `AVATARS_R2`!
+ * 1. Double-click `ClassroomSmartBoardDO` to view its RPC method signatures in the Inspector.
+ * 2. Click `CAFETERIA_POS_KV` or `LECTURE_MEDIA_R2` to view KV schemas and R2 bucket CORS rules.
+ * 3. Add a new RPC method signature to `ClassroomSmartBoardDO` in the Inspector!
  */
 
 /**
- * D1 Relational Core Table
- * Linked to USER_KV and AVATARS_R2 via synthetic JSDoc cross-storage relations!
- * @strata { "target": "d1", "x": 120, "y": 140, "relations": [{ "to": "USER_KV" }, { "to": "AVATARS_R2" }] }
+ * Tuition & Fee Invoices (D1 Database Table)
+ * @strata { "target": "d1", "x": 120, "y": 140, "relations": [{ "to": "CAFETERIA_POS_KV" }, { "to": "LECTURE_MEDIA_R2" }] }
  */
-export const users = sqliteTable("users", {
+export const tuition_invoices = sqliteTable("tuition_invoices", {
   id: integer("id").primaryKey(),
-  email: text("email").notNull(),
-  created_at: integer("created_at", { mode: "timestamp" }).notNull(),
+  student_id: integer("student_id").notNull(),
+  amount_due: real("amount_due").notNull(),
+  status: text("status").notNull(), // e.g. "PENDING", "PAID", "OVERDUE"
+  due_date: integer("due_date", { mode: "timestamp" }).notNull(),
 });
 
 /**
- * Cloudflare KV Namespace (Key-Value Storage)
- * Stores fast session tokens and login failure counters globally.
- * @strata { "target": "kv", "x": 560, "y": 140, "schema": { "sessionToken": "string", "failedAttempts": "number" } }
+ * Cafeteria Point-of-Sale Cache (Cloudflare KV)
+ * Sub-millisecond lookup for student meal plan card balances and daily menu items.
+ * @strata { "target": "kv", "x": 580, "y": 140, "schema": { "mealPlanBalance": "number", "dailyMenu": "string", "isEligible": "boolean" } }
  */
-export const USER_KV = {};
+export const CAFETERIA_POS_KV = {};
 
 /**
- * Cloudflare Durable Object (Stateful Realtime Object)
- * Manages active user sessions, WebSockets, and stateful presence.
- * @strata { "target": "do", "x": 560, "y": 420, "path": "./src/do/UserDO.ts", "class": "UserDO", "methods": ["getUserInfo", "updateStatus"] }
+ * Realtime Classroom Smart Board & Exam Engine (Cloudflare Durable Object)
+ * Manages stateful WebSocket connections for live interactive classroom displays & online exams.
+ * @strata { "target": "do", "x": 580, "y": 420, "path": "./src/do/ClassroomSmartBoardDO.ts", "class": "ClassroomSmartBoardDO", "methods": ["getBoardState", "broadcastDrawLine", "submitExamAnswer"] }
  */
-export const UserDO = {};
+export const ClassroomSmartBoardDO = {};
 
 /**
- * Cloudflare R2 Bucket (Object Storage)
- * Publicly readable bucket hosting avatars and attachments.
- * @strata { "target": "r2", "x": 120, "y": 460, "public": true, "cors": true, "folders": { "avatars": "image/*", "documents": "application/pdf" } }
+ * Lecture Media Archives (Cloudflare R2 Bucket)
+ * High-capacity object storage bucket holding recorded lecture streams and media assets.
+ * @strata { "target": "r2", "x": 120, "y": 460, "public": true, "cors": true, "folders": { "video_lectures": "video/mp4", "audio_podcasts": "audio/mpeg" } }
  */
-export const AVATARS_R2 = {};
+export const LECTURE_MEDIA_R2 = {};

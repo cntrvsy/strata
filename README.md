@@ -8,7 +8,7 @@
 [![Svelte 5](https://img.shields.io/badge/Svelte-5.0-orange.svg)](https://svelte.dev)
 [![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg)](https://v2.tauri.app)
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-v0.45.2-brightgreen.svg)](https://orm.drizzle.team)
-[![Tests Passing](https://img.shields.io/badge/Tests-93%20passed-success.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/Tests-121%20passed-success.svg)](tests/)
 
 _Single Source of Truth • AST-Driven • Local-First • Zero Lock-In_
 
@@ -194,10 +194,10 @@ Strata maintains a strict suite of unit, AST, type diagnostic, and E2E browser t
 # Run Svelte & TypeScript type diagnostic checks
 npm run check
 
-# Run Vitest unit & AST parser test suite (93 tests)
+# Run Vitest unit & AST parser test suite (105 tests)
 npm test
 
-# Run Playwright end-to-end UI tests (14 tests)
+# Run Playwright end-to-end UI tests (16 tests)
 npm run test:e2e
 
 # Check Rust backend compilation

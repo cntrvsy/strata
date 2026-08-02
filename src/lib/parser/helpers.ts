@@ -9,32 +9,41 @@ import { VariableDeclaration, SyntaxKind, SourceFile, Node as ASTNode } from 'ts
 import type { ChainElement } from '$lib/parser/types';
 
 /**
- * Resolves the underlying drizzle sqliteTable CallExpression node from an initializer.
+ * Resolves the underlying Drizzle table CallExpression node from an initializer.
+ * Supports sqliteTable, pgTable, mysqlTable, singlestoreTable, and custom wrappers.
  */
 export function findSqliteTableCall(initializer: ASTNode): any {
-	if (initializer.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
-		return initializer;
+	const isTableFn = (name: string) => 
+		['sqliteTable', 'pgTable', 'mysqlTable', 'singlestoreTable'].includes(name) || name.endsWith('Table');
+
+	if (initializer.isKind(SyntaxKind.CallExpression)) {
+		const exprText = initializer.getExpression().getText();
+		if (isTableFn(exprText)) return initializer;
 	}
-	return initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => c.getExpression().getText() === 'sqliteTable');
+
+	return initializer.getDescendantsOfKind(SyntaxKind.CallExpression).find(c => {
+		const text = c.getExpression().getText();
+		return isTableFn(text);
+	});
 }
 
 /**
- * Robustly checks if a variable declaration is initialized with a Drizzle sqliteTable.
- * Resolves the sqliteTable symbol to confirm it is imported from a module starting with 'drizzle-orm'.
+ * Robustly checks if a variable declaration is initialized with a Drizzle table.
+ * Resolves the table symbol to confirm it is imported from a Drizzle ORM package.
  */
 export function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
 	const initializer = decl.getInitializer();
 	if (!initializer) return false;
 
 	const tableCall = findSqliteTableCall(initializer);
-
 	if (!tableCall) return false;
 
 	const identifier = tableCall.getExpression();
 	const symbol = identifier.getSymbol();
 	if (!symbol) {
 		// Fallback to text matching if symbol resolution is unavailable
-		return initializer.getText().includes('sqliteTable');
+		const text = initializer.getText();
+		return text.includes('Table') || text.includes('sqliteTable') || text.includes('pgTable') || text.includes('mysqlTable');
 	}
 
 	const declarations = symbol.getDeclarations();
@@ -42,10 +51,16 @@ export function isDrizzleTableDeclaration(decl: VariableDeclaration): boolean {
 		if (d.isKind(SyntaxKind.ImportSpecifier)) {
 			const importDecl = d.getImportDeclaration();
 			const moduleSpecifier = importDecl.getModuleSpecifierValue();
-			if (moduleSpecifier.startsWith('drizzle-orm')) {
+			if (moduleSpecifier.includes('drizzle-orm')) {
 				return true;
 			}
 		}
+	}
+
+	// Fallback check if it follows table initialization structure (e.g. 2+ arguments with object literal columns)
+	const args = tableCall.getArguments();
+	if (args.length >= 2 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+		return true;
 	}
 
 	return false;

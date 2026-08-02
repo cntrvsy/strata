@@ -2,45 +2,46 @@ import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 
 /**
  * ============================================================================
- * STRATA LESSON 1: RELATIONAL D1 CORE & PHYSICAL FOREIGN KEYS
+ * EDUSTRATA LEVEL 1: CLASSROOMS & STUDENT FOUNDATIONS
  * ============================================================================
- * Welcome to the Strata Sandbox! This template teaches you basic D1 SQL tables.
+ * Welcome to the Strata Sandbox! This is Level 1 of the EduStrata School System.
  *
  * CONCEPT 1: D1 TABLES (sqliteTable)
- * - Strata parses Drizzle `sqliteTable()` declarations into visual ERD nodes.
- * - The `@strata` JSDoc comment directly above each entity stores its visual (x, y) coordinates.
+ * - Strata parses Drizzle `sqliteTable()` declarations into interactive ERD cards.
+ * - The `@strata` JSDoc block above each entity stores its visual (x, y) canvas coordinates.
  *
  * CONCEPT 2: PHYSICAL FOREIGN KEYS (.references)
- * - `author_id` uses `.references(() => users.id)`.
- * - Strata automatically renders physical foreign keys as SOLID relationship lines with arrowheads pointing to the parent table.
+ * - `students.classroom_id` uses `.references(() => classrooms.id)`.
+ * - Strata automatically renders physical foreign keys as SOLID lines with arrowheads pointing to the parent table.
  *
  * TRY IT IN THE SANDBOX:
- * 1. Drag the `users` or `posts` nodes on the canvas — notice how @strata (x, y) coordinates update!
- * 2. Add a new table or column in the Code Editor on the left to see the diagram render instantly.
- * 3. Use the "+ New Table" or "Reset Schema" buttons in the top navbar at any time.
+ * 1. Drag `classrooms` or `students` cards on the canvas — notice how `@strata` coordinates update!
+ * 2. Click on a table or column to inspect and modify properties in the sidebar Inspector.
+ * 3. Use the "+ New Entity" button to add a new table to your schema.
  */
 
 /**
- * Parent Entity: Users Table
- * @strata { "target": "d1", "x": 140, "y": 180 }
+ * Parent Entity: Classrooms Table
+ * @strata { "target": "d1", "x": 120, "y": 180 }
  */
-export const users = sqliteTable("users", {
+export const classrooms = sqliteTable("classrooms", {
   id: integer("id").primaryKey(),
-  username: text("username").notNull(),
-  // SQLite does not have native booleans. Drizzle maps booleans using integer mode:
+  room_number: text("room_number").notNull(),
+  building_wing: text("building_wing").notNull(),
+  capacity: integer("capacity").notNull(),
   is_active: integer("is_active", { mode: "boolean" }).notNull(),
 });
 
 /**
- * Child Entity: Posts Table
- * Linked to `users` via `author_id` physical foreign key reference.
- * @strata { "target": "d1", "x": 520, "y": 180 }
+ * Child Entity: Students Table
+ * Linked to `classrooms` via `classroom_id` physical foreign key reference.
+ * @strata { "target": "d1", "x": 560, "y": 180 }
  */
-export const posts = sqliteTable("posts", {
+export const students = sqliteTable("students", {
   id: integer("id").primaryKey(),
-  title: text("title").notNull(),
-  // Solid line relationship: Points directly to users.id
-  author_id: integer("author_id").notNull().references(() => users.id),
-  // SQLite dates map as timestamps in integer mode:
-  created_at: integer("created_at", { mode: "timestamp" }).notNull(),
+  full_name: text("full_name").notNull(),
+  email: text("email").notNull(),
+  grade_level: integer("grade_level").notNull(),
+  classroom_id: integer("classroom_id").notNull().references(() => classrooms.id),
+  enrolled_at: integer("enrolled_at", { mode: "timestamp" }).notNull(),
 });

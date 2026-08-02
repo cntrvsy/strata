@@ -27,6 +27,7 @@
   import HelpModal from "$lib/components/HelpModal.svelte";
   import DiffPreviewModal from "$lib/components/DiffPreviewModal.svelte";
   import { arrangeLayout } from "$lib/services/layout";
+  import { SAMPLE_TEMPLATES } from "$lib/mock";
 
   let showHelp = $state(false);
   let showDiffPreview = $state(false);
@@ -164,30 +165,16 @@
           class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-44 p-1.5 shadow-2xl mt-1 text-xs"
         >
           <li class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1">Starter Templates</li>
-          <li>
-            <button
-              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'basic' ? 'active font-bold' : ''}"
-              onclick={() => schemaState.loadSandboxDemo('basic')}
-            >
-              Basic D1
-            </button>
-          </li>
-          <li>
-            <button
-              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'ecommerce' ? 'active font-bold' : ''}"
-              onclick={() => schemaState.loadSandboxDemo('ecommerce')}
-            >
-              E-Commerce
-            </button>
-          </li>
-          <li>
-            <button
-              class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === 'fullstack' ? 'active font-bold' : ''}"
-              onclick={() => schemaState.loadSandboxDemo('fullstack')}
-            >
-              Full Stack
-            </button>
-          </li>
+          {#each Object.values(SAMPLE_TEMPLATES) as tpl}
+            <li>
+              <button
+                class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === tpl.key ? 'active font-bold' : ''}"
+                onclick={() => schemaState.loadSandboxDemo(tpl.key)}
+              >
+                {tpl.name}
+              </button>
+            </li>
+          {/each}
         </ul>
       </div>
     {/if}

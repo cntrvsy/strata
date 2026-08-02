@@ -31,7 +31,7 @@
 <div class="flex flex-col gap-2">
   {#each data.columns as col}
     <div
-      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group"
+      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
     >
       <div class="flex items-center justify-between">
@@ -45,10 +45,12 @@
                 bind:value={newColumnName}
                 class="input input-xs input-bordered w-full rounded-lg font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
                 onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
+                data-testid="field-rename-input-{col.name}"
               />
               <button
                 class="btn btn-primary btn-xs btn-circle"
                 onclick={submitRenameColumn}
+                data-testid="field-rename-submit-{col.name}"
               >
                 <Check class="w-3 h-3 text-primary-content" />
               </button>
@@ -57,6 +59,7 @@
             <div class="flex items-center gap-2 group/col-title">
               <span
                 class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
+                data-testid="field-name-{col.name}"
               >
                 {col.name}
               </span>
@@ -67,6 +70,7 @@
                     editingColumnName = col.name;
                     newColumnName = col.name;
                   }}
+                  data-testid="field-rename-btn-{col.name}"
                 >
                   <Pencil class="w-2.5 h-2.5 opacity-60" />
                 </button>
@@ -84,6 +88,7 @@
             <button
               class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
               onclick={() => deleteColumn(col.name)}
+              data-testid="field-delete-btn-{col.name}"
             >
               <Trash2 class="w-3 h-3" />
             </button>

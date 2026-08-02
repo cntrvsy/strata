@@ -67,13 +67,12 @@ export function parseSchema(
 			}
 
 			if (isExternal) {
-				const names = imp.getNamedImports().map(ni => ni.getName());
-				if (names.length > 0) {
-					externalImports.push({
-						filePath: resolvedPath,
-						importNames: names
-					});
-				}
+				const names = imp.getNamedImports().map(ni => ni.getAliasNode()?.getText() || ni.getName());
+				// Handle named imports or default/namespace imports
+				externalImports.push({
+					filePath: resolvedPath,
+					importNames: names.length > 0 ? names : ['*']
+				});
 			}
 		}
 
@@ -244,41 +243,55 @@ export function parseSchema(
 						// Create a temporary source file for the external schema
 						const extSf = project.createSourceFile(`temp_${extImp.filePath.replace(/[\/.]/g, '_')}.ts`, externalContent, { overwrite: true });
 						tempSourceFiles.push(extSf);
-						for (const name of extImp.importNames) {
-							const decl = extSf.getVariableDeclaration(name);
-							if (decl && isDrizzleTableDeclaration(decl)) {
-								const statement = decl.getVariableStatement();
-								const jsDocs = statement?.getJsDocs() || [];
-								let strataData: any = {
-									x: Math.round(Math.random() * 200),
-									y: Math.round(Math.random() * 200),
-									target: 'd1'
-								};
-								
-								for (const doc of jsDocs) {
-									const strataExtracted = extractStrataMetadata(doc.getText());
-									if (strataExtracted) {
-										strataData = { ...strataData, ...strataExtracted.data };
-									}
-								}
-
-								// Register external node (marked with isExternal: true)
-								nodes.push({
-									id: name,
-									type: 'table',
-									data: {
-										label: name,
-										columns: extractColumns(decl),
-										target: strataData.target || 'd1',
-										strata: strataData,
-										isExternal: true
-									},
-									position: { x: strataData.x, y: strataData.y }
-								});
-								
-								// Register declaration so we can scan relationships from main schema pointing here
-								tableDeclarations.set(name, decl);
+						const targetDecls: VariableDeclaration[] = [];
+						if (extImp.importNames.includes('*')) {
+							for (const d of extSf.getVariableDeclarations()) {
+								if (isDrizzleTableDeclaration(d)) targetDecls.push(d);
 							}
+						} else {
+							for (const name of extImp.importNames) {
+								const decl = extSf.getVariableDeclaration(name);
+								if (decl && isDrizzleTableDeclaration(decl)) {
+									targetDecls.push(decl);
+								}
+							}
+						}
+
+						for (const decl of targetDecls) {
+							const name = decl.getName();
+							if (nodes.some(n => n.id === name)) continue;
+
+							const statement = decl.getVariableStatement();
+							const jsDocs = statement?.getJsDocs() || [];
+							let strataData: any = {
+								x: Math.round(Math.random() * 200),
+								y: Math.round(Math.random() * 200),
+								target: 'd1'
+							};
+							
+							for (const doc of jsDocs) {
+								const strataExtracted = extractStrataMetadata(doc.getText());
+								if (strataExtracted) {
+									strataData = { ...strataData, ...strataExtracted.data };
+								}
+							}
+
+							// Register external node (marked with isExternal: true)
+							nodes.push({
+								id: name,
+								type: 'table',
+								data: {
+									label: name,
+									columns: extractColumns(decl),
+									target: strataData.target || 'd1',
+									strata: strataData,
+									isExternal: true
+								},
+								position: { x: strataData.x, y: strataData.y }
+							});
+							
+							// Register declaration so we can scan relationships from main schema pointing here
+							tableDeclarations.set(name, decl);
 						}
 					} catch (err) {
 						console.warn(`Failed to parse external file ${extImp.filePath} safely:`, err);

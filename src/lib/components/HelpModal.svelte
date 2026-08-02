@@ -449,29 +449,35 @@ export const users = sqliteTable("users", {});</pre>
     {
       id: "ach-framework-do-exports",
       category: "achievements",
-      title: "Framework-Agnostic Durable Object Exports (Hono vs SvelteKit)",
-      tags: ["durable", "objects", "hono", "sveltekit", "exports", "wrangler"],
+      title: "Framework-Agnostic Durable Object Exports (Hono, SvelteKit, Remix, Astro, Nuxt, Next.js)",
+      tags: ["durable", "objects", "hono", "sveltekit", "remix", "astro", "nuxt", "nextjs", "exports", "wrangler"],
       summary:
-        "How Durable Object classes must be exported depending on whether your project uses Hono, plain Cloudflare Workers, or SvelteKit.",
-      content: `<p class="mb-2">Cloudflare Workers requires your Durable Object class to be exported from your worker entrypoint:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class in your <code>main</code> entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>):<br/><code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { TelemetrySessionDO } from './durable-objects/TelemetrySessionDO';</code></li>
-                  <li><strong>SvelteKit:</strong> SvelteKit builds <code>_worker.js</code> dynamically. Ensure <code>vite.config.ts</code> references the correct file path inside <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/durable-objects/TelemetrySessionDO.ts'] })</code>.</li>
-                  <li><strong>Why Dragging Triggers Re-bundling:</strong> When you drag nodes in Strata, JSDocs update in <code>schema.ts</code>. Your dev server (Vite or Wrangler) re-bundles the entrypoint, which triggers error alerts if the DO file or export is missing.</li>
+        "How Durable Object classes must be exported across all major Cloudflare Workers web frameworks.",
+      content: `<p class="mb-2">The Cloudflare Workers runtime requires every Durable Object class bound in <code>wrangler.toml</code> to be exported from your worker entrypoint module. Here is how each framework handles it:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class directly in your main entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>):<br/><code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { TelemetrySessionDO } from './durable-objects/TelemetrySessionDO';</code></li>
+                  <li><strong>SvelteKit:</strong> Ensure <code>vite.config.ts</code> references the DO class file inside <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/durable-objects/TelemetrySessionDO.ts'] })</code>.</li>
+                  <li><strong>Remix (Vite):</strong> Re-export the DO class from your custom server entrypoint (e.g. <code>server.ts</code> or <code>app/entry.server.ts</code>).</li>
+                  <li><strong>Astro (Advanced Mode):</strong> Configure a custom worker entry file (<code>src/worker.ts</code>) in <code>astro.config.mjs</code> and re-export the DO class.</li>
+                  <li><strong>Nuxt / Nitro:</strong> Re-export the DO class in a custom Nitro server plugin or entry file (<code>server/index.ts</code>).</li>
+                  <li><strong>Next.js (OpenNext):</strong> Re-export the DO class in your custom worker wrapper file (<code>worker.ts</code>).</li>
+                  <li><strong>Why Dragging Triggers Re-bundling:</strong> When you drag nodes in Strata, JSDoc tags update in <code>schema.ts</code>. Your dev server (Vite or Wrangler) re-bundles the entrypoint, which raises a runtime error if the DO class export is missing.</li>
                 </ul>`,
     },
     {
       id: "ach-do-mutations",
       category: "achievements",
-      title: "Durable Object AST Mutations & File Path Diagnostics",
-      tags: ["durable", "objects", "ast", "diagnostics", "debug", "paths"],
+      title: "Durable Object Folder Structures & File Path Resolution",
+      tags: ["durable", "objects", "ast", "paths", "folders", "resolution", "aliases"],
       summary:
-        "How visual Durable Object method edits update code files, and how to troubleshoot file reading or parsing failures.",
-      content: `<p class="mb-2">Durable Object nodes map directly to your TypeScript source files:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>AST Updates:</strong> Edits to public methods parse and modify the target file using <code>ts-morph</code>. If the target file contains syntax errors, writes will be blocked to prevent file corruption.</li>
-                  <li><strong>File Path Resolution:</strong> Verify that the <code>path</code> parameter in JSDoc (e.g. <code>"path": "./src/lib/server/durable-objects/TelemetrySessionDO.ts"</code>) points to a valid file relative to the project root.</li>
-                  <li><strong>Missing File Warnings:</strong> If a DO file is missing or unreadable, Strata displays a diagnostic warning flag on the node.</li>
+        "How Strata flexibly resolves single files, shared folders, co-located routes, and tsconfig path aliases for Durable Objects.",
+      content: `<p class="mb-2">Strata places <strong>zero restrictions on your folder structure</strong> when organizing Durable Objects:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Dedicated Class Files (Recommended):</strong> Store one DO class per file in a shared folder (e.g. <code>"path": "./src/durable-objects/UserSessionDO.ts"</code>).</li>
+                  <li><strong>Multiple Classes in One File:</strong> Declare multiple DO classes inside a single file. Strata targets the matching class using the <code>class</code> parameter (e.g. <code>"class": "CounterDO"</code>).</li>
+                  <li><strong>Co-Located Feature Routes:</strong> Keep DO files next to API endpoints (e.g. <code>"path": "./src/routes/api/counter/CounterDO.ts"</code>).</li>
+                  <li><strong>Path Alias Support:</strong> Relative paths, workspace absolute paths, and <code>tsconfig.json</code> aliases (e.g. <code>$lib/server/durable-objects/...</code>) are fully supported.</li>
+                  <li><strong>AST Integrity:</strong> Edits to public methods parse and update the target file using <code>ts-morph</code>. Missing or unreadable files raise visual diagnostic warning flags.</li>
                 </ul>`,
     },
     {
@@ -580,45 +586,51 @@ export const users = sqliteTable("users", {});</pre>
     },
   ];
 
-  const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare D1 (SQLite dialect).
-We are using Strata, an interactive ERD tool that parses our \`schema.ts\` file.
+  const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare Workers (D1 SQLite, KV, Durable Objects, R2).
+We are using Strata, an interactive ERD tool that parses and bi-directionally syncs our \`schema.ts\` file.
 
 You MUST follow these design & layout rules when writing or modifying Drizzle schema code for me:
 
-1. AESTHETICS & METADATA: Every table or collection declaration MUST be preceded by a standard JSDoc comment containing Strata visual coordinates in valid JSON format. Do NOT use abstract union types or placeholders inside the JSDoc JSON string:
+1. AESTHETICS & METADATA: Every table or collection declaration MUST be preceded by a standard JSDoc comment containing Strata visual coordinates in valid JSON format:
    /**
     * @strata { "target": "d1", "x": 100, "y": 200 }
     */
 
-2. GRID LAYOUT: Pre-calculate visual layout positions (x, y coordinates) for new tables. Space them out logically (e.g. 400px apart horizontally, 300px apart vertically) to avoid overlaps.
+2. GRID LAYOUT: Pre-calculate visual layout positions (x, y coordinates) for new tables. Space them out logically (e.g. 350px apart horizontally, 250px apart vertically) to prevent canvas overlaps.
 
-3. DATATYPES (Cloudflare D1 / SQLite):
+3. DATATYPES & DIALECTS (Cloudflare D1 / SQLite):
+   - Always import table builders cleanly: import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
    - SQLite does not have a native Date type. Always map dates using:
-     integer("column_name", { mode: "timestamp" }) or integer("column_name", { mode: "timestamp_ms" })
-   - Booleans must map to: integer("column_name", { mode: "boolean" })
+     integer("created_at", { mode: "timestamp" }) or integer("created_at", { mode: "timestamp_ms" })
+   - Booleans must map to: integer("is_active", { mode: "boolean" })
 
-4. STORAGE TARGETS (JSDoc overrides):
-   - SQLite D1 database target is specified by: "target": "d1"
-   - Durable Object targets are specified by: "target": "do". Example JSDoc metadata:
+4. DRIZZLE RELATIONS:
+   - Physical Foreign Keys: Use .references(() => parentTable.id, { onDelete: 'cascade' }) on foreign key columns.
+   - Logical Relations: Use Drizzle's relations() query builder API:
+     export const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }));
+
+5. CLOUDFLARE STORAGE TARGETS (KV, DO, R2 JSDoc Overrides):
+   - D1 Table: "target": "d1" (Default)
+   - Durable Objects (DO): "target": "do"
      /**
       * @strata { "target": "do", "x": 100, "y": 200, "path": "./src/do/UserDO.ts", "class": "UserDO", "methods": ["getUserInfo", "updateStatus"] }
       */
-   - KV Namespace targets are specified by: "target": "kv". Example JSDoc metadata:
+   - KV Namespaces: "target": "kv"
      /**
       * @strata { "target": "kv", "x": 150, "y": 300, "schema": { "sessionToken": "string", "failedAttempts": { "type": "number", "ttl": 3600 } } }
       */
-   - R2 Bucket targets are specified by: "target": "r2". Example JSDoc metadata:
+   - R2 Buckets: "target": "r2"
      /**
       * @strata { "target": "r2", "x": 200, "y": 400, "public": true, "cors": true, "folders": { "avatars": "image/*", "documents": "application/pdf" } }
       */
 
-5. SYNTHETIC RELATIONSHIPS:
-   - If establishing relations involving KV, DO, or R2 targets, do not declare physical SQL foreign keys. Instead, specify logical connections inside the source entity JSDoc:
+6. SYNTHETIC CROSS-STORAGE LINKS:
+   - For links between D1 tables and non-SQL targets (KV, DO, R2), do not declare physical SQL foreign keys. Instead, define synthetic links inside the JSDoc metadata:
      /**
-      * @strata { "target": "d1", "x": 100, "y": 100, "relations": [{ "to": "USERS_KV" }] }
+      * @strata { "target": "d1", "x": 100, "y": 100, "relations": [{ "to": "SESSIONS_KV" }] }
       */
 
-Generate only code inside standard markdown codeblocks without conversational fluff.`;
+Generate only valid, production-ready TypeScript code inside standard markdown codeblocks without conversational fluff.`;
 
   async function copyPrompt() {
     try {
@@ -657,7 +669,8 @@ Generate only code inside standard markdown codeblocks without conversational fl
   // Count topics helper for badges
   function getTopicCount(catId: string) {
     if (catId === "all") return docTopics.length;
-    if (catId === "starter-templates") return Object.keys(SAMPLE_TEMPLATES).length;
+    if (catId === "starter-templates")
+      return Object.keys(SAMPLE_TEMPLATES).length;
     if (catId === "ai") return 1;
     if (catId === "jsdoc-builder") return 1;
     return docTopics.filter((t) => t.category === catId).length;
@@ -797,12 +810,16 @@ Generate only code inside standard markdown codeblocks without conversational fl
                     Interactive Starter Templates
                   </h3>
                 </div>
-                <span class="badge badge-sm badge-secondary font-mono text-[10px]">
+                <span
+                  class="badge badge-sm badge-secondary font-mono text-[10px]"
+                >
                   Zero-Risk Sandbox Mode
                 </span>
               </div>
               <p class="text-base-content/75 leading-relaxed">
-                Explore pre-built Cloudflare D1, KV, Durable Object, and R2 schema architectures. Loading a template populates the visual canvas and CodeMirror editor instantly.
+                Explore pre-built Cloudflare D1, KV, Durable Object, and R2
+                schema architectures. Loading a template populates the visual
+                canvas and CodeMirror editor instantly.
               </p>
 
               <div class="grid grid-cols-1 gap-3.5 mt-1">
@@ -813,24 +830,26 @@ Generate only code inside standard markdown codeblocks without conversational fl
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
                         <span
-                          class="font-bold text-sm text-base-content group-hover:text-secondary transition-colors"
+                          class="font-bold text-sm text-base-content group-hover:text-secondary transitdion-colors"
                         >
                           {tpl.name}
                         </span>
                         <span
-                          class="badge badge-sm badge-outline font-mono text-[10px] opacity-75"
+                          class="badge badge-sm badge-outline font-mono text-[10px] opacity-75 p-3"
                         >
                           {tpl.badge}
                         </span>
                       </div>
                       <button
-                        class="btn btn-secondary btn-xs rounded-xl font-bold px-3 shadow-xs gap-1"
+                        class="btn btn-secondary btn-xs rounded-xl font-bold px-3 shadow-xs gap-1 ml-2"
                         onclick={() => loadStarterTemplate(tpl.key)}
                       >
                         Load Template ➔
                       </button>
                     </div>
-                    <p class="text-[11px] text-base-content/70 leading-relaxed font-sans">
+                    <p
+                      class="text-[11px] text-base-content/70 leading-relaxed font-sans"
+                    >
                       {tpl.description}
                     </p>
                   </div>

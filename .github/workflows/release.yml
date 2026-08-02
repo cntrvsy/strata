@@ -66,12 +66,15 @@ jobs:
           --features updater
           --config '{"bundle":{"targets":["appimage"],"createUpdaterArtifacts":true}}'
 
+      # No rename, no `path:` override — `cn ... --framework tauri` walks
+      # src-tauri/target/release/bundle itself and pairs each artifact with
+      # its .tar.gz/.sig sidecar by the filename Tauri generated. Renaming
+      # the .AppImage orphans that sidecar and breaks detection.
       - name: upload AppImage to CrabNebula
         uses: crabnebula-dev/cloud-release@v0
         with:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
-          path: ./src-tauri
 
   build-windows:
     name: Build MSI (Store + CrabNebula fallback) & upload to CrabNebula
@@ -111,12 +114,14 @@ jobs:
           --features updater
           --config '{"bundle":{"targets":["msi"],"createUpdaterArtifacts":true,"windows":{"webviewInstallMode":{"type":"offlineInstaller"}}}}'
 
+      # No rename, no `path:` override — same reasoning as the Linux job:
+      # `cn` pairs the .msi with its auto-generated .zip/.sig sidecar by
+      # filename; renaming to strata.msi would orphan it.
       - name: upload MSI to CrabNebula
         uses: crabnebula-dev/cloud-release@v0
         with:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
-          path: ./src-tauri
 
   publish:
     name: Publish CrabNebula release

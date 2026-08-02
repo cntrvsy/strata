@@ -168,15 +168,17 @@
                   bind:value={newTableName}
                   class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all"
                   onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
+                  data-testid="inspector-rename-table-input"
                 />
                 <button
                   class="btn btn-primary btn-xs btn-circle"
-                  onclick={submitRenameTable}><Check class="w-3 h-3" /></button
-                >
+                  onclick={submitRenameTable}
+                  data-testid="inspector-rename-table-submit"
+                ><Check class="w-3 h-3" /></button>
               </div>
             {:else}
               <div class="flex items-center gap-2 group/header">
-                <h3 class="font-bold text-sm tracking-tight leading-none">
+                <h3 class="font-bold text-sm tracking-tight leading-none" data-testid="inspector-title">
                   {selectedNode.id}
                 </h3>
                 {#if !isReadOnly}
@@ -186,6 +188,7 @@
                       editingTableName = selectedNode.id;
                       newTableName = selectedNode.id;
                     }}
+                    data-testid="inspector-rename-table-btn"
                   >
                     <Pencil class="w-3 h-3 opacity-60" />
                   </button>
@@ -215,12 +218,14 @@
               >
                 <button
                   class="btn btn-error btn-xs rounded-lg px-2 text-[10px] text-error-content"
-                  onclick={() => deleteTable(selectedNode.id)}>Confirm</button
-                >
+                  onclick={() => deleteTable(selectedNode.id)}
+                  data-testid="confirm-delete-entity-button"
+                >Confirm</button>
                 <button
                   class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px] hover:bg-base-200"
-                  onclick={() => (isConfirmingDelete = false)}>Cancel</button
-                >
+                  onclick={() => (isConfirmingDelete = false)}
+                  data-testid="cancel-delete-entity-button"
+                >Cancel</button>
               </div>
             {/if}
           {/if}

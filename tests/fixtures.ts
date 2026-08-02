@@ -24,6 +24,13 @@ export const test = base.extend({
         console.log('[MOCK TAURI] invoke:', cmd, args);
         switch (cmd) {
           case 'watch_file': return null;
+          case 'read_schema_file': return vfs[args?.path] || '';
+          case 'write_schema_file':
+            if (args?.path && args?.content !== undefined) {
+              vfs[args.path] = args.content;
+            }
+            return null;
+          case 'mutate_wrangler_config': return null;
           default: return {};
         }
       };

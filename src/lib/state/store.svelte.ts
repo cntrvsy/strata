@@ -341,6 +341,12 @@ export class SchemaState {
 	get activeInspectorNodeId() { return uiState.activeInspectorNodeId; }
 	set activeInspectorNodeId(val: string | null) { uiState.activeInspectorNodeId = val; }
 
+	/** Convenient getter to retrieve the active inspector node object */
+	get activeInspectorNode() {
+		if (!this.activeInspectorNodeId) return undefined;
+		return this.nodes.find(n => n.id === this.activeInspectorNodeId);
+	}
+
 	/** Selection coordinates of the currently active/dragged node */
 	get activeCoordinates() { return uiState.activeCoordinates; }
 	set activeCoordinates(val: { x: number; y: number } | null) { uiState.activeCoordinates = val; }
@@ -620,7 +626,8 @@ export class SchemaState {
 			} catch (e: any) {
 				console.error("[Strata] Sync failed:", e);
 				this.error = e.message;
-				this.errorType = 'parse';
+				this.errorType = 'disk';
+				this.isValid = false;
 				this.machine.send("FAIL");
 				toast.error("File synchronization failed", {
 					description: e.message || String(e)
