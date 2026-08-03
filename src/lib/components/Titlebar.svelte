@@ -40,10 +40,13 @@
   data-tauri-drag-region
   data-testid="titlebar"
 >
-  <div class="flex items-center gap-2 pointer-events-none">
-    <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 leading-none">Strata</span>
-    <span class="text-[9px] opacity-30">/</span>
-    <span class="text-[10px] font-bold opacity-60 leading-none">
+  <div class="flex items-center gap-2">
+    <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 leading-none pointer-events-none">Strata</span>
+    <span class="text-[9px] opacity-30 pointer-events-none">/</span>
+    <span
+      class="text-[10px] font-bold opacity-70 hover:opacity-100 transition-opacity leading-none cursor-default"
+      title={schemaState.filePath || (schemaState.isSandboxMode ? "Playground Sandbox (In-Memory)" : "No Schema Loaded")}
+    >
       {schemaState.filePath?.split("/").pop() || (schemaState.isSandboxMode ? "Sandbox Demo" : "No Schema")}
     </span>
     {#if schemaState.hasUnsavedChanges}

@@ -8,6 +8,7 @@ import basicCode from "./basic.ts?raw";
 import academicsCode from "./academics.ts?raw";
 import infrastructureCode from "./infrastructure.ts?raw";
 import fullstackCode from "./fullstack.ts?raw";
+import masterCode from "./schema.ts?raw";
 
 export interface SchemaTemplate {
   key: string;
@@ -18,6 +19,13 @@ export interface SchemaTemplate {
 }
 
 export const SAMPLE_TEMPLATES: Record<string, SchemaTemplate> = {
+  master: {
+    key: "master",
+    name: "EduStrata Benchmark: Master School Campus",
+    badge: "Full Hybrid Cloud (D1 + KV + DO + R2)",
+    description: "Ultimate school campus architecture featuring 13 entities, physical Foreign Keys, Drizzle logical relations, KV auth sessions, Durable Object WebSockets, R2 asset buckets, and synthetic cross-storage links.",
+    code: masterCode,
+  },
   basic: {
     key: "basic",
     name: "EduStrata L1: Classrooms & Students",
