@@ -82,19 +82,31 @@
           <div>
             <span
               class="text-[9px] font-bold uppercase tracking-wider text-primary/75 block leading-none mb-0.5"
-              >{schemaState.isSandboxMode ? "In-Memory Engine" : "Bi-Directional Engine"}</span
+              >{schemaState.isSandboxMode
+                ? "In-Memory Engine"
+                : "Bi-Directional Engine"}</span
             >
             <span class="font-bold text-xs text-base-content"
-              >{schemaState.isSandboxMode ? "Playground Sandbox Active" : "Code ⇄ UI Synchronization"}</span
+              >{schemaState.isSandboxMode
+                ? "Playground Sandbox Active"
+                : "Code ⇄ UI Synchronization"}</span
             >
           </div>
         </div>
         {#if schemaState.isSandboxMode}
           <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
-            You are in zero-risk <strong>Playground Sandbox Mode</strong>. Edits operate strictly in memory and will not modify files on disk.
+            You are in zero-risk <strong>Playground Sandbox Mode</strong>. Edits
+            operate strictly in memory and will not modify files on disk.
           </p>
-          <div class="text-[10px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-secondary/50 font-sans">
-            Click <strong>Open Schema</strong> in the navbar to connect to a real <code class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[9px]">schema.ts</code> file on disk.
+          <div
+            class="text-[10px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-secondary/50 font-sans"
+          >
+            Click <strong>Open Schema</strong> in the navbar to connect to a
+            real
+            <code
+              class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[9px]"
+              >schema.ts</code
+            > file on disk.
           </div>
         {:else}
           <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
@@ -111,38 +123,43 @@
               the file watcher to instantly parse the AST and refresh the diagram.</span
             >
             <span
-              >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications surgically
-              patch the AST and write back in real-time.</span
+              >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications
+              surgically patch the AST and write back in real-time.</span
             >
           </div>
         {/if}
         <div class="h-px bg-base-200/80 my-1"></div>
         <div
-          class="flex items-center justify-between text-[9px] font-mono text-base-content/40"
+          class="flex flex-col gap-1 text-[9px] font-mono text-base-content/50"
         >
-          <span>Drizzle ORM: v0.45.2</span>
+          <div class="flex items-center justify-between">
+            <span>Drizzle ORM: v0.45.2</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Active File Path or Sandbox Badge -->
+    <!-- Active File Path or Sandbox Badge (Compact Basename) -->
     {#if schemaState.isSandboxMode}
       <div class="h-3 w-px bg-base-300/80"></div>
-      <div class="flex items-center gap-1.5 opacity-90 text-secondary font-semibold text-[10px]">
+      <div
+        class="flex items-center gap-1 opacity-90 text-secondary font-semibold text-[10px]"
+        title="Playground Sandbox Mode (In-Memory Engine)"
+      >
         <FileText class="w-3.5 h-3.5" />
-        <span>[Sandbox Memory Mode]</span>
+        <span>Sandbox</span>
       </div>
     {:else if schemaState.filePath}
       <div class="h-3 w-px bg-base-300/80"></div>
       <div
-        class="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity"
+        class="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity cursor-default"
+        title={schemaState.filePath}
       >
-        <FileText class="w-3.5 h-3.5" />
+        <FileText class="w-3.5 h-3.5 text-base-content/60" />
         <span
-          class="truncate max-w-70 sm:max-w-112.5"
-          title={schemaState.filePath}
+          class="truncate max-w-28 sm:max-w-44 font-semibold text-base-content/85"
         >
-          {schemaState.filePath}
+          {schemaState.filePath.split("/").pop()}
         </span>
       </div>
     {/if}
@@ -190,7 +207,8 @@
           <div class="pt-2 border-t border-base-300/40 flex flex-col gap-2">
             {#if schemaState.isSandboxMode}
               <div class="text-[10px] text-base-content/65 font-sans">
-                <strong>Sandbox Note:</strong> Disk Wrangler config files are bypassed in-memory while testing in Sandbox Mode.
+                <strong>Sandbox Note:</strong> Disk Wrangler config files are bypassed
+                in-memory while testing in Sandbox Mode.
               </div>
             {:else}
               <button
@@ -199,8 +217,13 @@
               >
                 ⚡ Fix & Sync to Wrangler Config
               </button>
-              <div class="text-[9px] text-base-content/40 leading-normal font-sans">
-                💡 Automatically writes missing binding headers into your <code>{schemaState.wranglerConfigFilePath?.split("/").pop() || "wrangler.toml"}</code> file.
+              <div
+                class="text-[9px] text-base-content/40 leading-normal font-sans"
+              >
+                💡 Automatically writes missing binding headers into your <code
+                  >{schemaState.wranglerConfigFilePath?.split("/").pop() ||
+                    "wrangler.toml"}</code
+                > file.
               </div>
             {/if}
           </div>
@@ -337,5 +360,12 @@
         >
       </div>
     {/if}
+
+    <!-- Application Version Badge -->
+    <div class="h-3 w-px bg-base-300/80"></div>
+    <span
+      class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold"
+      title="Strata App Version">v3.0.3</span
+    >
   </div>
 </div>
