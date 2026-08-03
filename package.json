@@ -1,6 +1,6 @@
 {
   "name": "strata",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Making it easier to visualize your cloudflare applications",
   "type": "module",
   "scripts": {
