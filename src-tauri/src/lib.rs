@@ -112,22 +112,29 @@ pub fn run() {
             app.manage(WatcherState {
                 watcher: Mutex::new(None),
             });
+
+            use tauri_plugin_updater::UpdaterExt;
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Ok(updater) = handle.updater() {
+                    if let Ok(Some(update)) = updater.check().await {
+                        let _ = update.download_and_install(|_, _| {}, || {}).await;
+                    }
+                }
+            });
+
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init());
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
 
     #[cfg(feature = "devtools")]
     {
         builder = builder
             .plugin(tauri_plugin_devtools::init())
             .plugin(tauri_plugin_devtools_app::init());
-    }
-
-    #[cfg(feature = "updater")]
-    {
-        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     }
 
     builder
