@@ -94,11 +94,61 @@ async fn close_splashscreen(app: tauri::AppHandle) {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn appimage_wayland_preload_fix() {
+    use std::os::unix::process::CommandExt;
+
+    // Only relevant when actually running from inside an AppImage on Wayland,
+    // and only once (guard against re-exec looping).
+    let in_appimage = std::env::var("APPIMAGE").is_ok();
+    let on_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+    let already_reexeced = std::env::var("__STRATA_WAYLAND_PRELOAD_DONE").is_ok();
+
+    if !in_appimage || !on_wayland || already_reexeced || std::env::var("LD_PRELOAD").is_ok() {
+        return;
+    }
+
+    let candidates = [
+        "/usr/lib64/libwayland-client.so.0",
+        "/usr/lib/x86_64-linux-gnu/libwayland-client.so.0",
+        "/usr/lib/libwayland-client.so.0",
+    ];
+
+    for path in candidates {
+        let p = std::path::Path::new(path);
+        if !p.exists() {
+            continue;
+        }
+        // Skip if it's the wrong ELF class (e.g. a 32-bit lib on a 64-bit system)
+        if let Ok(bytes) = std::fs::read(p) {
+            if bytes.len() > 5 && bytes[4] != 2 {
+                // ELF class byte: 1 = 32-bit, 2 = 64-bit — skip mismatches
+                continue;
+            }
+        }
+
+        let exe = match std::env::current_exe() {
+            Ok(exe) => exe,
+            Err(_) => return,
+        };
+
+        let _ = std::process::Command::new(exe)
+            .args(std::env::args_os().skip(1))
+            .env("LD_PRELOAD", path)
+            .env("__STRATA_WAYLAND_PRELOAD_DONE", "1")
+            .exec(); // replaces current process on success, never returns
+
+        break;
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Check if running on Linux and dynamically force the fix safely at runtime
     #[cfg(target_os = "linux")]
     {
+        appimage_wayland_preload_fix();
+
         if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
