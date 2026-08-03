@@ -16,6 +16,7 @@
     CircleAlert,
     FolderOpen,
     LoaderCircle,
+    Lightbulb,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { PlatformService } from "$lib/services/platform";
@@ -372,7 +373,8 @@
                 <span
                   >Leaving this empty tells Strata to auto-discover <code
                     >wrangler.toml</code
-                  >, <code>wrangler.jsonc</code>, or <code>wrangler.json</code> in parent folders.</span
+                  >, <code>wrangler.jsonc</code>, or <code>wrangler.json</code> in
+                  parent folders.</span
                 >
               </div>
             </div>
@@ -459,7 +461,7 @@
       <div
         class="p-4 bg-info/5 border border-info/10 rounded-2xl text-[11px] leading-relaxed flex gap-2"
       >
-        <span class="text-info font-bold text-sm">💡</span>
+        <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
         <div class="flex flex-col gap-1 text-base-content/85">
           <span class="font-bold text-base-content"
             >Cloudflare Configuration</span
