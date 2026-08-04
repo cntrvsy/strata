@@ -23,9 +23,11 @@
     Braces,
     Wrench,
     Copy,
+    RefreshCw,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
   import { schemaState } from "$lib/state";
+  import { updateState } from "$lib/state/updateState.svelte";
   import { SAMPLE_TEMPLATES } from "$lib/mock";
 
   let { show = $bindable(false) } = $props();
@@ -449,8 +451,20 @@ export const users = sqliteTable("users", {});</pre>
     {
       id: "ach-framework-do-exports",
       category: "achievements",
-      title: "Framework-Agnostic Durable Object Exports (Hono, SvelteKit, Remix, Astro, Nuxt, Next.js)",
-      tags: ["durable", "objects", "hono", "sveltekit", "remix", "astro", "nuxt", "nextjs", "exports", "wrangler"],
+      title:
+        "Framework-Agnostic Durable Object Exports (Hono, SvelteKit, Remix, Astro, Nuxt, Next.js)",
+      tags: [
+        "durable",
+        "objects",
+        "hono",
+        "sveltekit",
+        "remix",
+        "astro",
+        "nuxt",
+        "nextjs",
+        "exports",
+        "wrangler",
+      ],
       summary:
         "How Durable Object classes must be exported across all major Cloudflare Workers web frameworks.",
       content: `<p class="mb-2">The Cloudflare Workers runtime requires every Durable Object class bound in <code>wrangler.toml</code> to be exported from your worker entrypoint module. Here is how each framework handles it:</p>
@@ -468,7 +482,15 @@ export const users = sqliteTable("users", {});</pre>
       id: "ach-do-mutations",
       category: "achievements",
       title: "Durable Object Folder Structures & File Path Resolution",
-      tags: ["durable", "objects", "ast", "paths", "folders", "resolution", "aliases"],
+      tags: [
+        "durable",
+        "objects",
+        "ast",
+        "paths",
+        "folders",
+        "resolution",
+        "aliases",
+      ],
       summary:
         "How Strata flexibly resolves single files, shared folders, co-located routes, and tsconfig path aliases for Durable Objects.",
       content: `<p class="mb-2">Strata places <strong>zero restrictions on your folder structure</strong> when organizing Durable Objects:</p>
@@ -710,6 +732,16 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
         </div>
 
         <div class="flex items-center gap-2">
+          <button
+            class="btn btn-outline btn-xs rounded-xl font-bold gap-1.5 px-3 border-base-300 hover:border-primary hover:bg-primary/10 hover:text-primary"
+            onclick={() => {
+              show = false;
+              updateState.openModal();
+            }}
+          >
+            <RefreshCw class="w-3 h-3 text-primary" />
+            <span>Check for Updates</span>
+          </button>
           <button
             class="btn btn-secondary btn-xs rounded-xl font-bold gap-1.5 px-3 shadow-xs"
             onclick={() => (activeTab = "starter-templates")}

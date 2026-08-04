@@ -208,7 +208,7 @@
   <!-- Missing File Warning Banner -->
   {#if missingWarning}
     <div
-      class="p-3 bg-warning/10 border border-warning/20 rounded-2xl text-[11px] text-warning-content/90 flex items-start gap-2.5 leading-relaxed"
+      class="p-3 bg-warning/10 border border-warning/20 rounded-2xl text-[11px] text-base-content/90 flex items-start gap-2.5 leading-relaxed"
     >
       <TriangleAlert class="w-4 h-4 text-warning shrink-0 mt-0.5" />
       <div class="flex flex-col gap-0.5">

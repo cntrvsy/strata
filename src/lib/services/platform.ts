@@ -95,4 +95,59 @@ export class PlatformService {
 		const { getCurrentWindow } = await import("@tauri-apps/api/window");
 		await getCurrentWindow().close();
 	}
+
+	static async checkForUpdate(): Promise<{
+		available: boolean;
+		version?: string;
+		body?: string;
+		date?: string;
+		rawUpdate?: any;
+	} | null> {
+		if (!this.isTauri()) return null;
+		try {
+			const { check } = await import("@tauri-apps/plugin-updater");
+			const update = await check();
+			if (!update) {
+				return { available: false };
+			}
+			return {
+				available: true,
+				version: update.version,
+				body: update.body,
+				date: update.date,
+				rawUpdate: update
+			};
+		} catch (err) {
+			console.warn("[Strata] Updater check failed:", err);
+			throw err;
+		}
+	}
+
+	static async downloadAndInstallUpdate(
+		rawUpdate: any,
+		onProgress?: (downloaded: number, contentLength?: number) => void
+	): Promise<void> {
+		if (!this.isTauri() || !rawUpdate) return;
+		let downloadedBytes = 0;
+		await rawUpdate.downloadAndInstall((event: any) => {
+			if (event.event === "Started") {
+				onProgress?.(0, event.data.contentLength);
+			} else if (event.event === "Progress") {
+				downloadedBytes += event.data.chunkLength;
+				onProgress?.(downloadedBytes);
+			} else if (event.event === "Finished") {
+				onProgress?.(downloadedBytes);
+			}
+		});
+	}
+
+	static async relaunchApp(): Promise<void> {
+		if (!this.isTauri()) return;
+		try {
+			const { relaunch } = await import("@tauri-apps/plugin-process");
+			await relaunch();
+		} catch (err) {
+			console.error("[Strata] Relaunch failed:", err);
+		}
+	}
 }

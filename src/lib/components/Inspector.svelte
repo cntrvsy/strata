@@ -196,7 +196,7 @@
               </div>
             {/if}
             <span
-              class="text-[9px] uppercase tracking-wider font-bold opacity-40 mt-0.5"
+              class="text-[9px] uppercase tracking-wider font-bold opacity-75 mt-0.5 text-base-content/75"
               >{config.label}</span
             >
           </div>
@@ -268,7 +268,7 @@
       <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
         {#if isReadOnly}
           <div
-            class="alert alert-info/10 bg-info/5 text-info-content text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed"
+            class="alert alert-info/10 bg-info/5 text-base-content/90 text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed"
           >
             <span>ℹ️</span>
             <span
@@ -293,7 +293,7 @@
           <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between px-1">
               <span
-                class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
+                class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider"
                 >Structure</span
               >
             </div>
@@ -341,14 +341,14 @@
           <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between px-1">
               <span
-                class="text-[10px] font-bold uppercase opacity-45 tracking-wider"
+                class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider"
                 >Defined Connections</span
               >
             </div>
 
             {#if tableEdges.length === 0}
               <div
-                class="text-center py-8 opacity-40 text-xs text-base-content/50"
+                class="text-center py-8 text-xs text-base-content/70 font-medium"
               >
                 No relationships defined for this entity.
               </div>
@@ -377,7 +377,7 @@
                       </div>
 
                       <span
-                        class="badge badge-outline badge-xs text-[9px] uppercase font-mono opacity-50 px-1 py-0.5 rounded leading-none"
+                        class="badge badge-outline badge-xs text-[9px] uppercase font-mono opacity-80 text-base-content/85 px-1 py-0.5 rounded leading-none"
                       >
                         {card}
                       </span>
@@ -436,7 +436,7 @@
               >
                 💡 Handle Fallbacks
               </span>
-              <p class="leading-relaxed opacity-65 font-medium">
+              <p class="leading-relaxed opacity-80 text-base-content/80 font-medium">
                 Physical foreign key references connect directly to the column
                 rows. Logical relations and synthetic references fall back to
                 entity-level handles on the sides of the node cards.
@@ -460,7 +460,7 @@
       <!-- Footer Stats/Hint -->
       <div class="p-6 bg-base-200/30 border-t border-base-300/60">
         <div class="flex flex-col items-center gap-4">
-          <p class="text-[10px] opacity-60 text-center flex items-center gap-1">
+          <p class="text-[10px] opacity-75 text-base-content/75 text-center flex items-center gap-1">
             Made with<Heart class="w-4 h-4" fill="red" /> from
             <a
               href="https://frstudios.co.ke"

@@ -80,7 +80,7 @@
         </div>
         <div class="flex items-center gap-2">
           <span
-            class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold"
+            class="text-[9px] font-mono opacity-75 text-base-content/80 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold"
           >
             {col.definition.split("(")[0]}
           </span>
@@ -140,7 +140,7 @@
       </div>
 
       <div class="flex items-center gap-2 mt-2 pt-1">
-        <span class="text-[9px] font-bold uppercase tracking-wider opacity-40">
+        <span class="text-[9px] font-bold uppercase tracking-wider opacity-70 text-base-content/75">
           Default
         </span>
         <input
