@@ -126,7 +126,7 @@
             </span>
           {/if}
           <span
-            class="text-[9px] font-mono opacity-50 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-bold"
+            class="text-[9px] font-mono opacity-75 text-base-content/80 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-bold"
           >
             {col.definition}
           </span>
@@ -157,7 +157,7 @@
         >
           <div class="grid grid-cols-2 gap-2">
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-40"
+              <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
                 >Value Type</span
               >
               <select
@@ -171,7 +171,7 @@
               </select>
             </div>
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-40"
+              <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
                 >Expiration TTL (s)</span
               >
               <input
@@ -185,7 +185,7 @@
           </div>
 
           <div class="flex flex-col gap-1">
-            <span class="text-[9px] font-bold uppercase opacity-40"
+            <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
               >Metadata String / Description</span
             >
             <input

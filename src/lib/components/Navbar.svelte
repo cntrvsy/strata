@@ -20,12 +20,15 @@
     GitCompare,
     RotateCcw,
     Sparkles,
+    CircleArrowUp,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
+  import { updateState } from "$lib/state/updateState.svelte";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "$lib/components/HelpModal.svelte";
   import DiffPreviewModal from "$lib/components/DiffPreviewModal.svelte";
+  import UpdateModal from "$lib/components/UpdateModal.svelte";
   import { arrangeLayout } from "$lib/services/layout";
   import { SAMPLE_TEMPLATES } from "$lib/mock";
 
@@ -141,7 +144,8 @@
     {#if schemaState.isSandboxMode}
       <button
         class="btn btn-secondary btn-sm gap-1.5 rounded-lg text-xs font-semibold px-3 h-8 min-h-0 shadow-sm"
-        onclick={() => schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
+        onclick={() =>
+          schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
         title="Reset sandbox schema template to initial state"
         data-testid="reset-sandbox-button"
       >
@@ -157,18 +161,27 @@
           title="Switch Sandbox Template"
         >
           <Sparkles class="w-3 h-3 text-secondary" />
-          <span class="capitalize font-bold">{schemaState.sandboxTemplateKey}</span>
+          <span class="capitalize font-bold"
+            >{schemaState.sandboxTemplateKey}</span
+          >
         </div>
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <ul
           tabindex="0"
           class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-44 p-1.5 shadow-2xl mt-1 text-xs"
         >
-          <li class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1">Starter Templates</li>
+          <li
+            class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
+          >
+            Starter Templates
+          </li>
           {#each Object.values(SAMPLE_TEMPLATES) as tpl}
             <li>
               <button
-                class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey === tpl.key ? 'active font-bold' : ''}"
+                class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey ===
+                tpl.key
+                  ? 'active font-bold'
+                  : ''}"
                 onclick={() => schemaState.loadSandboxDemo(tpl.key)}
               >
                 {tpl.name}
@@ -255,7 +268,6 @@
           </button>
         </div>
 
-
         <div
           class="tooltip tooltip-bottom text-[10px] font-sans"
           data-tip="Export Diagram as PNG"
@@ -312,10 +324,15 @@
       <div
         tabindex="0"
         role="button"
-        class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg hover:bg-base-200/80 flex items-center justify-center"
+        class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg hover:bg-base-200/80 flex items-center justify-center relative"
         title="Settings & Help"
       >
         <Menu class="w-3.5 h-3.5 text-base-content/75" />
+        {#if updateState.hasUnseenUpdate}
+          <span
+            class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-base-100 animate-pulse"
+          ></span>
+        {/if}
       </div>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <ul
@@ -336,6 +353,21 @@
         {/if}
         <li>
           <button
+            class="flex items-center justify-between rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+            onclick={() => updateState.openModal()}
+          >
+            <div class="flex items-center gap-2">
+              <CircleArrowUp class="w-3.5 h-3.5 text-base-content/70" />
+              <span>Check for Updates...</span>
+            </div>
+            {#if updateState.hasUnseenUpdate}
+              <span class="w-2 h-2 rounded-full bg-primary animate-pulse"
+              ></span>
+            {/if}
+          </button>
+        </li>
+        <li>
+          <button
             class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
             onclick={() => (showHelp = true)}
           >
@@ -350,3 +382,4 @@
 
 <HelpModal bind:show={showHelp} />
 <DiffPreviewModal bind:show={showDiffPreview} />
+<UpdateModal />

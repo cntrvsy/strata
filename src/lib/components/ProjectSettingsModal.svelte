@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import { schemaState } from "$lib/state";
+  import { updateState } from "$lib/state/updateState.svelte";
   import {
     X,
     Settings,
@@ -17,6 +18,9 @@
     FolderOpen,
     LoaderCircle,
     Lightbulb,
+    ArrowUpCircle,
+    RefreshCw,
+    CircleArrowUp,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { PlatformService } from "$lib/services/platform";
@@ -455,6 +459,36 @@
             </div>
           {/if}
         </div>
+      </div>
+
+      <!-- Software Updates & App Info -->
+      <div
+        class="p-4 bg-base-200/50 border border-base-300/60 rounded-2xl flex items-center justify-between"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary"
+          >
+            <CircleArrowUp class="w-4 h-4" />
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-base-content">
+              Software Updates
+            </h4>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-outline btn-xs gap-1.5 rounded-lg font-semibold border-base-300 hover:border-primary hover:bg-primary/10 hover:text-primary"
+          onclick={() => {
+            schemaState.showProjectSettingsModal = false;
+            updateState.openModal();
+          }}
+        >
+          <RefreshCw class="w-3 h-3" />
+          <span>Check for Updates</span>
+        </button>
       </div>
 
       <!-- Cloudflare bindings info -->

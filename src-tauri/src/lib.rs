@@ -164,11 +164,16 @@ pub fn run() {
             });
 
             use tauri_plugin_updater::UpdaterExt;
+            use tauri::Emitter;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
                     if let Ok(Some(update)) = updater.check().await {
-                        let _ = update.download_and_install(|_, _| {}, || {}).await;
+                        let _ = handle.emit("update-available", serde_json::json!({
+                            "version": update.version,
+                            "body": update.body,
+                            "date": update.date.map(|d| d.to_string())
+                        }));
                     }
                 }
             });
@@ -178,6 +183,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
     #[cfg(feature = "devtools")]

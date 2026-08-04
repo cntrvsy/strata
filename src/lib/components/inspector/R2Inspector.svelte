@@ -176,7 +176,7 @@
         </div>
         <div class="flex items-center gap-2">
           <span
-            class="text-[9px] font-mono opacity-50 uppercase bg-info/10 text-info px-1.5 py-0.5 rounded leading-none shrink-0 border border-info/15 font-bold"
+            class="text-[9px] font-mono opacity-90 uppercase bg-info/10 text-info px-1.5 py-0.5 rounded leading-none shrink-0 border border-info/20 font-bold"
           >
             {col.definition}
           </span>
