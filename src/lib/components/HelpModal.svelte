@@ -23,11 +23,9 @@
     Braces,
     Wrench,
     Copy,
-    RefreshCw,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
   import { schemaState } from "$lib/state";
-  import { updateState } from "$lib/state/updateState.svelte";
   import { SAMPLE_TEMPLATES } from "$lib/mock";
 
   let { show = $bindable(false) } = $props();
@@ -732,16 +730,6 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
         </div>
 
         <div class="flex items-center gap-2">
-          <button
-            class="btn btn-outline btn-xs rounded-xl font-bold gap-1.5 px-3 border-base-300 hover:border-primary hover:bg-primary/10 hover:text-primary"
-            onclick={() => {
-              show = false;
-              updateState.openModal();
-            }}
-          >
-            <RefreshCw class="w-3 h-3 text-primary" />
-            <span>Check for Updates</span>
-          </button>
           <button
             class="btn btn-secondary btn-xs rounded-xl font-bold gap-1.5 px-3 shadow-xs"
             onclick={() => (activeTab = "starter-templates")}
