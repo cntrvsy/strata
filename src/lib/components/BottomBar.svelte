@@ -365,7 +365,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.0.5</span
+      title="Strata App Version">v3.0.6</span
     >
   </div>
 </div>
