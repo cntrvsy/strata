@@ -115,7 +115,7 @@
 
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `strata-${schemaState.filePath?.split("/").pop() || "schema"}-${Date.now()}.png`;
+      a.download = `strata-${schemaState.filePath?.split(/[/\\]/).pop() || "schema"}-${Date.now()}.png`;
       a.click();
       schemaState.machine.send("SUCCESS");
 
@@ -229,7 +229,7 @@
             class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-base-content/85 max-w-44 sm:max-w-64 truncate"
           >
             <FolderOpen class="w-3.5 h-3.5 text-primary shrink-0" />
-            <span class="truncate">{schemaState.filePath.split("/").pop()}</span
+            <span class="truncate">{schemaState.filePath.split(/[/\\]/).pop()}</span
             >
             <ChevronDown class="w-3 h-3 opacity-60 shrink-0 ml-0.5" />
           </div>
