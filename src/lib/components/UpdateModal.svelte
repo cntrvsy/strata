@@ -195,15 +195,17 @@
 
           <!-- 6. ERROR STATE -->
         {:else if updateState.status === "error"}
-          <div class="flex flex-col items-center gap-3 py-2">
+          <div class="flex flex-col items-center gap-3 py-2 w-full">
             <div
               class="w-12 h-12 rounded-full bg-error/15 border border-error/30 flex items-center justify-center text-error"
             >
               <TriangleAlert class="w-6 h-6" />
             </div>
-            <div class="space-y-1">
-              <h4 class="text-sm font-bold text-error">Update Failed</h4>
-              <p class="text-xs text-base-content/70 max-w-xs leading-relaxed">
+            <div class="space-y-1 text-center">
+              <h4 class="text-sm font-bold text-error">
+                Update Server Unreachable
+              </h4>
+              <p class="text-xs text-base-content/80 max-w-sm leading-relaxed">
                 {updateState.errorMessage ||
                   "Unable to complete update process."}
               </p>

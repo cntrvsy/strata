@@ -65,17 +65,17 @@
       <Form.Control>
         {#snippet children({ props })}
           <Form.Label
-            class="text-[10px] font-semibold opacity-60 mb-1.5 block uppercase tracking-wider"
+            class="text-[10px] font-bold text-base-content/80 mb-1.5 block uppercase tracking-wider"
             >Target Entity</Form.Label
           >
           <select
             {...props}
             bind:value={$formData.target}
-            class="select select-sm select-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-xs"
+            class="select select-sm select-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-xs font-medium"
           >
-            <option value="" disabled selected>Select target...</option>
+            <option class="bg-base-100 text-base-content" value="" disabled selected>Select target...</option>
             {#each potentialTargets as target}
-              <option value={target}>{target}</option>
+              <option class="bg-base-100 text-base-content" value={target}>{target}</option>
             {/each}
           </select>
         {/snippet}
