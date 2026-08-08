@@ -63,7 +63,13 @@
 </script>
 
 <div class="flex flex-col gap-2">
+  <div class="p-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent flex flex-col gap-0.5 text-[10px] mb-1">
+    <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace Binding</span>
+    <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+  </div>
+
   {#each data.columns as col}
+
     <div
       class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"

@@ -61,6 +61,6 @@ test.describe('Code Mirror Component', () => {
 
     // 2. Check for error indicators in the global overlay
     await expect(page.getByText('Sync Paused: Parse Error')).toBeVisible();
-    await expect(page.getByText('Syntax Error: Unexpected token')).toBeVisible();
+    await expect(page.getByText('Syntax Error: Unexpected token').first()).toBeVisible();
   });
 });

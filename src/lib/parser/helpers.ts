@@ -188,6 +188,10 @@ export interface ExtractedStrataMetadata {
 	rawMatch: string;
 	jsonStr: string;
 	data: any;
+	issue?: {
+		message: string;
+		code: 'JSDOC_SYNTAX_ERROR' | 'INVALID_TARGET' | 'TYPE_MISMATCH';
+	};
 }
 
 /**
@@ -199,7 +203,17 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 	if (strataIdx === -1) return null;
 
 	const startBraceIdx = text.indexOf('{', strataIdx);
-	if (startBraceIdx === -1) return null;
+	if (startBraceIdx === -1) {
+		return {
+			rawMatch: '@strata',
+			jsonStr: '',
+			data: null,
+			issue: {
+				message: 'Malformed @strata JSDoc: Missing opening bracket `{`',
+				code: 'JSDOC_SYNTAX_ERROR'
+			}
+		};
+	}
 
 	let depth = 0;
 	let inString = false;
@@ -238,7 +252,18 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 		}
 	}
 
-	if (endBraceIdx === -1) return null;
+	if (endBraceIdx === -1) {
+		const rawMatch = text.slice(strataIdx, Math.min(text.length, strataIdx + 100));
+		return {
+			rawMatch,
+			jsonStr: rawMatch,
+			data: null,
+			issue: {
+				message: 'Malformed @strata JSDoc: Unclosed closing bracket `}`',
+				code: 'JSDOC_SYNTAX_ERROR'
+			}
+		};
+	}
 
 	const rawMatch = text.slice(strataIdx, endBraceIdx + 1);
 	const rawJson = text.slice(startBraceIdx, endBraceIdx + 1);
@@ -252,13 +277,46 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 			jsonStr: cleanJson,
 			data
 		};
-	} catch (e) {
+	} catch (e: any) {
+		// Attempt soft JSON repair (convert single quotes, remove trailing commas)
+		const softRepaired = trySoftRepairJson(cleanJson);
+		if (softRepaired) {
+			return {
+				rawMatch,
+				jsonStr: cleanJson,
+				data: softRepaired,
+				issue: {
+					message: 'JSDoc @strata syntax formatting issue (single quotes or trailing commas auto-repaired)',
+					code: 'JSDOC_SYNTAX_ERROR'
+				}
+			};
+		}
+
 		console.warn('[Strata] Failed to parse @strata JSON payload:', cleanJson, e);
 		return {
 			rawMatch,
 			jsonStr: cleanJson,
-			data: null
+			data: null,
+			issue: {
+				message: `Invalid JSDoc JSON syntax: ${e?.message || String(e)}`,
+				code: 'JSDOC_SYNTAX_ERROR'
+			}
 		};
 	}
 }
+
+function trySoftRepairJson(jsonStr: string): any | null {
+	try {
+		const sanitized = jsonStr
+			.replace(/\/\/.*/g, '')
+			.replace(/'([^'\\]*?)'\s*:/g, '"$1":')
+			.replace(/:\s*'([^'\\]*?)'/g, ': "$1"')
+			.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":')
+			.replace(/,(\s*[}\]])/g, '$1');
+		return JSON.parse(sanitized);
+	} catch {
+		return null;
+	}
+}
+
 

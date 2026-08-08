@@ -14,8 +14,14 @@
     Cpu,
     Zap,
     TriangleAlert,
+    CircleAlert,
+    Wrench,
+    X,
+    Lightbulb,
+    CircleX,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
+  import { uiState } from "$lib/state/uiStore.svelte";
 
   const stats = $derived.by(() => {
     const nodes = schemaState.nodes;
@@ -161,72 +167,148 @@
         >
           {schemaState.filePath.split("/").pop()}
         </span>
+        <button
+          class="btn btn-ghost btn-xs btn-circle h-4 w-4 min-h-0 hover:bg-base-200 text-base-content/50 hover:text-error ml-0.5"
+          onclick={() => schemaState.closeFile()}
+          title="Close schema & return to welcome overlay"
+        >
+          <X class="w-3 h-3" />
+        </button>
       </div>
     {/if}
 
-    <!-- Validation Warnings (Config Mismatch Indicator) -->
-    {#if (schemaState.filePath || schemaState.isSandboxMode) && schemaState.validationWarnings.length > 0}
+    <!-- Audit Issues & Configuration Mismatches -->
+    {#if (schemaState.filePath || schemaState.isSandboxMode) && schemaState.totalAuditCount > 0}
       <div class="h-3 w-px bg-base-300/80"></div>
       <div
-        class="relative group/warn flex items-center gap-1 cursor-help py-0.5"
+        class="relative group/warn flex items-center gap-1 cursor-pointer py-0.5"
       >
         <div
-          class="flex items-center gap-1 text-warning bg-warning/10 border border-warning/20 rounded px-1.5 py-0.5 text-[9px] font-bold"
+          class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold border transition-colors {schemaState.auditErrorCount >
+          0
+            ? 'bg-error/15 border-error/30 text-error'
+            : 'bg-warning/15 border-warning/30 text-warning'}"
         >
-          <TriangleAlert class="w-3 h-3 text-warning" />
-          <span>{schemaState.validationWarnings.length} Mismatches</span>
+          {#if schemaState.auditErrorCount > 0}
+            <CircleAlert class="w-3 h-3 text-error" />
+            <span>{schemaState.auditErrorCount} Errors</span>
+          {:else}
+            <TriangleAlert class="w-3 h-3 text-warning" />
+            <span>{schemaState.auditWarningCount} Warnings</span>
+          {/if}
         </div>
 
-        <!-- Detail Card (glorious tooltip) -->
+        <!-- Detail Card (glorious audit & diagnostic tooltip) -->
         <div
-          class="absolute bottom-7 left-0 w-84 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 group-hover/warn:pointer-events-auto pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
+          class="absolute bottom-7 left-0 w-96 max-h-105 p-4 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 group-hover/warn:pointer-events-auto pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-3 backdrop-blur-md text-[11px] font-sans overflow-y-auto"
         >
-          <div class="flex items-center justify-between">
+          <div
+            class="flex items-center justify-between border-b border-base-200 pb-2"
+          >
             <div class="flex items-center gap-2">
-              <div class="p-1 bg-warning/10 rounded-lg text-warning">
-                <TriangleAlert class="w-3.5 h-3.5" />
-              </div>
-              <span
-                class="font-bold text-xs text-base-content uppercase tracking-wider"
-                >Configuration Mismatches</span
+              <div
+                class="p-1 rounded-lg {schemaState.auditErrorCount > 0
+                  ? 'bg-error/10 text-error'
+                  : 'bg-warning/10 text-warning'}"
               >
+                {#if schemaState.auditErrorCount > 0}
+                  <CircleAlert class="w-4 h-4" />
+                {:else}
+                  <TriangleAlert class="w-4 h-4" />
+                {/if}
+              </div>
+              <div>
+                <span
+                  class="font-bold text-xs text-base-content uppercase tracking-wider block leading-none"
+                  >Schema Diagnostics</span
+                >
+                <span class="text-[10px] text-base-content/60"
+                  >{schemaState.totalAuditCount} total issues detected</span
+                >
+              </div>
             </div>
           </div>
-          <p class="text-[10px] leading-relaxed text-base-content/70">
-            The following entities or connections in your schema JSDoc do not
-            match your wrangler configuration:
-          </p>
-          <ul
-            class="list-disc pl-4 space-y-1 text-[10px] leading-relaxed text-warning font-mono"
-          >
-            {#each schemaState.validationWarnings as warning}
-              <li>{warning}</li>
-            {/each}
-          </ul>
 
-          <div class="pt-2 border-t border-base-300/40 flex flex-col gap-2">
-            {#if schemaState.isSandboxMode}
-              <div class="text-[10px] text-base-content/65 font-sans">
-                <strong>Sandbox Note:</strong> Disk Wrangler config files are bypassed
-                in-memory while testing in Sandbox Mode.
-              </div>
-            {:else}
-              <button
-                class="btn btn-warning btn-xs rounded-xl font-semibold gap-1 text-[10px] shadow-sm w-full"
-                onclick={() => schemaState.syncMissingWranglerBindings()}
+          <!-- Audit Issues List -->
+          {#if schemaState.auditIssues.length > 0}
+            <div class="flex flex-col gap-1.5">
+              <span
+                class="text-[9px] font-bold uppercase tracking-wider text-base-content/50"
+                >JSDoc & Parser Issues</span
               >
-                ⚡ Fix & Sync to Wrangler Config
-              </button>
-              <div
-                class="text-[9px] text-base-content/40 leading-normal font-sans"
+              {#each schemaState.auditIssues as issue}
+                <div
+                  class="p-2 rounded-xl bg-base-200/50 border border-base-300/50 flex flex-col gap-1 text-[10px]"
+                >
+                  <div class="flex items-center justify-between">
+                    <span
+                      class="font-bold font-mono text-[10px] flex items-center gap-1 {issue.severity ===
+                        'error' || issue.severity === 'critical'
+                        ? 'text-error'
+                        : 'text-warning'}"
+                    >
+                      <span>
+                        {#if issue.severity === "error" || issue.severity === "critical"}
+                          <CircleX class="w-4 h-4" />
+                        {:else}
+                          <TriangleAlert class="w-4 h-4" />
+                        {/if}
+                      </span>
+                      <span>{issue.symbolName || "Schema"}</span>
+                    </span>
+                    {#if issue.line}
+                      <button
+                        class="px-1.5 py-0.5 rounded bg-base-300/60 hover:bg-primary/20 hover:text-primary font-mono text-[9px] transition-colors"
+                        onclick={() => uiState.jumpToCodeLine(issue.line)}
+                        title="Click to jump to line {issue.line} in Code Editor"
+                      >
+                        Line {issue.line} ↗
+                      </button>
+                    {/if}
+                  </div>
+                  <p class="text-base-content/80 font-sans leading-tight">
+                    {issue.message}
+                  </p>
+                  {#if issue.suggestedFix && issue.symbolName}
+                    <button
+                      class="btn btn-xs btn-ghost text-primary border border-primary/20 rounded-lg text-[9px] h-6 min-h-6 self-start mt-0.5 gap-1 hover:bg-primary/10"
+                      onclick={() =>
+                        issue.symbolName &&
+                        schemaState.repairNodeJsdoc(issue.symbolName)}
+                    >
+                      <Wrench class="w-3 h-3" />
+                      <span>{issue.suggestedFix.label}</span>
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+
+          <!-- Configuration Mismatches List -->
+          {#if schemaState.validationWarnings.length > 0}
+            <div class="flex flex-col gap-1.5">
+              <span
+                class="text-[9px] font-bold uppercase tracking-wider text-base-content/50"
+                >Configuration Mismatches</span
               >
-                💡 Automatically writes missing binding headers into your <code
-                  >{schemaState.wranglerConfigFilePath?.split("/").pop() ||
-                    "wrangler.toml"}</code
-                > file.
-              </div>
-            {/if}
-          </div>
+              <ul
+                class="list-disc pl-4 space-y-1 text-[10px] leading-relaxed text-warning font-mono"
+              >
+                {#each schemaState.validationWarnings as warning}
+                  <li>{warning}</li>
+                {/each}
+              </ul>
+              {#if !schemaState.isSandboxMode}
+                <button
+                  class="btn btn-warning btn-xs rounded-xl font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
+                  onclick={() => schemaState.syncMissingWranglerBindings()}
+                >
+                  ⚡ Fix & Sync to Wrangler Config
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     {/if}
@@ -342,7 +424,8 @@
           <div
             class="text-[9px] text-base-content/40 leading-normal border-t border-base-300/40 pt-1.5"
           >
-            💡 Click database tags to isolate node types in the canvas.
+            <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" /> Click database tags
+            to isolate node types in the canvas.
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
   import { schemaState } from "$lib/state";
-  import { X, Check } from "lucide-svelte";
+  import { X, Check, Lightbulb } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
     tableName: string;
@@ -132,32 +132,86 @@
                 class="select select-sm select-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-xs font-medium"
               >
                 {#if target === "kv"}
-                  <option class="bg-base-100 text-base-content" value="string">String</option>
-                  <option class="bg-base-100 text-base-content" value="number">Number</option>
-                  <option class="bg-base-100 text-base-content" value="boolean">Boolean</option>
-                  <option class="bg-base-100 text-base-content" value="any">Any</option>
+                  <option class="bg-base-100 text-base-content" value="string"
+                    >String</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="number"
+                    >Number</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="boolean"
+                    >Boolean</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="any"
+                    >Any</option
+                  >
                 {:else if target === "do"}
-                  <option class="bg-base-100 text-base-content" value="Promise<any>">Promise&lt;any&gt;</option>
-                  <option class="bg-base-100 text-base-content" value="Promise<string>">Promise&lt;string&gt;</option>
-                  <option class="bg-base-100 text-base-content" value="Promise<number>">Promise&lt;number&gt;</option>
-                  <option class="bg-base-100 text-base-content" value="Promise<boolean>">Promise&lt;boolean&gt;</option>
-                  <option class="bg-base-100 text-base-content" value="Promise<void>">Promise&lt;void&gt;</option>
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="Promise<any>">Promise&lt;any&gt;</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="Promise<string>">Promise&lt;string&gt;</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="Promise<number>">Promise&lt;number&gt;</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="Promise<boolean>">Promise&lt;boolean&gt;</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="Promise<void>">Promise&lt;void&gt;</option
+                  >
                 {:else}
-                  <option class="bg-base-100 text-base-content" value="text">Text (String)</option>
-                  <option class="bg-base-100 text-base-content" value="integer">Integer (Number)</option>
-                  <option class="bg-base-100 text-base-content" value="timestamp">Timestamp (Date → mode: "timestamp")</option>
-                  <option class="bg-base-100 text-base-content" value="boolean_int">Boolean (0/1 → mode: "boolean")</option>
-                  <option class="bg-base-100 text-base-content" value="real">Real (Float)</option>
-                  <option class="bg-base-100 text-base-content" value="blob">Blob (Binary)</option>
+                  <option class="bg-base-100 text-base-content" value="text"
+                    >Text (String)</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="integer"
+                    >Integer (Number)</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="timestamp"
+                    >Timestamp (Date → mode: "timestamp")</option
+                  >
+                  <option
+                    class="bg-base-100 text-base-content"
+                    value="boolean_int">Boolean (0/1 → mode: "boolean")</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="real"
+                    >Real (Float)</option
+                  >
+                  <option class="bg-base-100 text-base-content" value="blob"
+                    >Blob (Binary)</option
+                  >
                 {/if}
               </select>
               {#if target === "d1" && $formData.type === "timestamp"}
-                <p class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium">
-                  💡 <strong>D1 Date:</strong> Generates <code>integer("{$formData.name || 'field'}", &#123; mode: "timestamp" &#125;)</code> for native JS Date mapping.
+                <p
+                  class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium"
+                >
+                  <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
+                  <strong>D1 Date:</strong>
+                  Generates
+                  <code
+                    >integer("{$formData.name || "field"}", &#123; mode:
+                    "timestamp" &#125;)</code
+                  > for native JS Date mapping.
                 </p>
               {:else if target === "d1" && $formData.type === "boolean_int"}
-                <p class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium">
-                  💡 <strong>D1 Boolean:</strong> Generates <code>integer("{$formData.name || 'field'}", &#123; mode: "boolean" &#125;)</code> for 0/1 boolean flags.
+                <p
+                  class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium"
+                >
+                  <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
+                  <strong>D1 Boolean:</strong>
+                  Generates
+                  <code
+                    >integer("{$formData.name || "field"}", &#123; mode:
+                    "boolean" &#125;)</code
+                  > for 0/1 boolean flags.
                 </p>
               {/if}
             {/if}
@@ -173,7 +227,8 @@
       >
         <div class="flex items-center gap-2">
           <div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
-          <span class="text-[9.5px] font-bold text-base-content/80 uppercase tracking-wider"
+          <span
+            class="text-[9.5px] font-bold text-base-content/80 uppercase tracking-wider"
             >Foreign Key (Optional)</span
           >
         </div>
@@ -187,9 +242,14 @@
                   bind:value={$formData.referencesTable}
                   class="select select-xs select-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px]"
                 >
-                  <option class="bg-base-100 text-base-content" value="">No Reference</option>
+                  <option class="bg-base-100 text-base-content" value=""
+                    >No Reference</option
+                  >
                   {#each potentialTargets as targetName}
-                    <option class="bg-base-100 text-base-content" value={targetName}>{targetName}</option>
+                    <option
+                      class="bg-base-100 text-base-content"
+                      value={targetName}>{targetName}</option
+                    >
                   {/each}
                 </select>
               {/snippet}
@@ -205,9 +265,13 @@
                   disabled={!$formData.referencesTable}
                   class="select select-xs select-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] disabled:opacity-50"
                 >
-                  <option class="bg-base-100 text-base-content" value="">Select col...</option>
+                  <option class="bg-base-100 text-base-content" value=""
+                    >Select col...</option
+                  >
                   {#each potentialColumns as col}
-                    <option class="bg-base-100 text-base-content" value={col}>{col}</option>
+                    <option class="bg-base-100 text-base-content" value={col}
+                      >{col}</option
+                    >
                   {/each}
                 </select>
               {/snippet}

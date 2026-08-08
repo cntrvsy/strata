@@ -28,8 +28,10 @@ export {
 	renameColumnInSchema, 
 	updateColumnModifiersInSchema,
 	updateProjectConfigInSchema,
-	updateTableMetadataInSchema
+	updateTableMetadataInSchema,
+	addForeignKeyToColumnInSchema
 } from './mutators';
+
 
 export type { ParseResult } from './types';
 export { createIsolatedProject } from './project';

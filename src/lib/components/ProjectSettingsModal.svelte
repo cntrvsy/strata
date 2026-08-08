@@ -200,7 +200,12 @@
   });
 
   async function browseWrangler() {
-    if (!schemaState.filePath) return;
+    if (schemaState.isSandboxMode || !schemaState.filePath) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Auto-detecting wrangler.toml and selecting local file paths require a local schema file on disk.",
+      });
+      return;
+    }
 
     const dir = schemaState.filePath.substring(
       0,
@@ -228,7 +233,12 @@
   }
 
   async function autoDetectWrangler() {
-    if (!schemaState.filePath) return;
+    if (schemaState.isSandboxMode || !schemaState.filePath) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Auto-detecting wrangler.toml requires a local project directory on disk.",
+      });
+      return;
+    }
     isDetecting = true;
 
     const dir = schemaState.filePath.substring(
@@ -276,6 +286,12 @@
 
   async function handleSave(e: Event) {
     e.preventDefault();
+    if (schemaState.isSandboxMode) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Project settings JSDoc persistence is disabled in Playground Sandbox Mode.",
+      });
+      return;
+    }
     if (!schemaState.filePath) return;
     try {
       await schemaState.updateProjectConfig(wranglerPath.trim() || undefined);
@@ -316,6 +332,15 @@
     </div>
 
     <form onsubmit={handleSave} class="p-6 flex flex-col gap-6">
+      {#if schemaState.isSandboxMode}
+        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-2.5 text-xs text-warning leading-relaxed">
+          <CircleAlert class="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <span class="font-bold block text-warning">Playground Sandbox Active</span>
+            <span class="text-warning/85 text-[11px]">Wrangler file discovery and relative JSDoc path binding operate in-memory. Open a local schema file on disk to bind to a project wrangler.toml file.</span>
+          </div>
+        </div>
+      {/if}
       <div class="flex flex-col gap-3">
         <div class="flex items-center justify-between">
           <label

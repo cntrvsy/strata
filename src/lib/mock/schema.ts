@@ -187,14 +187,14 @@ export const tuitionInvoicesRelations = relations(tuitionInvoices, ({ one }) => 
 /**
  * Student Portal Auth Sessions (Cloudflare KV)
  * Global sub-millisecond session validation token cache.
- * @strata { "target": "kv", "x": 120, "y": 880, "relations": [{ "to": "students" }], "schema": { "sessionId": "string", "studentId": "number", "authToken": "string", "ipAddress": "string", "expiresAt": "number" } }
+ * @strata { "target": "kv", "binding": "STUDENT_SESSIONS_KV", "x": 120, "y": 880, "relations": [{ "to": "students" }], "schema": { "sessionId": "string", "studentId": "number", "authToken": "string", "ipAddress": "string", "expiresAt": "number" } }
  */
 export const STUDENT_SESSIONS_KV = {};
 
 /**
  * Campus Bell & Emergency Schedule (Cloudflare KV)
  * Real-time daily period timing & emergency alert broadcast flags.
- * @strata { "target": "kv", "x": 120, "y": 1240, "relations": [{ "to": "departments" }], "schema": { "scheduleType": "string", "periodIndex": "number", "startTime": "string", "endTime": "string", "emergencyLockdown": "boolean" } }
+ * @strata { "target": "kv", "binding": "BELL_SCHEDULE_KV", "x": 120, "y": 1240, "relations": [{ "to": "departments" }], "schema": { "scheduleType": "string", "periodIndex": "number", "startTime": "string", "endTime": "string", "emergencyLockdown": "boolean" } }
  */
 export const BELL_SCHEDULE_KV = {};
 
@@ -205,14 +205,14 @@ export const BELL_SCHEDULE_KV = {};
 /**
  * Interactive SmartBoard Engine (Cloudflare Durable Object)
  * Manages live classroom WebSocket sessions, digital whiteboards, and instant polls.
- * @strata { "target": "do", "x": 1500, "y": 280, "relations": [{ "to": "classes" }], "path": "./src/do/ClassroomSmartBoardDO.ts", "class": "ClassroomSmartBoardDO", "methods": ["joinClassSession", "broadcastDrawingStroke", "raiseHand", "submitLivePoll"] }
+ * @strata { "target": "do", "binding": "ClassroomSmartBoardDO", "x": 1500, "y": 280, "relations": [{ "to": "classes" }], "path": "./src/do/ClassroomSmartBoardDO.ts", "class": "ClassroomSmartBoardDO", "methods": ["joinClassSession", "broadcastDrawingStroke", "raiseHand", "submitLivePoll"] }
  */
 export const ClassroomSmartBoardDO = {};
 
 /**
  * Exam Proctoring Anti-Cheat Session (Cloudflare Durable Object)
  * Stateful real-time monitor for online exams tracking browser focus & telemetry.
- * @strata { "target": "do", "x": 1500, "y": 680, "relations": [{ "to": "enrollments" }], "path": "./src/do/ExamProctorSessionDO.ts", "class": "ExamProctorSessionDO", "methods": ["initializeExam", "recordTabSwitch", "streamWebcamSnapshot", "finalizeGrade"] }
+ * @strata { "target": "do", "binding": "ExamProctorSessionDO", "x": 1500, "y": 680, "relations": [{ "to": "enrollments" }], "path": "./src/do/ExamProctorSessionDO.ts", "class": "ExamProctorSessionDO", "methods": ["initializeExam", "recordTabSwitch", "streamWebcamSnapshot", "finalizeGrade"] }
  */
 export const ExamProctorSessionDO = {};
 
@@ -223,13 +223,14 @@ export const ExamProctorSessionDO = {};
 /**
  * Student Document Assets (Cloudflare R2 Bucket)
  * Secure object storage bucket for PDF transcripts, student ID badges, and health forms.
- * @strata { "target": "r2", "x": 580, "y": 1240, "relations": [{ "to": "students" }], "public": false, "cors": true, "folders": { "transcripts": "application/pdf", "id_badges": "image/png", "medical_records": "application/pdf" } }
+ * @strata { "target": "r2", "binding": "STUDENT_ASSETS_R2", "x": 580, "y": 1240, "relations": [{ "to": "students" }], "public": false, "cors": true, "folders": { "transcripts": "application/pdf", "id_badges": "image/png", "medical_records": "application/pdf" } }
  */
 export const STUDENT_ASSETS_R2 = {};
 
 /**
  * Lecture Video & Media Archives (Cloudflare R2 Bucket)
  * Public high-capacity bucket holding recorded video lectures, slide PDFs, and audio podcasts.
- * @strata { "target": "r2", "x": 1040, "y": 1240, "relations": [{ "to": "courses" }], "public": true, "cors": true, "folders": { "video_streams": "video/mp4", "lecture_notes": "application/pdf", "audio_podcasts": "audio/mpeg" } }
+ * @strata { "target": "r2", "binding": "LECTURE_ARCHIVES_R2", "x": 1040, "y": 1240, "relations": [{ "to": "courses" }], "public": true, "cors": true, "folders": { "video_streams": "video/mp4", "lecture_notes": "application/pdf", "audio_podcasts": "audio/mpeg" } }
  */
 export const LECTURE_ARCHIVES_R2 = {};
+

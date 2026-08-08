@@ -7,6 +7,24 @@
  */
 import type { Node, Edge } from '@xyflow/svelte';
 
+export type AuditSeverity = 'info' | 'warning' | 'error' | 'critical';
+
+export interface AuditIssue {
+	id: string;
+	severity: AuditSeverity;
+	code: 'JSDOC_SYNTAX_ERROR' | 'INVALID_TARGET' | 'DANGLING_RELATION' | 'TYPE_MISMATCH' | 'WRANGLER_MISMATCH';
+	message: string;
+	symbolName?: string;
+	filePath?: string;
+	line?: number;
+	column?: number;
+	rawMatch?: string;
+	suggestedFix?: {
+		label: string;
+		action: 'auto_repair_jsdoc' | 'reset_coords' | 'remove_annotation';
+	};
+}
+
 export interface ParseResult {
 	success: boolean;
 	nodes: Node[];
@@ -16,6 +34,7 @@ export interface ParseResult {
 	externalImports?: { filePath: string; importNames: string[] }[];
 	externalPaths?: string[]; // Custom paths parsed from JSDoc metadata (e.g. schema pointers, DO class paths)
 	warnings?: string[];
+	auditIssues?: AuditIssue[];
 	wranglerPath?: string;
 }
 
@@ -23,3 +42,4 @@ export interface ChainElement {
 	name: string;
 	args: string[];
 }
+

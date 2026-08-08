@@ -45,22 +45,30 @@
   let selectedRelationType = $state<"foreign_key" | "drizzle_relation" | "synthetic">("foreign_key");
 
   $effect(() => {
-    selectedSourceCol =
-      connection.sourceHandle && connection.sourceHandle !== "source"
-        ? connection.sourceHandle
-        : sourceColumns.find((c: any) => c.isReferences)?.name || sourceColumns[0]?.name || "";
+    if (!selectedSourceCol) {
+      if (connection.sourceHandle && connection.sourceHandle !== "source") {
+        selectedSourceCol = connection.sourceHandle;
+      } else {
+        const found = sourceColumns.find((c: any) => c.isReferences || c.name.toLowerCase().includes("id"))?.name;
+        selectedSourceCol = found || (connection.source === connection.target ? "parent_id" : `${connection.target.toLowerCase()}_id`);
+      }
+    }
   });
 
   $effect(() => {
-    selectedTargetCol =
-      connection.targetHandle && connection.targetHandle !== "target"
-        ? connection.targetHandle
-        : targetColumns.find((c: any) => c.isPk)?.name || targetColumns[0]?.name || "";
+    if (!selectedTargetCol) {
+      if (connection.targetHandle && connection.targetHandle !== "target") {
+        selectedTargetCol = connection.targetHandle;
+      } else {
+        selectedTargetCol = targetColumns.find((c: any) => c.isPk)?.name || targetColumns[0]?.name || "id";
+      }
+    }
   });
 
   $effect(() => {
     selectedRelationType = isBothD1 ? "foreign_key" : "synthetic";
   });
+
 
   function handleConfirm() {
     onConfirm(selectedRelationType, {

@@ -11,7 +11,15 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
   import { schemaState } from "$lib/state";
-  import { Database, X, Cpu, Zap, HardDrive } from "lucide-svelte";
+  import {
+    Database,
+    X,
+    Cpu,
+    Zap,
+    HardDrive,
+    Lightbulb,
+    TriangleAlert,
+  } from "lucide-svelte";
 
   const form = superForm(defaults(valibot(tableSchema)), {
     SPA: true,
@@ -43,30 +51,36 @@
   let doClass = $state("");
   let doPath = $state("");
 
+  const isDuplicateName = $derived(
+    schemaState.nodes.some(
+      (n) => n.id.toLowerCase() === $formData.name.trim().toLowerCase(),
+    ),
+  );
+
   const targetConfig = {
     d1: {
       label: "D1 Database Table",
       icon: Database,
       color: "text-primary",
-      details: "Creates a standard sqliteTable code structure.",
+      details: "Creates a standard Drizzle sqliteTable code structure.",
     },
     do: {
-      label: "Durable Object Pointer",
+      label: "Durable Object Class Pointer",
       icon: Cpu,
       color: "text-secondary",
-      details: "Registers a class method signature binding.",
+      details: "Registers a stateful WebSocket class method binding.",
     },
     kv: {
-      label: "KV Namespace Pointer",
+      label: "KV Namespace Binding",
       icon: Zap,
       color: "text-accent",
-      details: "Creates an inline or JSDoc-annotated schema entry.",
+      details: "Creates a Key-Value document schema binding.",
     },
     r2: {
-      label: "R2 Bucket Pointer",
+      label: "R2 Bucket Binding",
       icon: HardDrive,
       color: "text-info",
-      details: "Creates an empty object mapping directory hierarchies.",
+      details: "Creates an object storage bucket & directory mapping.",
     },
   };
 </script>
@@ -108,10 +122,18 @@
               {...props}
               bind:value={$formData.name}
               placeholder="e.g. users"
-              class="input input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm"
+              class="input input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm {isDuplicateName
+                ? 'input-error'
+                : ''}"
             />
           {/snippet}
         </Form.Control>
+        {#if isDuplicateName}
+          <p class="text-[10px] text-error mt-1 font-bold">
+            <TriangleAlert class="w-4 h-4" /> An entity or binding named "{$formData.name}"
+            already exists.
+          </p>
+        {/if}
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
       </Form.Field>
 
@@ -178,7 +200,9 @@
       <div
         class="p-4 bg-info/5 border border-info/10 rounded-2xl text-[11px] leading-relaxed flex gap-2"
       >
-        <span class="text-info font-bold text-sm">💡</span>
+        <span class="text-info font-bold text-sm">
+          <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
+        </span>
         <div class="flex flex-col gap-1 text-base-content/85">
           <span class="font-bold text-base-content">
             {targetConfig[

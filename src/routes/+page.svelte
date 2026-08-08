@@ -57,6 +57,22 @@
    */
   async function onconnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
+    
+    // Duplicate Edge Guard
+    const exists = schemaState.edges.some(
+      (e) =>
+        e.source === connection.source &&
+        e.target === connection.target &&
+        (!connection.sourceHandle || e.sourceHandle === connection.sourceHandle)
+    );
+    if (exists) {
+      const { toast } = await import("svelte-sonner");
+      toast.info("Relationship Already Exists", {
+        description: `A relationship between "${connection.source}" and "${connection.target}" is already present in your schema.`
+      });
+      return;
+    }
+
     pendingConnection = connection;
   }
 
@@ -90,10 +106,9 @@
     );
 
     if (type === "foreign_key" && details.sourceCol && details.targetCol) {
-      await schemaState.addColumn(
+      await schemaState.addForeignKeyRelation(
         conn.source,
         details.sourceCol,
-        "integer",
         conn.target,
         details.targetCol,
       );
@@ -101,6 +116,7 @@
       await schemaState.addRelation(conn.source, conn.target);
     }
   }
+
 
   let saveTimeout: any;
 
