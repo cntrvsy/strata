@@ -29,10 +29,17 @@ function getSharedProject(): Project {
  */
 export function createIsolatedProject(filename: string, code: string): { project: Project; sourceFile: SourceFile } {
 	const project = getSharedProject();
-	const existing = project.getSourceFile(filename);
-	if (existing) {
-		project.removeSourceFile(existing);
+	
+	// Clean up stale or temporary files left behind to prevent memory bloat and AST engine soft-locks
+	for (const sf of project.getSourceFiles()) {
+		const filePath = sf.getFilePath();
+		if (filePath.includes('temp_') || filePath.includes('dummy.ts') || filePath.endsWith(filename)) {
+			try {
+				project.removeSourceFile(sf);
+			} catch (e) {}
+		}
 	}
+
 	const sourceFile = project.createSourceFile(filename, code, { overwrite: true });
 	return { project, sourceFile };
 }

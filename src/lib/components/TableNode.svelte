@@ -8,7 +8,16 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "$lib/state";
-  import { Database, Key, Zap, Cpu, Trash2, HardDrive } from "lucide-svelte";
+  import {
+    Database,
+    Key,
+    Zap,
+    Cpu,
+    Trash2,
+    HardDrive,
+    CircleX,
+    TriangleAlert,
+  } from "lucide-svelte";
 
   const { data, selected, dragging } = $props<{
     data: {
@@ -115,6 +124,17 @@
   const hiddenColumnsCount = $derived(
     data.columns.length - columnsToDisplay.length,
   );
+  const nodeAuditIssues = $derived(
+    schemaState.auditIssues.filter((i) => i.symbolName === data.label),
+  );
+  const hasAuditError = $derived(
+    nodeAuditIssues.some(
+      (i) => i.severity === "error" || i.severity === "critical",
+    ),
+  );
+  const hasAuditWarning = $derived(
+    nodeAuditIssues.some((i) => i.severity === "warning"),
+  );
 </script>
 
 <div
@@ -178,10 +198,29 @@
           >
         {/if}
       </div>
-      <div
-        class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
-      >
-        {config.label}
+      <div class="flex items-center gap-1.5">
+        {#if hasAuditError}
+          <div
+            class="badge badge-error badge-xs font-bold gap-0.5 text-[8px] cursor-help"
+            title={nodeAuditIssues[0]?.message || "JSDoc Audit Error"}
+          >
+            <CircleX class="w-4 h-4" />
+            Issue
+          </div>
+        {:else if hasAuditWarning}
+          <div
+            class="badge badge-warning badge-xs font-bold gap-0.5 text-[8px] cursor-help"
+            title={nodeAuditIssues[0]?.message || "JSDoc Audit Warning"}
+          >
+            <TriangleAlert class="w-4 h-4" />
+            Issue
+          </div>
+        {/if}
+        <div
+          class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
+        >
+          {config.label}
+        </div>
       </div>
     </div>
 

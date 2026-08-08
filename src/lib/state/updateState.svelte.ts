@@ -90,7 +90,17 @@ export class UpdateState {
 			}
 		} catch (err: any) {
 			this.status = 'error';
-			this.errorMessage = err?.message || "Failed to connect to update server.";
+			const rawMsg = err?.message || String(err);
+			if (
+				rawMsg.includes("404") ||
+				rawMsg.toLowerCase().includes("not found") ||
+				rawMsg.toLowerCase().includes("could not fetch") ||
+				rawMsg.toLowerCase().includes("failed to parse")
+			) {
+				this.errorMessage = "No published update manifest found for this release version on CrabNebula CDN (404 Not Found).";
+			} else {
+				this.errorMessage = rawMsg || "Failed to connect to update server.";
+			}
 		}
 	}
 

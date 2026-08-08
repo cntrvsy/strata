@@ -107,8 +107,17 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 	return sf.getFullText();
 }
 
+export function sanitizeIdentifier(name: string): string {
+	let clean = name.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+	if (/^[0-9]/.test(clean)) {
+		clean = `entity_${clean}`;
+	}
+	return clean || 'entity';
+}
+
 /**
  * Adds a new table or plain object entity to the schema.
+ * Automatically sanitizes name and guards against duplicate variable declaration collisions.
  */
 export function addTableToSchema(
 	code: string, 
@@ -118,26 +127,35 @@ export function addTableToSchema(
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	
+	const sanitized = sanitizeIdentifier(tableName);
+	let finalName = sanitized;
+	let counter = 2;
+	while (sf.getVariableDeclaration(finalName)) {
+		finalName = `${sanitized}_${counter}`;
+		counter++;
+	}
+
 	if (target === 'd1') {
 		ensureImports(sf, "drizzle-orm/sqlite-core", ["sqliteTable", "integer", "text"]);
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${tableName} = sqliteTable("${tableName}", {
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {
   id: integer("id").primaryKey(),
 });\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'do') {
 		const className = extra?.class || "MyClass";
 		const classPath = extra?.path || `./src/${className}.ts`;
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${tableName} = {};\n`;
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'r2') {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}} \n */\nexport const ${tableName} = {};\n`;
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}} \n */\nexport const ${tableName} = {};\n`;
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	}
 	return sf.getFullText();
 }
+
 
 /**
  * Adds a new column or field to an existing entity.
@@ -278,9 +296,61 @@ export async function addColumnToSchema(
 }
 
 /**
+ * Adds or updates a physical Foreign Key (.references()) on a column in a D1 table.
+ * If sourceCol exists on sourceTable, appends .references(() => targetTable.targetCol).
+ * If sourceCol does not exist, creates the new column with .references(() => targetTable.targetCol).
+ */
+export function addForeignKeyToColumnInSchema(
+	code: string,
+	sourceTable: string,
+	sourceCol: string,
+	targetTable: string,
+	targetCol: string = 'id'
+): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	const decl = sf.getVariableDeclaration(sourceTable);
+	if (!decl) return code;
+
+	const initializer = decl.getInitializer();
+	if (!initializer) return code;
+
+	const tableCall = findSqliteTableCall(initializer);
+	if (!tableCall) return code;
+
+	const args = tableCall.getArguments();
+	if (args.length < 2 || !args[1].isKind(SyntaxKind.ObjectLiteralExpression)) return code;
+
+	const objLit = args[1].asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
+	const prop = objLit.getProperty(sourceCol);
+
+	const refString = `.references(() => ${targetTable}.${targetCol})`;
+
+	if (prop && prop.isKind(SyntaxKind.PropertyAssignment)) {
+		const propInit = prop.getInitializer();
+		if (propInit) {
+			const text = propInit.getText();
+			if (!text.includes('.references(')) {
+				propInit.replaceWithText(`${text}${refString}`);
+			}
+		}
+	} else {
+		// Column doesn't exist yet, create it with integer type & references
+		ensureImports(sf, "drizzle-orm/sqlite-core", ["integer"]);
+		const columnDef = `integer("${sourceCol}")${refString}`;
+		objLit.addPropertyAssignment({
+			name: sourceCol,
+			initializer: columnDef
+		});
+	}
+
+	return sf.getFullText();
+}
+
+/**
  * Creates a relationship between two entities. 
  * Detects if it should use Drizzle relations() or Synthetic JSDoc relations.
  */
+
 export function addEdgeToSchema(code: string, source: string, target: string): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
@@ -607,25 +677,28 @@ export async function removeColumnFromSchema(
  * Also updates associated relations() blocks.
  */
 export function renameTableInSchema(code: string, oldName: string, newName: string): string {
+	const cleanNewName = sanitizeIdentifier(newName);
+	if (!cleanNewName || cleanNewName === oldName) return code;
+
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(oldName);
 	
 	if (decl) {
 		// 1. Rename the variable declaration
-		decl.rename(newName);
+		decl.rename(cleanNewName);
 		
 		// 2. Update the sqliteTable name if applicable
 		const initializer = decl.getInitializer();
 		if (initializer?.isKind(SyntaxKind.CallExpression) && initializer.getExpression().getText() === 'sqliteTable') {
 			const args = initializer.getArguments();
 			if (args.length > 0 && args[0].isKind(SyntaxKind.StringLiteral)) {
-				args[0].setLiteralValue(newName);
+				args[0].setLiteralValue(cleanNewName);
 			}
 		}
 
 		// 3. Rename associated relations() block
 		const oldRelName = `${oldName}Relations`;
-		const newRelName = `${newName}Relations`;
+		const newRelName = `${cleanNewName}Relations`;
 		const relDecl = sf.getVariableDeclaration(oldRelName);
 		if (relDecl) {
 			relDecl.rename(newRelName);
@@ -633,13 +706,14 @@ export function renameTableInSchema(code: string, oldName: string, newName: stri
 			const relInit = relDecl.getInitializer();
 			if (relInit?.isKind(SyntaxKind.CallExpression)) {
 				const args = relInit.getArguments();
-				if (args.length > 0) args[0].replaceWithText(newName);
+				if (args.length > 0) args[0].replaceWithText(cleanNewName);
 			}
 		}
 	}
 	
 	return sf.getFullText();
 }
+
 
 /**
  * Renames a specific column or field within an entity.

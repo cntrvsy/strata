@@ -73,7 +73,12 @@
     </div>
   </div>
 
-  <div class="flex flex-col gap-2">
+  <div class="flex flex-col gap-3">
+    <div class="p-2.5 rounded-xl bg-info/10 border border-info/20 text-info flex flex-col gap-0.5 text-[10px]">
+      <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare R2 Object Storage Bucket</span>
+      <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+    </div>
+
     <label class="label cursor-pointer flex items-center justify-between p-0">
       <span class="text-xs font-semibold text-base-content/85"
         >Public Access</span

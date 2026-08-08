@@ -7,9 +7,10 @@
  */
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
-import type { ParseResult } from '$lib/parser/types';
+import type { ParseResult, AuditIssue } from '$lib/parser/types';
 import { createIsolatedProject } from '$lib/parser/project';
 import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from '$lib/parser/helpers';
+
 
 /**
  * Wraps raw code in pre/code tags for UI presentation.
@@ -49,6 +50,7 @@ export function parseSchema(
 		const edges: Edge[] = [];
 		const externalPaths: string[] = [];
 		const warnings: string[] = [];
+		const auditIssues: AuditIssue[] = [];
 		
 		// Find all relative or aliased import declarations
 		const externalImports: { filePath: string; importNames: string[] }[] = [];
@@ -97,9 +99,28 @@ export function parseSchema(
 				for (const doc of jsDocs) {
 					const strataExtracted = extractStrataMetadata(doc.getText());
 					if (strataExtracted) {
-						strataData = { ...strataData, ...strataExtracted.data };
+						if (strataExtracted.issue) {
+							auditIssues.push({
+								id: `audit_${decl.getName()}_${statement.getStartLineNumber()}_${auditIssues.length}`,
+								severity: strataExtracted.issue.code === 'JSDOC_SYNTAX_ERROR' && strataExtracted.data ? 'warning' : 'error',
+								code: strataExtracted.issue.code,
+								message: strataExtracted.issue.message,
+								symbolName: decl.getName(),
+								line: statement.getStartLineNumber(),
+								column: 1,
+								rawMatch: strataExtracted.rawMatch,
+								suggestedFix: {
+									label: 'Auto-Repair JSDoc',
+									action: 'auto_repair_jsdoc'
+								}
+							});
+						}
+						if (strataExtracted.data) {
+							strataData = { ...strataData, ...strataExtracted.data };
+						}
 					}
 				}
+
 
 				if (strataData.target === 'project') {
 					if (strataData.wranglerPath) {
@@ -373,12 +394,26 @@ export function parseSchema(
 		for (const [tableName, decl] of tableDeclarations) {
 			const statement = decl.getVariableStatement();
 			const jsDocs = statement?.getJsDocs() || [];
+			const lineNum = statement?.getStartLineNumber() || 1;
 			for (const doc of jsDocs) {
 				const strataExtracted = extractStrataMetadata(doc.getText());
 				if (strataExtracted?.data?.relations && Array.isArray(strataExtracted.data.relations)) {
 					for (const rel of strataExtracted.data.relations) {
 						if (!tableNames.has(rel.to)) {
-							warnings.push(`Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`);
+							const msg = `Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`;
+							warnings.push(msg);
+							auditIssues.push({
+								id: `audit_dangling_${tableName}_${rel.to}`,
+								severity: 'warning',
+								code: 'DANGLING_RELATION',
+								message: msg,
+								symbolName: tableName,
+								line: lineNum,
+								suggestedFix: {
+									label: 'Remove Dangling Relation',
+									action: 'auto_repair_jsdoc'
+								}
+							});
 						}
 					}
 				}
@@ -389,10 +424,10 @@ export function parseSchema(
 		const validEdges = edges.filter(e => tableNames.has(e.source) && tableNames.has(e.target));
 		
 		if (nodes.length === 0 && code.trim().length > 0) {
-			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports, externalPaths, warnings, wranglerPath };
+			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports, externalPaths, warnings, auditIssues, wranglerPath };
 		}
 
-		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, wranglerPath };
+		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath };
 	} catch (e: any) {
 		console.error("[Strata] Parse critical failure:", e);
 		
@@ -404,13 +439,24 @@ export function parseSchema(
 			column = parseInt(match[2]);
 		}
 
+		const criticalIssue: AuditIssue = {
+			id: `critical_${Date.now()}`,
+			severity: 'critical',
+			code: 'JSDOC_SYNTAX_ERROR',
+			message: `AST Parse Failure: ${e.message || 'Syntax Error'}`,
+			line,
+			column
+		};
+
 		return { 
 			success: false, 
 			error: e.message || "Unknown Error",
 			errorLoc: { line, column },
 			nodes: [],
-			edges: []
+			edges: [],
+			auditIssues: [criticalIssue]
 		};
+
 	} finally {
 		for (const sf of tempSourceFiles) {
 			try {

@@ -6,7 +6,7 @@
   Output: Lets developers inspect line diffs before saving or reverting.
 -->
 <script lang="ts">
-  import { X, Save, Undo, GitCompare } from "lucide-svelte";
+  import { X, Save, Undo, GitCompare, Lightbulb } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { PlatformService } from "$lib/services/platform";
   import { EditorView, basicSetup } from "codemirror";
@@ -160,7 +160,8 @@
         class="px-6 py-4 bg-base-200/80 border-t border-base-300 flex items-center justify-between"
       >
         <span class="text-[10px] text-base-content/50 font-mono">
-          💡 Review AST statement changes before committing to disk.
+          <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" /> Review AST statement
+          changes before committing to disk.
         </span>
 
         <div class="flex items-center gap-2">

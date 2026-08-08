@@ -52,12 +52,25 @@ export class UIState {
 	isCodeCollapsed = $state(false);
 	isDiagramCollapsed = $state(false);
 
+	/** Target line number to scroll/highlight in code editor */
+	targetCodeLine = $state<number | null>(null);
+
+	/** Switch to Code Editor mode and jump to line */
+	jumpToCodeLine(line?: number) {
+		this.viewMode = 'code';
+		this.isCodeCollapsed = false;
+		if (line && line > 0) {
+			this.targetCodeLine = line;
+		}
+	}
+
 	/** Reset transient UI selection state */
 	resetSelection() {
 		this.activeInspectorNodeId = null;
 		this.activeCoordinates = null;
 		this.hoveredNodeId = null;
 	}
+
 }
 
 export const uiState = new UIState();

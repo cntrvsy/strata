@@ -16,8 +16,12 @@
     Pencil,
     Heart,
     HardDrive,
+    Wrench,
+    Lightbulb,
+    TriangleAlert,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
+  import { uiState } from "$lib/state/uiStore.svelte";
   import AddFieldForm from "$lib/components/forms/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/forms/AddRelationForm.svelte";
   import D1Inspector from "$lib/components/inspector/D1Inspector.svelte";
@@ -26,6 +30,7 @@
   import R2Inspector from "$lib/components/inspector/R2Inspector.svelte";
 
   // --- Local UI State ---
+
   /** Whether the user is currently filling out the 'Add Field' form */
   let isAddingField = $state(false);
   /** Whether the user is currently filling out the 'Create Relation' form */
@@ -150,15 +155,15 @@
       targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
     <div
-      class="w-full h-full max-h-full bg-base-100/85 backdrop-blur-md border-r border-base-300/60 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
+      class="w-full h-full max-h-full bg-base-100 border-r border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
       data-testid="inspector-panel"
     >
       <!-- Header -->
       <div
-        class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/20"
+        class="p-5 border-b border-base-300 flex items-center justify-between bg-base-200/50"
       >
         <div class="flex items-center gap-3">
-          <div class="p-2 {config.bg} rounded-xl">
+          <div class="p-2.5 {config.bg} rounded-xl shadow-xs">
             <config.icon class="w-4 h-4 {config.text}" />
           </div>
           <div class="flex flex-col grow">
@@ -166,7 +171,7 @@
               <div class="flex items-center gap-1">
                 <input
                   bind:value={newTableName}
-                  class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all"
+                  class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all text-base-content"
                   onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
                   data-testid="inspector-rename-table-input"
                 />
@@ -174,29 +179,33 @@
                   class="btn btn-primary btn-xs btn-circle"
                   onclick={submitRenameTable}
                   data-testid="inspector-rename-table-submit"
-                ><Check class="w-3 h-3" /></button>
+                  ><Check class="w-3 h-3 text-primary-content" /></button
+                >
               </div>
             {:else}
               <div class="flex items-center gap-2 group/header">
-                <h3 class="font-bold text-sm tracking-tight leading-none" data-testid="inspector-title">
+                <h3
+                  class="font-bold text-sm tracking-tight leading-none text-base-content"
+                  data-testid="inspector-title"
+                >
                   {selectedNode.id}
                 </h3>
                 {#if !isReadOnly}
                   <button
-                    class="opacity-0 group-hover/header:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-5 w-5 hover:bg-base-200"
+                    class="opacity-40 group-hover/header:opacity-100 transition-all btn btn-ghost btn-xs btn-circle h-5 w-5 hover:bg-base-200"
                     onclick={() => {
                       editingTableName = selectedNode.id;
                       newTableName = selectedNode.id;
                     }}
                     data-testid="inspector-rename-table-btn"
                   >
-                    <Pencil class="w-3 h-3 opacity-60" />
+                    <Pencil class="w-3 h-3 text-base-content" />
                   </button>
                 {/if}
               </div>
             {/if}
             <span
-              class="text-[9px] uppercase tracking-wider font-bold opacity-75 mt-0.5 text-base-content/75"
+              class="text-[9.5px] uppercase tracking-wider font-bold text-base-content/80 mt-0.5"
               >{config.label}</span
             >
           </div>
@@ -205,7 +214,7 @@
           {#if !isReadOnly}
             {#if !isConfirmingDelete}
               <button
-                class="btn btn-ghost btn-xs btn-circle hover:text-error hover:bg-error/10 opacity-50 hover:opacity-100 transition-all"
+                class="btn btn-ghost btn-xs btn-circle hover:text-error hover:bg-error/10 text-base-content/70 hover:opacity-100 transition-all"
                 onclick={() => (isConfirmingDelete = true)}
                 title="Delete Entity"
                 data-testid="delete-entity-button"
@@ -214,48 +223,121 @@
               </button>
             {:else}
               <div
-                class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-4"
+                class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-2"
               >
                 <button
-                  class="btn btn-error btn-xs rounded-lg px-2 text-[10px] text-error-content"
+                  class="btn btn-error btn-xs rounded-lg font-bold text-white shadow-xs"
                   onclick={() => deleteTable(selectedNode.id)}
                   data-testid="confirm-delete-entity-button"
-                >Confirm</button>
+                >
+                  Delete?
+                </button>
                 <button
-                  class="btn btn-ghost btn-xs rounded-lg px-2 text-[10px] hover:bg-base-200"
+                  class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
                   onclick={() => (isConfirmingDelete = false)}
-                  data-testid="cancel-delete-entity-button"
-                >Cancel</button>
+                >
+                  <X class="w-3.5 h-3.5 opacity-60" />
+                </button>
               </div>
             {/if}
           {/if}
           <button
-            class="btn btn-ghost btn-sm btn-circle hover:bg-error/10 hover:text-error transition-all"
+            class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
             onclick={dismiss}
           >
-            <X class="w-4 h-4" />
+            <X class="w-4 h-4 opacity-60" />
           </button>
         </div>
       </div>
 
+      {#if schemaState.auditIssues.some((i) => i.symbolName === selectedNode.id)}
+        {@const issue = schemaState.auditIssues.find(
+          (i) => i.symbolName === selectedNode.id,
+        )!}
+        <div
+          class="px-5 py-2.5 bg-warning/10 border-b border-warning/20 flex flex-col gap-1.5 text-xs text-warning"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-bold flex items-center gap-1.5 text-[11px]">
+              <TriangleAlert class="w-3.5 h-3.5 shrink-0 text-warning" />
+              <span>JSDoc Metadata Warning</span>
+            </span>
+            {#if issue.line}
+              <button
+                class="text-[9px] font-mono underline hover:opacity-80"
+                onclick={() => uiState.jumpToCodeLine(issue.line)}
+              >
+                Line {issue.line} ↗
+              </button>
+            {/if}
+          </div>
+          <p class="text-[10.5px] leading-tight text-warning/90">
+            {issue.message}
+          </p>
+          {#if issue.suggestedFix}
+            <button
+              class="btn btn-xs btn-warning rounded-lg text-[10px] h-6 min-h-6 self-start font-bold gap-1 mt-0.5"
+              onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
+            >
+              <Wrench class="w-3 h-3" />
+              <span>Auto-Repair JSDoc</span>
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- JSDoc Audit Issues Banner -->
+      {#if schemaState.auditIssues.some((i) => i.symbolName === selectedNode.id)}
+        {@const nodeIssues = schemaState.auditIssues.filter(
+          (i) => i.symbolName === selectedNode.id,
+        )}
+        <div
+          class="mx-5 mt-4 p-3 rounded-2xl bg-error/10 border border-error/20 flex flex-col gap-2"
+        >
+          <div class="flex items-center gap-2 text-error text-xs font-bold">
+            <TriangleAlert class="w-4 h-4 shrink-0" />
+            <span
+              >{nodeIssues.length} JSDoc Diagnostic Issue{nodeIssues.length > 1
+                ? "s"
+                : ""}</span
+            >
+          </div>
+          {#each nodeIssues as issue}
+            <p
+              class="text-[11px] text-base-content/80 leading-relaxed font-sans"
+            >
+              {issue.message}
+            </p>
+          {/each}
+          <button
+            class="btn btn-error btn-xs rounded-xl font-bold gap-1.5 self-start text-[10px] shadow-sm mt-1"
+            onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
+          >
+            <Wrench class="w-3 h-3" />
+            <span>Auto-Repair JSDoc Metadata</span>
+          </button>
+        </div>
+      {/if}
+
       <!-- Tabs Navigation -->
+
       <div
-        class="tabs tabs-boxed rounded-xl bg-base-200/40 p-1 mx-6 mt-4 flex select-none shrink-0 border border-base-300/40"
+        class="tabs tabs-boxed rounded-2xl bg-base-200/80 p-1 mx-5 mt-4 flex select-none shrink-0 border border-base-300"
       >
         <button
-          class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab ===
+          class="tab tab-sm grow rounded-xl transition-all text-xs font-semibold py-1.5 {activeTab ===
           'fields'
-            ? 'tab-active bg-base-100 shadow-sm font-bold text-primary'
-            : 'opacity-65 hover:opacity-100 text-base-content/85'}"
+            ? 'tab-active bg-base-100 shadow-xs font-bold text-primary'
+            : 'text-base-content/75 hover:text-base-content'}"
           onclick={() => (activeTab = "fields")}
         >
           Fields ({data.columns.length})
         </button>
         <button
-          class="tab tab-sm grow rounded-lg transition-all text-xs font-semibold py-1.5 {activeTab ===
+          class="tab tab-sm grow rounded-xl transition-all text-xs font-semibold py-1.5 {activeTab ===
           'relations'
-            ? 'tab-active bg-base-100 shadow-sm font-bold text-primary'
-            : 'opacity-65 hover:opacity-100 text-base-content/85'}"
+            ? 'tab-active bg-base-100 shadow-xs font-bold text-primary'
+            : 'text-base-content/75 hover:text-base-content'}"
           onclick={() => (activeTab = "relations")}
         >
           Relationships ({schemaState.edges.filter(
@@ -434,9 +516,11 @@
               <span
                 class="font-bold text-base-content/85 flex items-center gap-1"
               >
-                💡 Handle Fallbacks
+                <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" /> Handle Fallbacks
               </span>
-              <p class="leading-relaxed opacity-80 text-base-content/80 font-medium">
+              <p
+                class="leading-relaxed opacity-80 text-base-content/80 font-medium"
+              >
                 Physical foreign key references connect directly to the column
                 rows. Logical relations and synthetic references fall back to
                 entity-level handles on the sides of the node cards.
@@ -460,7 +544,9 @@
       <!-- Footer Stats/Hint -->
       <div class="p-6 bg-base-200/30 border-t border-base-300/60">
         <div class="flex flex-col items-center gap-4">
-          <p class="text-[10px] opacity-75 text-base-content/75 text-center flex items-center gap-1">
+          <p
+            class="text-[10px] opacity-75 text-base-content/75 text-center flex items-center gap-1"
+          >
             Made with<Heart class="w-4 h-4" fill="red" /> from
             <a
               href="https://frstudios.co.ke"

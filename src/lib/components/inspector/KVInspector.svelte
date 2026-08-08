@@ -63,7 +63,13 @@
 </script>
 
 <div class="flex flex-col gap-2">
+  <div class="p-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent flex flex-col gap-0.5 text-[10px] mb-1">
+    <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace Binding</span>
+    <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+  </div>
+
   {#each data.columns as col}
+
     <div
       class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
@@ -153,25 +159,25 @@
 
       {#if expandedKey === col.name && !isReadOnly}
         <div
-          class="border-t border-base-300/40 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200"
+          class="border-t border-base-300 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200"
         >
           <div class="grid grid-cols-2 gap-2">
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
+              <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
                 >Value Type</span
               >
               <select
                 bind:value={selectedType}
-                class="select select-xs select-bordered w-full rounded-lg bg-base-100 border-base-300/60 focus:select-primary transition-all text-[10px]"
+                class="select select-xs select-bordered w-full rounded-lg bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] font-medium"
               >
-                <option value="string">String</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="any">Any</option>
+                <option class="bg-base-100 text-base-content" value="string">String</option>
+                <option class="bg-base-100 text-base-content" value="number">Number</option>
+                <option class="bg-base-100 text-base-content" value="boolean">Boolean</option>
+                <option class="bg-base-100 text-base-content" value="any">Any</option>
               </select>
             </div>
             <div class="flex flex-col gap-1">
-              <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
+              <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
                 >Expiration TTL (s)</span
               >
               <input
@@ -179,21 +185,21 @@
                 bind:value={selectedTtl}
                 placeholder="None"
                 min="60"
-                class="input input-xs input-bordered w-full rounded-lg bg-base-100 border-base-300/60 focus:input-primary transition-all text-[10px]"
+                class="input input-xs input-bordered w-full rounded-lg bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-[10px]"
               />
             </div>
           </div>
 
           <div class="flex flex-col gap-1">
-            <span class="text-[9px] font-bold uppercase opacity-70 text-base-content/75"
+            <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
               >Metadata String / Description</span
             >
-            <input
-              type="text"
+            <textarea
               bind:value={selectedMetadata}
-              placeholder="e.g. user-profile, system-config"
-              class="input input-xs input-bordered w-full rounded-lg bg-base-100 border-base-300/60 focus:input-primary transition-all text-[10px] font-mono"
-            />
+              placeholder="e.g. user-profile or system-config"
+              rows="2"
+              class="textarea textarea-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:textarea-primary transition-all text-[10.5px] font-mono leading-tight resize-y"
+            ></textarea>
           </div>
 
           <div class="flex justify-end gap-1.5">

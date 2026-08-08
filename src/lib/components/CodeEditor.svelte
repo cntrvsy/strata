@@ -10,7 +10,8 @@
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";
   import { schemaState } from "$lib/state";
-  import { FileCode } from "lucide-svelte";
+  import { uiState } from "$lib/state/uiStore.svelte";
+  import { FileCode, Target } from "lucide-svelte";
   import { parseSchema } from "$lib/parser";
 
   let debounceTimer: any;
@@ -43,6 +44,7 @@
       if (schemaState.isSyncing) return;
 
       const result = parseSchema(newCode);
+      schemaState.auditIssues = result.auditIssues || [];
       if (result.success) {
         const selectedNodeIds = new Set(
           schemaState.nodes.filter((n) => n.selected).map((n) => n.id),
@@ -84,7 +86,32 @@
         >
       </div>
     </div>
+    {#if uiState.targetCodeLine}
+      <div class="flex items-center gap-2 bg-primary/20 border border-primary/40 rounded-lg px-2.5 py-1 text-primary text-xs font-mono">
+        <Target class="w-3.5 h-3.5" />
+        <span>Diagnostic Line: #{uiState.targetCodeLine}</span>
+        <button
+          class="hover:opacity-75 font-bold ml-1 text-white/60 hover:text-white"
+          onclick={() => (uiState.targetCodeLine = null)}
+          title="Clear line focus"
+        >
+          ✕
+        </button>
+      </div>
+    {/if}
   </div>
+
+  {#if !schemaState.isValid && schemaState.error}
+    <div class="px-6 py-2 bg-error/20 border-b border-error/30 flex items-center justify-between text-xs text-error font-mono shrink-0">
+      <span class="truncate">⚠️ Parse Error: {schemaState.error} {schemaState.errorLoc ? `(line ${schemaState.errorLoc.line}:${schemaState.errorLoc.column})` : ''}</span>
+    </div>
+  {:else if schemaState.auditIssues.length > 0}
+    <div class="px-6 py-1.5 bg-warning/15 border-b border-warning/30 flex items-center justify-between text-[11px] text-warning font-mono shrink-0">
+      <span class="truncate">⚠️ JSDoc Diagnostics: {schemaState.auditIssues.length} issue(s) detected in @strata metadata</span>
+      <span class="text-[10px] opacity-75">See bottom bar for details</span>
+    </div>
+  {/if}
+
 
   <!-- Editor Container -->
   <div class="grow relative overflow-hidden bg-[#282c34]">

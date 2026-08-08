@@ -202,6 +202,30 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.machine.current).toBe('EMPTY');
   });
 
+  it('should reset state back to empty when closeFile is called', () => {
+    schemaState.filePath = '/mock/schema.ts';
+    schemaState.nodes = [{ id: 'table', type: 'table', position: { x: 0, y: 0 }, data: {} }];
+    schemaState.isSandboxMode = true;
+    schemaState.machine.send("OPEN");
+
+    schemaState.closeFile();
+
+    expect(schemaState.filePath).toBeNull();
+    expect(schemaState.nodes).toHaveLength(0);
+    expect(schemaState.isSandboxMode).toBe(false);
+    expect(schemaState.machine.current).toBe('EMPTY');
+  });
+
+  it('should clear recent files list and remove item from localStorage when clearRecentFiles is called', () => {
+    schemaState.recentFiles = ['/mock/a.ts', '/mock/b.ts'];
+    mockStorage['strata_recent_files'] = JSON.stringify(schemaState.recentFiles);
+
+    schemaState.clearRecentFiles();
+
+    expect(schemaState.recentFiles).toEqual([]);
+    expect(mockStorage['strata_recent_files']).toBeUndefined();
+  });
+
   it('should update project configuration via updateProjectConfig', async () => {
     const rawDrizzle = `
       /** @strata { "target": "project", "wranglerPath": "./wrangler.toml" } */

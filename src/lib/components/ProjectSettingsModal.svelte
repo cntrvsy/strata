@@ -7,7 +7,6 @@
 -->
 <script lang="ts">
   import { schemaState } from "$lib/state";
-  import { updateState } from "$lib/state/updateState.svelte";
   import {
     X,
     Settings,
@@ -18,9 +17,7 @@
     FolderOpen,
     LoaderCircle,
     Lightbulb,
-    ArrowUpCircle,
-    RefreshCw,
-    CircleArrowUp,
+    Sparkles,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { PlatformService } from "$lib/services/platform";
@@ -203,7 +200,12 @@
   });
 
   async function browseWrangler() {
-    if (!schemaState.filePath) return;
+    if (schemaState.isSandboxMode || !schemaState.filePath) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Auto-detecting wrangler.toml and selecting local file paths require a local schema file on disk.",
+      });
+      return;
+    }
 
     const dir = schemaState.filePath.substring(
       0,
@@ -231,7 +233,12 @@
   }
 
   async function autoDetectWrangler() {
-    if (!schemaState.filePath) return;
+    if (schemaState.isSandboxMode || !schemaState.filePath) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Auto-detecting wrangler.toml requires a local project directory on disk.",
+      });
+      return;
+    }
     isDetecting = true;
 
     const dir = schemaState.filePath.substring(
@@ -279,6 +286,12 @@
 
   async function handleSave(e: Event) {
     e.preventDefault();
+    if (schemaState.isSandboxMode) {
+      toast.warning("Not available in Sandbox Mode", {
+        description: "Project settings JSDoc persistence is disabled in Playground Sandbox Mode.",
+      });
+      return;
+    }
     if (!schemaState.filePath) return;
     try {
       await schemaState.updateProjectConfig(wranglerPath.trim() || undefined);
@@ -319,51 +332,100 @@
     </div>
 
     <form onsubmit={handleSave} class="p-6 flex flex-col gap-6">
-      <div class="flex flex-col gap-2">
-        <label
-          for="wrangler-path-input"
-          class="text-[10px] font-bold uppercase tracking-wider opacity-50 block"
-        >
-          Wrangler Config Path
-        </label>
-        <div class="flex items-center gap-2">
-          <div class="relative flex-1 flex items-center">
-            <FileText
-              class="absolute left-3 w-4 h-4 text-base-content/40 font-mono"
-            />
-            <input
-              id="wrangler-path-input"
-              type="text"
-              bind:value={wranglerPath}
-              placeholder="e.g. ../../wrangler.toml or wrangler.jsonc"
-              class="input input-bordered w-full pl-10 pr-28 rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm h-11"
-            />
-            <button
-              type="button"
-              class="absolute right-2 btn btn-xs btn-ghost hover:bg-base-200/80 text-primary font-bold rounded-lg transition-all h-7"
-              disabled={isDetecting}
-              onclick={autoDetectWrangler}
-            >
-              {#if isDetecting}
-                Detecting...
-              {:else}
-                Auto-Detect
-              {/if}
-            </button>
+      {#if schemaState.isSandboxMode}
+        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-2.5 text-xs text-warning leading-relaxed">
+          <CircleAlert class="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <span class="font-bold block text-warning">Playground Sandbox Active</span>
+            <span class="text-warning/85 text-[11px]">Wrangler file discovery and relative JSDoc path binding operate in-memory. Open a local schema file on disk to bind to a project wrangler.toml file.</span>
           </div>
+        </div>
+      {/if}
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <label
+            for="wrangler-path-input"
+            class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/80 block"
+          >
+            Wrangler Config Path
+          </label>
+          {#if wranglerPath.trim()}
+            {@const upCount = (wranglerPath.match(/\.\.\//g) || []).length}
+            <span
+              class="badge badge-sm badge-outline font-mono text-[10px] text-primary font-bold"
+            >
+              {upCount > 0
+                ? `${upCount} parent level${upCount > 1 ? "s" : ""} up`
+                : "same directory"}
+            </span>
+          {/if}
+        </div>
+
+        <!-- Full-Width Path Input -->
+        <div class="relative flex items-center">
+          <FileText
+            class="absolute left-3 w-4 h-4 text-base-content/60 font-mono"
+          />
+          <input
+            id="wrangler-path-input"
+            type="text"
+            bind:value={wranglerPath}
+            placeholder="e.g. ../../wrangler.toml or wrangler.jsonc"
+            class="input input-bordered w-full pl-10 pr-4 rounded-xl bg-base-100 border-base-300 text-base-content focus:input-primary transition-all font-mono text-xs h-11"
+          />
+        </div>
+
+        <!-- Action Bar: Auto-Detect & Browse -->
+        <div class="flex items-center gap-2">
           <button
             type="button"
-            class="btn btn-outline border-base-300/60 hover:bg-base-200 text-base-content/70 hover:text-base-content rounded-xl h-11 w-11 p-0 flex items-center justify-center shrink-0 transition-all"
+            class="btn btn-secondary btn-sm grow rounded-xl font-bold shadow-xs flex items-center gap-1.5"
+            disabled={isDetecting}
+            onclick={autoDetectWrangler}
+          >
+            {#if isDetecting}
+              <LoaderCircle class="w-3.5 h-3.5 animate-spin" />
+              Detecting Config...
+            {:else}
+              <Sparkles class="w-3.5 h-3.5" />
+              Auto-Detect Wrangler
+            {/if}
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline border-base-300 hover:bg-base-200 text-base-content rounded-xl btn-sm font-semibold flex items-center gap-1.5 shrink-0"
             title="Browse File"
             onclick={browseWrangler}
           >
-            <FolderOpen class="w-4.5 h-4.5" />
+            <FolderOpen class="w-4 h-4 text-primary" />
+            Browse...
           </button>
         </div>
 
+        <!-- Path Hierarchy Depth Preview -->
+        {#if wranglerPath.trim() && schemaState.filePath}
+          {@const resolved = resolvePath(
+            schemaState.filePath,
+            wranglerPath.trim(),
+          )}
+          <div
+            class="bg-base-200/70 p-3 rounded-xl border border-base-300 flex flex-col gap-1 text-xs"
+          >
+            <span class="text-[9.5px] uppercase font-bold text-base-content/60"
+              >Resolved Path Location</span
+            >
+            <span
+              class="font-mono text-[11px] text-base-content font-semibold break-all"
+              title={resolved}
+            >
+              {resolved}
+            </span>
+          </div>
+        {/if}
+
         <!-- Real-Time Validation Status -->
         <div
-          class="mt-2 rounded-xl p-3 border transition-all duration-300 bg-base-200/20 border-base-300/40"
+          class="mt-1 rounded-xl p-3.5 border transition-all duration-300 bg-base-200/50 border-base-300"
         >
           {#if validationStatus === "idle"}
             <div
@@ -459,36 +521,6 @@
             </div>
           {/if}
         </div>
-      </div>
-
-      <!-- Software Updates & App Info -->
-      <div
-        class="p-4 bg-base-200/50 border border-base-300/60 rounded-2xl flex items-center justify-between"
-      >
-        <div class="flex items-center gap-3">
-          <div
-            class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary"
-          >
-            <CircleArrowUp class="w-4 h-4" />
-          </div>
-          <div>
-            <h4 class="text-xs font-bold text-base-content">
-              Software Updates
-            </h4>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          class="btn btn-outline btn-xs gap-1.5 rounded-lg font-semibold border-base-300 hover:border-primary hover:bg-primary/10 hover:text-primary"
-          onclick={() => {
-            schemaState.showProjectSettingsModal = false;
-            updateState.openModal();
-          }}
-        >
-          <RefreshCw class="w-3 h-3" />
-          <span>Check for Updates</span>
-        </button>
       </div>
 
       <!-- Cloudflare bindings info -->

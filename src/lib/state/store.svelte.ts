@@ -12,7 +12,9 @@ import { OperationQueue } from "$lib/state/queue";
 import { toast } from "svelte-sonner";
 
 import { resolveRelativePath } from "$lib/parser";
+import type { AuditIssue } from "$lib/parser/types";
 import { uiState } from "$lib/state/uiStore.svelte";
+
 
 /**
  * State-machine JSONC parser.
@@ -465,6 +467,9 @@ export class SchemaState {
 	get showHelpModal() { return uiState.showHelpModal; }
 	set showHelpModal(val: boolean) { uiState.showHelpModal = val; }
 
+	/** List of JSDoc and AST audit issues */
+	auditIssues = $state<AuditIssue[]>([]);
+
 	/** The list of bindings parsed from wrangler.toml */
 	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
 
@@ -503,6 +508,51 @@ export class SchemaState {
 		return warnings;
 	}
 
+	/** Total count of audit issues (errors + warnings) */
+	get totalAuditCount() {
+		return this.auditIssues.length + this.validationWarnings.length;
+	}
+
+	/** Count of critical/error audit issues */
+	get auditErrorCount() {
+		return this.auditIssues.filter(i => i.severity === 'error' || i.severity === 'critical').length;
+	}
+
+	/** Count of warning audit issues */
+	get auditWarningCount() {
+		return this.auditIssues.filter(i => i.severity === 'warning').length + this.validationWarnings.length;
+	}
+
+	/**
+	 * Auto-repairs malformed or missing @strata JSDoc for a given node symbol.
+	 */
+	async repairNodeJsdoc(symbolName: string) {
+		const node = this.nodes.find(n => n.id === symbolName);
+		if (!node) return;
+		const x = node.position.x || 100;
+		const y = node.position.y || 100;
+		
+		const { updateNodePositionInSchema } = await import("../parser");
+		const updatedCode = updateNodePositionInSchema(this.rawCode, symbolName, x, y);
+		if (this.filePath && !this.isSandboxMode) {
+			await this.queue.enqueue(async () => {
+				this.lastWriteTime = Date.now();
+				await PlatformService.writeText(this.filePath!, updatedCode);
+				this.rawCode = updatedCode;
+				await this.parseAndApply(updatedCode);
+			});
+		} else {
+			this.rawCode = updatedCode;
+			await this.parseAndApply(updatedCode);
+		}
+		toast.success("JSDoc Repaired", {
+			description: `Cleaned and formatted @strata metadata for "${symbolName}".`
+		});
+	}
+
+
+
+
 
 	/**
 	 * Force-syncs the UI state with the current file on disk.
@@ -529,9 +579,11 @@ export class SchemaState {
 
 		// 2. Final parse with external file contents mapped
 		const result = parseSchema(code, externalFilesMap, tsconfigPaths, tsconfigPath);
+		this.auditIssues = result.auditIssues || [];
 		
 		if (result.success) {
 			this.wranglerPath = result.wranglerPath;
+
 			// Display any warnings
 			if (result.warnings && result.warnings.length > 0) {
 				for (const warning of result.warnings) {
@@ -928,6 +980,29 @@ export class SchemaState {
 	}
 
 	/**
+	 * Adds or updates a physical Foreign Key relationship (.references()) on a specific column.
+	 * Checks for duplicate relationships before executing AST mutation.
+	 */
+	async addForeignKeyRelation(sourceTable: string, sourceCol: string, targetTable: string, targetCol: string = 'id') {
+		const existingEdge = this.edges.find(e => 
+			(e.source === sourceTable && e.target === targetTable) &&
+			((e.data as any)?.sourceCol === sourceCol || e.sourceHandle === sourceCol)
+		);
+		if (existingEdge) {
+			toast.info("Relationship Already Exists", {
+				description: `A relationship between "${sourceTable}" (${sourceCol}) and "${targetTable}" already exists.`
+			});
+			return;
+		}
+
+		const { addForeignKeyToColumnInSchema } = await import("../parser");
+		await this.executeSchemaMutation("Foreign Key add", (code) => 
+			addForeignKeyToColumnInSchema(code, sourceTable, sourceCol, targetTable, targetCol)
+		);
+	}
+
+
+	/**
 	 * Resets the entire application state to its initial empty state.
 	 * Primarily used for testing and starting a fresh session.
 	 */
@@ -939,7 +1014,35 @@ export class SchemaState {
 		this.isValid = true;
 		this.error = null;
 		this.activeInspectorNodeId = null;
+		this.isSandboxMode = false;
 		this.machine.send("RESET");
+	}
+
+	/**
+	 * Closes the currently open schema or sandbox mode, returning to the Welcome screen overlay.
+	 */
+	closeFile() {
+		this.reset();
+	}
+
+	/**
+	 * Clears all saved recent files from localStorage and memory state.
+	 */
+	clearRecentFiles() {
+		this.recentFiles = [];
+		if (typeof window !== 'undefined' && window.localStorage) {
+			try {
+				window.localStorage.removeItem('strata_recent_files');
+			} catch (e) {}
+		}
+	}
+
+	/**
+	 * Clears recent files cache and resets state back to empty Welcome screen.
+	 */
+	closeFileAndClearRecent() {
+		this.clearRecentFiles();
+		this.closeFile();
 	}
 
 	/**

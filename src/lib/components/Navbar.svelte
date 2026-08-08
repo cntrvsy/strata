@@ -21,6 +21,11 @@
     RotateCcw,
     Sparkles,
     CircleArrowUp,
+    X,
+    ChevronDown,
+    FileCode,
+    Code,
+    DraftingCompass,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { updateState } from "$lib/state/updateState.svelte";
@@ -130,65 +135,152 @@
   class="navbar w-full h-11 border-b border-base-300/80 bg-base-100/90 backdrop-blur-md z-30 px-4 select-none shrink-0"
   data-testid="navbar"
 >
-  <!-- Left Side: File Controls & Sandbox Actions -->
+  <!-- Left Side: Session Context & Adaptive Schema Controls -->
   <div class="navbar-start flex items-center gap-2">
-    <button
-      class="btn btn-outline btn-sm border-base-300/85 hover:border-base-300 hover:bg-base-200/60 text-base-content/80 rounded-lg text-xs font-semibold px-3 h-8 min-h-0"
-      onclick={onOpenFile}
-      title="Open Drizzle Schema file"
-    >
-      <FolderOpen class="w-3.5 h-3.5 opacity-80" />
-      <span>Open Schema</span>
-    </button>
-
     {#if schemaState.isSandboxMode}
-      <button
-        class="btn btn-secondary btn-sm gap-1.5 rounded-lg text-xs font-semibold px-3 h-8 min-h-0 shadow-sm"
-        onclick={() =>
-          schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
-        title="Reset sandbox schema template to initial state"
-        data-testid="reset-sandbox-button"
-      >
-        <RotateCcw class="w-3.5 h-3.5" />
-        <span>Reset Schema</span>
-      </button>
-
+      <!-- State C: Playground Sandbox Active (Unified Compact Dropdown Pill) -->
       <div class="dropdown dropdown-bottom">
         <div
           tabindex="0"
           role="button"
-          class="btn btn-ghost btn-xs rounded-lg gap-1 text-[10px] text-base-content/75 hover:bg-base-200/80 px-2"
-          title="Switch Sandbox Template"
+          class="join border border-secondary/40 rounded-lg overflow-hidden bg-secondary/10 p-0.5 shadow-2xs hover:bg-secondary/15 transition-colors cursor-pointer"
+          title="Playground Sandbox Mode (In-Memory Engine)"
         >
-          <Sparkles class="w-3 h-3 text-secondary" />
-          <span class="capitalize font-bold"
-            >{schemaState.sandboxTemplateKey}</span
+          <div
+            class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-secondary max-w-44 sm:max-w-64 truncate"
           >
+            <Sparkles class="w-3.5 h-3.5 text-secondary shrink-0" />
+            <span class="capitalize truncate"
+              >{schemaState.sandboxTemplateKey} Demo</span
+            >
+            <ChevronDown
+              class="w-3 h-3 opacity-70 shrink-0 ml-0.5 text-secondary"
+            />
+          </div>
         </div>
+
+        <!-- Sandbox Options & Demo Switcher Dropdown Menu -->
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <ul
           tabindex="0"
-          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-44 p-1.5 shadow-2xl mt-1 text-xs"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-auto p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
         >
           <li
             class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
           >
-            Starter Templates
+            Sandbox Session Actions
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] font-medium text-secondary hover:bg-secondary/10"
+              onclick={() =>
+                schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
+              data-testid="reset-sandbox-button"
+            >
+              <RotateCcw class="w-3.5 h-3.5 text-secondary" />
+              <span>Reset Sandbox Demo</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
+              onclick={() => schemaState.closeFile()}
+            >
+              <X class="w-3.5 h-3.5 text-error" />
+              <span>Exit Sandbox Mode</span>
+            </button>
+          </li>
+
+          <div class="h-px bg-base-300/50 my-1"></div>
+
+          <li
+            class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
+          >
+            Switch Starter Demo
           </li>
           {#each Object.values(SAMPLE_TEMPLATES) as tpl}
             <li>
               <button
-                class="rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey ===
+                class="flex items-center justify-between rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey ===
                 tpl.key
                   ? 'active font-bold'
                   : ''}"
                 onclick={() => schemaState.loadSandboxDemo(tpl.key)}
               >
-                {tpl.name}
+                <div class="flex items-center gap-1.5 min-w-0 truncate">
+                  <Sparkles class="w-3 h-3 text-secondary shrink-0" />
+                  <span class="truncate">{tpl.name}</span>
+                </div>
               </button>
             </li>
           {/each}
         </ul>
+      </div>
+    {:else if schemaState.filePath}
+      <!-- State B: Active File Mode (Compact File Pill with Menu Dropdown) -->
+      <div class="dropdown dropdown-bottom">
+        <div
+          tabindex="0"
+          role="button"
+          class="join border border-base-300/80 rounded-lg overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer"
+          title={schemaState.filePath}
+        >
+          <div
+            class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-base-content/85 max-w-44 sm:max-w-64 truncate"
+          >
+            <FolderOpen class="w-3.5 h-3.5 text-primary shrink-0" />
+            <span class="truncate">{schemaState.filePath.split("/").pop()}</span
+            >
+            <ChevronDown class="w-3 h-3 opacity-60 shrink-0 ml-0.5" />
+          </div>
+        </div>
+
+        <!-- File Options Dropdown Menu -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <ul
+          tabindex="0"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-52 p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
+        >
+          <li
+            class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
+          >
+            File Session Actions
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] font-medium"
+              onclick={onOpenFile}
+            >
+              <FolderOpen class="w-3.5 h-3.5 text-primary" />
+              <span>Switch / Open File...</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
+              onclick={() => schemaState.closeFile()}
+            >
+              <X class="w-3.5 h-3.5 text-error" />
+              <span>Close Schema</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    {:else}
+      <!-- State A: Empty State (Minimal App Branding, Welcome Overlay Active) -->
+      <div class="flex items-center gap-2">
+        <div class="p-1.5 bg-primary/10 rounded-xl ring-1 ring-primary/20">
+          <FileCode class="w-4 h-4 text-primary" />
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="font-bold text-sm tracking-tight text-base-content"
+            >Strata</span
+          >
+          <span
+            class="badge badge-xs badge-neutral opacity-70 font-mono text-[9px]"
+            >No Schema</span
+          >
+        </div>
       </div>
     {/if}
   </div>
@@ -206,7 +298,7 @@
           onclick={() => schemaState.toggleCodePane()}
           title="Toggle Code Editor View"
         >
-          Code
+          <Code class="w-3.5 h-3.5" />
         </button>
         <button
           class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isDiagramCollapsed
@@ -215,7 +307,7 @@
           onclick={() => schemaState.toggleDiagramPane()}
           title="Toggle Diagram Canvas View"
         >
-          Diagram
+          <DraftingCompass class="w-3.5 h-3.5" />
         </button>
       </div>
     {/if}
@@ -226,7 +318,7 @@
     {#if schemaState.filePath || schemaState.isSandboxMode}
       <!-- Primary Action: New Table (Solid, bold) -->
       <button
-        class="btn btn-primary btn-sm gap-1 rounded-lg shadow-sm font-semibold h-8 min-h-0 px-3 text-xs"
+        class="btn btn-primary btn-sm gap-1 rounded-lg shadow-sm font-semibold h-7 min-h-0 px-3 text-xs"
         onclick={() => (schemaState.showNewTableModal = true)}
         data-testid="new-table-button"
       >
