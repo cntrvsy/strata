@@ -165,7 +165,7 @@
         <span
           class="truncate max-w-28 sm:max-w-44 font-semibold text-base-content/85"
         >
-          {schemaState.filePath.split("/").pop()}
+          {schemaState.filePath.split(/[/\\]/).pop()}
         </span>
         <button
           class="btn btn-ghost btn-xs btn-circle h-4 w-4 min-h-0 hover:bg-base-200 text-base-content/50 hover:text-error ml-0.5"
@@ -448,7 +448,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.0.7</span
+      title="Strata App Version">v3.0.8</span
     >
   </div>
 </div>
