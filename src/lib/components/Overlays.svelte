@@ -93,14 +93,14 @@
     class="fixed inset-0 z-20 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-base-300/40 backdrop-blur-md animate-in fade-in duration-300"
   >
     <div
-      class="card bg-base-100 border border-base-300/80 shadow-2xl rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden"
+      class="card bg-base-100 border border-base-300/80 shadow-2xl rounded-box w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden"
     >
       <!-- Hero / Banner Header -->
       <div
         class="bg-base-200/50 px-6 pt-6 pb-4 border-b border-base-300/60 flex flex-col items-center text-center shrink-0"
       >
         <div
-          class="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mb-3 ring-1 ring-primary/20 shadow-xs"
+          class="w-12 h-12 bg-primary/10 rounded-field flex items-center justify-center mb-3 ring-1 ring-primary/20 shadow-xs"
         >
           <FileCode class="w-6 h-6 text-primary" />
         </div>
@@ -117,7 +117,7 @@
         <!-- Segmented Tab Navigation -->
         <div
           role="tablist"
-          class="tabs tabs-box bg-base-200/80 border border-base-300/60 mt-4 p-1 rounded-2xl w-full max-w-md grid grid-cols-3"
+          class="tabs tabs-box bg-base-200/80 border border-base-300/60 mt-4 p-1 rounded-field w-full max-w-md grid grid-cols-3"
         >
           <button
             role="tab"
@@ -173,12 +173,12 @@
           <!-- Quick Start View -->
           <div class="space-y-4 animate-in fade-in duration-200">
             <button
-              class="w-full border-2 border-dashed border-base-300 hover:border-primary/60 bg-base-200/20 hover:bg-primary/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center transition-all group cursor-pointer"
+              class="w-full border-2 border-dashed border-base-300 hover:border-primary/60 bg-base-200/20 hover:bg-primary/5 rounded-box p-6 flex flex-col items-center justify-center text-center transition-all group cursor-pointer"
               onclick={() => schemaState.openNewFile()}
               aria-label="Open Schema"
             >
               <div
-                class="p-3 bg-primary/10 rounded-2xl text-primary mb-2 group-hover:scale-105 transition-transform"
+                class="p-3 bg-primary/10 rounded-field text-primary mb-2 group-hover:scale-105 transition-transform"
               >
                 <Upload class="w-5 h-5" />
               </div>
@@ -189,12 +189,12 @@
               </span>
               <p class="text-[11px] text-base-content/60 mt-1 max-w-sm">
                 Open a local Drizzle <code
-                  class="bg-base-200 px-1 py-0.5 rounded text-primary font-mono text-[10px]"
+                  class="bg-base-200 px-1 py-0.5 rounded-field text-primary font-mono text-[10px]"
                   >schema.ts</code
                 > to generate & visualize ER diagrams automatically.
               </p>
               <span
-                class="btn btn-primary btn-sm rounded-xl px-5 mt-4 shadow-xs font-semibold text-xs"
+                class="btn btn-primary btn-sm rounded-field px-5 mt-4 shadow-xs font-semibold text-xs"
               >
                 <FolderOpen class="w-4 h-4 mr-1" />
                 Browse Files
@@ -204,10 +204,10 @@
             <!-- Quick Template Hint / Resume -->
             {#if schemaState.recentFiles.length > 0}
               <div
-                class="bg-base-200/40 rounded-2xl p-3.5 border border-base-300/60 flex items-center justify-between"
+                class="bg-base-200/40 rounded-box p-3.5 border border-base-300/60 flex items-center justify-between"
               >
                 <div class="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                  <div class="p-2 bg-accent/10 rounded-xl text-accent shrink-0">
+                  <div class="p-2 bg-accent/10 rounded-field text-accent shrink-0">
                     <Clock class="w-4 h-4" />
                   </div>
                   <div class="flex flex-col min-w-0">
@@ -222,7 +222,7 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <button
-                    class="btn btn-ghost btn-xs rounded-xl font-bold text-primary hover:bg-primary/10"
+                    class="btn btn-ghost btn-xs rounded-field font-bold text-primary hover:bg-primary/10"
                     onclick={() =>
                       schemaState.openFileDirectly(schemaState.recentFiles[0])}
                   >
@@ -239,10 +239,10 @@
               </div>
             {:else}
               <div
-                class="bg-base-200/40 rounded-2xl p-3.5 border border-base-300/60 flex items-center justify-between"
+                class="bg-base-200/40 rounded-box p-3.5 border border-base-300/60 flex items-center justify-between"
               >
                 <div class="flex items-center gap-3">
-                  <div class="p-2 bg-secondary/10 rounded-xl text-secondary">
+                  <div class="p-2 bg-secondary/10 rounded-field text-secondary">
                     <Sparkles class="w-4 h-4" />
                   </div>
                   <div class="flex flex-col text-left">
@@ -255,7 +255,7 @@
                   </div>
                 </div>
                 <button
-                  class="btn btn-secondary btn-xs rounded-xl font-semibold px-3"
+                  class="btn btn-secondary btn-xs rounded-field font-semibold px-3"
                   onclick={() => (activeTab = "templates")}
                 >
                   Explore Demos
@@ -278,7 +278,7 @@
             </div>
 
             <ul
-              class="list bg-base-200/30 rounded-2xl border border-base-300/60 divide-y divide-base-300/40 max-h-64 overflow-y-auto"
+              class="list bg-base-200/30 rounded-box border border-base-300/60 divide-y divide-base-300/40 max-h-64 overflow-y-auto"
             >
               {#each Object.values(SAMPLE_TEMPLATES) as tpl}
                 <li
@@ -304,7 +304,7 @@
                     </p>
                   </div>
                   <button
-                    class="btn btn-ghost btn-xs text-secondary font-bold group-hover:bg-secondary group-hover:text-secondary-content shrink-0 rounded-xl px-2.5"
+                    class="btn btn-ghost btn-xs text-secondary font-bold group-hover:bg-secondary group-hover:text-secondary-content shrink-0 rounded-field px-2.5"
                     onclick={() => schemaState.loadSandboxDemo(tpl.key)}
                   >
                     <ArrowRight />
@@ -328,7 +328,7 @@
                 >
                 {#if schemaState.recentFiles.length > 0}
                   <button
-                    class="btn btn-ghost btn-xs text-error hover:bg-error/10 rounded-lg text-[10px] h-6 min-h-0 px-2 font-semibold flex items-center gap-1"
+                    class="btn btn-ghost btn-xs text-error hover:bg-error/10 rounded-field text-[10px] h-6 min-h-0 px-2 font-semibold flex items-center gap-1"
                     onclick={() => {
                       schemaState.clearRecentFiles();
                       activeTab = "quickstart";
@@ -343,7 +343,7 @@
             </div>
 
             <ul
-              class="list bg-base-200/30 rounded-2xl border border-base-300/60 divide-y divide-base-300/40 max-h-64 overflow-y-auto"
+              class="list bg-base-200/30 rounded-box border border-base-300/60 divide-y divide-base-300/40 max-h-64 overflow-y-auto"
             >
               {#each schemaState.recentFiles as path}
                 <li
@@ -351,7 +351,7 @@
                 >
                   <div class="flex items-center gap-3 min-w-0 flex-1 pr-2">
                     <div
-                      class="p-2 bg-base-200 rounded-xl text-base-content/60 group-hover:text-primary group-hover:bg-primary/10 transition-colors"
+                      class="p-2 bg-base-200 rounded-field text-base-content/60 group-hover:text-primary group-hover:bg-primary/10 transition-colors"
                     >
                       <FolderOpen class="w-4 h-4" />
                     </div>
@@ -369,7 +369,7 @@
                     </div>
                   </div>
                   <button
-                    class="btn btn-ghost btn-xs text-primary font-bold group-hover:bg-primary group-hover:text-primary-content shrink-0 rounded-xl px-2.5"
+                    class="btn btn-ghost btn-xs text-primary font-bold group-hover:bg-primary group-hover:text-primary-content shrink-0 rounded-field px-2.5"
                     onclick={() => schemaState.openFileDirectly(path)}
                   >
                     <ArrowRight />
@@ -398,7 +398,7 @@
     class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-base-100/10 backdrop-blur-[1px] animate-in fade-in duration-300"
   >
     <div
-      class="p-4 bg-base-100 border border-base-300/80 rounded-2xl shadow-xl flex items-center gap-3"
+      class="p-4 bg-base-100 border border-base-300/80 rounded-box shadow-xl flex items-center gap-3"
     >
       <span class="loading loading-spinner loading-sm text-primary"></span>
       <span class="text-[10px] font-bold uppercase tracking-wider opacity-40"

@@ -74,7 +74,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
-    class="fixed inset-0 z-150 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
+    class="fixed inset-0 z-150 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-4"
     transition:fade={{ duration: 150 }}
     role="dialog"
     aria-modal="true"
@@ -82,14 +82,14 @@
     onkeydown={handleKeyDown}
   >
     <div
-      class="bg-base-100 rounded-3xl w-full max-w-md shadow-2xl border border-base-300 overflow-hidden flex flex-col font-sans"
+      class="bg-base-100 rounded-box w-full max-w-md shadow-2xl border border-base-300 overflow-hidden flex flex-col font-sans"
     >
       <!-- Header -->
       <div
         class="px-6 py-4 bg-base-200/90 border-b border-base-300 flex items-center justify-between"
       >
         <div class="flex items-center gap-2.5">
-          <div class="p-2 bg-secondary/10 rounded-xl text-secondary">
+          <div class="p-2 bg-secondary/10 rounded-field text-secondary">
             <FilePen class="w-4 h-4" />
           </div>
           <div>
@@ -114,17 +114,16 @@
 
       <!-- Body -->
       <div class="p-6 flex flex-col gap-4">
-        <div>
-          <label
-            for="rename-input"
-            class="block text-xs font-semibold text-base-content/80 mb-1.5"
-            >New Entity Identifier</label
+        <fieldset class="fieldset gap-1.5 p-0">
+          <legend
+            class="fieldset-legend text-xs font-semibold text-base-content/80"
+            >New Entity Identifier</legend
           >
           <input
             id="rename-input"
             bind:this={inputEl}
             type="text"
-            class="input input-sm input-bordered w-full rounded-xl text-xs bg-base-100 focus:input-secondary font-mono"
+            class="input input-sm input-bordered w-full rounded-field text-xs bg-base-100 focus:input-secondary font-mono"
             bind:value={newName}
             oninput={() => validate(newName)}
             placeholder="e.g. users_v2"
@@ -134,7 +133,7 @@
               >{errorMsg}</span
             >
           {/if}
-        </div>
+        </fieldset>
       </div>
 
       <!-- Footer -->
@@ -142,13 +141,13 @@
         class="px-6 py-3.5 bg-base-200/40 border-t border-base-300/80 flex items-center justify-end gap-2"
       >
         <button
-          class="btn btn-ghost btn-xs rounded-xl font-semibold px-3"
+          class="btn btn-ghost btn-xs rounded-field font-semibold px-3"
           onclick={close}
         >
           Cancel
         </button>
         <button
-          class="btn btn-secondary btn-xs rounded-xl font-bold px-4 shadow-sm"
+          class="btn btn-secondary btn-xs rounded-field font-bold px-4 shadow-sm"
           onclick={handleSave}
           disabled={Boolean(errorMsg)}
         >

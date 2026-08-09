@@ -163,7 +163,7 @@
         class="p-5 border-b border-base-300 flex items-center justify-between bg-base-200/50"
       >
         <div class="flex items-center gap-3">
-          <div class="p-2.5 {config.bg} rounded-xl shadow-xs">
+          <div class="p-2.5 {config.bg} rounded-field shadow-xs">
             <config.icon class="w-4 h-4 {config.text}" />
           </div>
           <div class="flex flex-col grow">
@@ -171,7 +171,7 @@
               <div class="flex items-center gap-1">
                 <input
                   bind:value={newTableName}
-                  class="input input-xs input-bordered w-full rounded-lg font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all text-base-content"
+                  class="input input-xs input-bordered w-full rounded-field font-bold text-sm h-7 bg-base-100 focus:input-primary transition-all text-base-content"
                   onkeydown={(e) => e.key === "Enter" && submitRenameTable()}
                   data-testid="inspector-rename-table-input"
                 />
@@ -179,7 +179,7 @@
                   class="btn btn-primary btn-xs btn-circle"
                   onclick={submitRenameTable}
                   data-testid="inspector-rename-table-submit"
-                  ><Check class="w-3 h-3 text-primary-content" /></button
+                  ><Check class="w-3 h-3" /></button
                 >
               </div>
             {:else}
@@ -226,7 +226,7 @@
                 class="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200 pr-2"
               >
                 <button
-                  class="btn btn-error btn-xs rounded-lg font-bold text-white shadow-xs"
+                  class="btn btn-error btn-xs rounded-field font-bold text-white shadow-xs"
                   onclick={() => deleteTable(selectedNode.id)}
                   data-testid="confirm-delete-entity-button"
                 >
@@ -276,7 +276,7 @@
           </p>
           {#if issue.suggestedFix}
             <button
-              class="btn btn-xs btn-warning rounded-lg text-[10px] h-6 min-h-6 self-start font-bold gap-1 mt-0.5"
+              class="btn btn-xs btn-warning rounded-field text-[10px] h-6 min-h-6 self-start font-bold gap-1 mt-0.5"
               onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
             >
               <Wrench class="w-3 h-3" />
@@ -292,7 +292,7 @@
           (i) => i.symbolName === selectedNode.id,
         )}
         <div
-          class="mx-5 mt-4 p-3 rounded-2xl bg-error/10 border border-error/20 flex flex-col gap-2"
+          class="mx-5 mt-4 p-3 rounded-box bg-error/10 border border-error/20 flex flex-col gap-2"
         >
           <div class="flex items-center gap-2 text-error text-xs font-bold">
             <TriangleAlert class="w-4 h-4 shrink-0" />
@@ -310,7 +310,7 @@
             </p>
           {/each}
           <button
-            class="btn btn-error btn-xs rounded-xl font-bold gap-1.5 self-start text-[10px] shadow-sm mt-1"
+            class="btn btn-error btn-xs rounded-field font-bold gap-1.5 self-start text-[10px] shadow-sm mt-1"
             onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
           >
             <Wrench class="w-3 h-3" />
@@ -322,10 +322,10 @@
       <!-- Tabs Navigation -->
 
       <div
-        class="tabs tabs-boxed rounded-2xl bg-base-200/80 p-1 mx-5 mt-4 flex select-none shrink-0 border border-base-300"
+        class="tabs tabs-boxed rounded-box bg-base-200/80 p-1 mx-5 mt-4 flex select-none shrink-0 border border-base-300"
       >
         <button
-          class="tab tab-sm grow rounded-xl transition-all text-xs font-semibold py-1.5 {activeTab ===
+          class="tab tab-sm grow rounded-field transition-all text-xs font-semibold py-1.5 {activeTab ===
           'fields'
             ? 'tab-active bg-base-100 shadow-xs font-bold text-primary'
             : 'text-base-content/75 hover:text-base-content'}"
@@ -334,7 +334,7 @@
           Fields ({data.columns.length})
         </button>
         <button
-          class="tab tab-sm grow rounded-xl transition-all text-xs font-semibold py-1.5 {activeTab ===
+          class="tab tab-sm grow rounded-field transition-all text-xs font-semibold py-1.5 {activeTab ===
           'relations'
             ? 'tab-active bg-base-100 shadow-xs font-bold text-primary'
             : 'text-base-content/75 hover:text-base-content'}"
@@ -350,7 +350,7 @@
       <div class="flex-1 overflow-y-auto min-h-0 p-6 flex flex-col gap-6">
         {#if isReadOnly}
           <div
-            class="alert alert-info/10 bg-info/5 text-base-content/90 text-[11px] rounded-2xl flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed"
+            class="alert alert-info/10 bg-info/5 text-base-content/90 text-[11px] rounded-box flex items-start gap-2.5 border border-info/10 p-3.5 leading-relaxed"
           >
             <span>ℹ️</span>
             <span
@@ -394,7 +394,7 @@
               {#if !isReadOnly}
                 <div class="grid grid-cols-2 gap-2 mt-2">
                   <button
-                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-primary/60 hover:bg-primary/5 transition-all"
+                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-field h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-primary/60 hover:bg-primary/5 transition-all"
                     onclick={() => (isAddingField = true)}
                     data-testid="add-field-button"
                   >
@@ -403,7 +403,7 @@
                     >
                   </button>
                   <button
-                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all"
+                    class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-field h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all"
                     onclick={() => (isCreatingRelation = true)}
                     data-testid="add-relation-button"
                   >
@@ -442,7 +442,7 @@
                   {@const isVirtual = edge.data?.isVirtual}
                   {@const card = edge.data?.cardinality || "unknown"}
                   <div
-                    class="bg-base-200/30 p-3.5 rounded-2xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
+                    class="bg-base-200/30 p-3.5 rounded-box flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group animate-in fade-in slide-in-from-bottom-2 duration-200"
                   >
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
@@ -511,7 +511,7 @@
 
             <!-- footnote banner -->
             <div
-              class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-2xl flex flex-col gap-1.5 text-[10px]"
+              class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-box flex flex-col gap-1.5 text-[10px]"
             >
               <span
                 class="font-bold text-base-content/85 flex items-center gap-1"
@@ -529,7 +529,7 @@
 
             {#if !isReadOnly}
               <button
-                class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-xl h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all mt-2"
+                class="btn btn-ghost btn-sm border border-dashed border-base-300 rounded-field h-auto py-3 flex flex-col gap-1 opacity-70 hover:opacity-100 hover:border-secondary/60 hover:bg-secondary/5 transition-all mt-2"
                 onclick={() => (isCreatingRelation = true)}
               >
                 <span class="text-xs font-semibold uppercase tracking-wider"

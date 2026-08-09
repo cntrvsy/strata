@@ -51,17 +51,17 @@
   <div class="flex items-center gap-3">
     <div class="relative group flex items-center gap-2 cursor-help py-0.5">
       <div class="flex items-center gap-1.5">
-        <div
-          class="w-1.5 h-1.5 rounded-full transition-all {schemaState.isSandboxMode
-            ? 'bg-secondary animate-pulse text-secondary'
+        <span
+          class="status status-xs {schemaState.isSandboxMode
+            ? 'status-secondary animate-pulse'
             : !schemaState.filePath
-              ? 'bg-warning text-warning'
+              ? 'status-warning'
               : !schemaState.isValid
-                ? 'bg-error animate-ping text-error'
+                ? 'status-error animate-ping'
                 : schemaState.hasUnsavedChanges
-                  ? 'bg-warning animate-pulse text-warning'
-                  : 'bg-success text-success'} shadow-[0_0_8px_currentColor]"
-        ></div>
+                  ? 'status-warning animate-pulse'
+                  : 'status-success'}"
+        ></span>
         <span class="font-bold text-base-content/75 uppercase tracking-wider">
           {schemaState.isSandboxMode
             ? "Playground Sandbox"
@@ -77,10 +77,10 @@
 
       <!-- Detail Card (glorious tooltip) -->
       <div
-        class="absolute bottom-7 left-0 w-80 p-5 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-3 backdrop-blur-md"
+        class="absolute bottom-7 left-0 w-80 p-5 bg-base-100 border border-base-300/80 rounded-box shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-3 backdrop-blur-md"
       >
         <div class="flex items-center gap-2.5">
-          <div class="p-1.5 bg-primary/10 rounded-xl">
+          <div class="p-1.5 bg-primary/10 rounded-field">
             <RefreshCw
               class="w-4 h-4 text-primary animate-spin duration-3000 [animation-duration:10s]"
             />
@@ -110,14 +110,14 @@
             Click <strong>Open Schema</strong> in the navbar to connect to a
             real
             <code
-              class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[9px]"
+              class="bg-base-200/60 px-1 py-0.5 rounded-field font-mono text-[9px]"
               >schema.ts</code
             > file on disk.
           </div>
         {:else}
           <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
             Strata keeps your <code
-              class="bg-base-200/60 px-1 py-0.5 rounded font-mono text-[10px] text-primary"
+              class="bg-base-200/60 px-1 py-0.5 rounded-field font-mono text-[10px] text-primary"
               >schema.ts</code
             > file as the absolute single source of truth.
           </p>
@@ -184,7 +184,7 @@
         class="relative group/warn flex items-center gap-1 cursor-pointer py-0.5"
       >
         <div
-          class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold border transition-colors {schemaState.auditErrorCount >
+          class="flex items-center gap-1 rounded-field px-1.5 py-0.5 text-[9px] font-bold border transition-colors {schemaState.auditErrorCount >
           0
             ? 'bg-error/15 border-error/30 text-error'
             : 'bg-warning/15 border-warning/30 text-warning'}"
@@ -200,14 +200,14 @@
 
         <!-- Detail Card (glorious audit & diagnostic tooltip) -->
         <div
-          class="absolute bottom-7 left-0 w-96 max-h-105 p-4 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 group-hover/warn:pointer-events-auto pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-3 backdrop-blur-md text-[11px] font-sans overflow-y-auto"
+          class="absolute bottom-7 left-0 w-96 max-h-105 p-4 bg-base-100 border border-base-300/80 rounded-box shadow-2xl opacity-0 scale-95 translate-y-2 group-hover/warn:opacity-100 group-hover/warn:scale-100 group-hover/warn:translate-y-0 group-hover/warn:pointer-events-auto pointer-events-none transition-all duration-200 z-50 origin-bottom-left flex flex-col gap-3 backdrop-blur-md text-[11px] font-sans overflow-y-auto"
         >
           <div
             class="flex items-center justify-between border-b border-base-200 pb-2"
           >
             <div class="flex items-center gap-2">
               <div
-                class="p-1 rounded-lg {schemaState.auditErrorCount > 0
+                class="p-1 rounded-field {schemaState.auditErrorCount > 0
                   ? 'bg-error/10 text-error'
                   : 'bg-warning/10 text-warning'}"
               >
@@ -238,7 +238,7 @@
               >
               {#each schemaState.auditIssues as issue}
                 <div
-                  class="p-2 rounded-xl bg-base-200/50 border border-base-300/50 flex flex-col gap-1 text-[10px]"
+                  class="p-2 rounded-box bg-base-200/50 border border-base-300/50 flex flex-col gap-1 text-[10px]"
                 >
                   <div class="flex items-center justify-between">
                     <span
@@ -258,7 +258,7 @@
                     </span>
                     {#if issue.line}
                       <button
-                        class="px-1.5 py-0.5 rounded bg-base-300/60 hover:bg-primary/20 hover:text-primary font-mono text-[9px] transition-colors"
+                        class="px-1.5 py-0.5 rounded-field bg-base-300/60 hover:bg-primary/20 hover:text-primary font-mono text-[9px] transition-colors"
                         onclick={() => uiState.jumpToCodeLine(issue.line)}
                         title="Click to jump to line {issue.line} in Code Editor"
                       >
@@ -271,7 +271,7 @@
                   </p>
                   {#if issue.suggestedFix && issue.symbolName}
                     <button
-                      class="btn btn-xs btn-ghost text-primary border border-primary/20 rounded-lg text-[9px] h-6 min-h-6 self-start mt-0.5 gap-1 hover:bg-primary/10"
+                      class="btn btn-xs btn-ghost text-primary border border-primary/20 rounded-field text-[9px] h-6 min-h-6 self-start mt-0.5 gap-1 hover:bg-primary/10"
                       onclick={() =>
                         issue.symbolName &&
                         schemaState.repairNodeJsdoc(issue.symbolName)}
@@ -301,7 +301,7 @@
               </ul>
               {#if !schemaState.isSandboxMode}
                 <button
-                  class="btn btn-warning btn-xs rounded-xl font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
+                  class="btn btn-warning btn-xs rounded-field font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
                   onclick={() => schemaState.syncMissingWranglerBindings()}
                 >
                   ⚡ Fix & Sync to Wrangler Config
@@ -325,7 +325,7 @@
             onclick={() =>
               (schemaState.activeFilter =
                 schemaState.activeFilter === "d1" ? null : "d1")}
-            class="flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
+            class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-field transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
             'd1'
               ? 'text-primary font-bold bg-primary/10'
               : 'text-base-content/75'}"
@@ -342,7 +342,7 @@
               onclick={() =>
                 (schemaState.activeFilter =
                   schemaState.activeFilter === "do" ? null : "do")}
-              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-field transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
               'do'
                 ? 'text-secondary font-bold bg-secondary/10'
                 : 'text-base-content/75'}"
@@ -360,7 +360,7 @@
               onclick={() =>
                 (schemaState.activeFilter =
                   schemaState.activeFilter === "kv" ? null : "kv")}
-              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-field transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
               'kv'
                 ? 'text-accent font-bold bg-accent/10'
                 : 'text-base-content/75'}"
@@ -380,7 +380,7 @@
 
         <!-- Detail Stats Popover -->
         <div
-          class="absolute bottom-7 right-0 w-52 p-4 bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-right flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
+          class="absolute bottom-7 right-0 w-52 p-4 bg-base-100 border border-base-300/80 rounded-box shadow-2xl opacity-0 scale-95 translate-y-2 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-y-0 pointer-events-none transition-all duration-200 z-50 origin-bottom-right flex flex-col gap-2.5 backdrop-blur-md text-[11px] font-sans"
         >
           <div
             class="flex items-center gap-1.5 border-b border-base-300/60 pb-1.5"
@@ -447,7 +447,7 @@
     <!-- Application Version Badge -->
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
-      class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold"
+      class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
       title="Strata App Version">v3.0.8</span
     >
   </div>

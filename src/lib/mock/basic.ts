@@ -8,7 +8,7 @@ import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
  *
  * CONCEPT 1: D1 TABLES (sqliteTable)
  * - Strata parses Drizzle `sqliteTable()` declarations into interactive ERD cards.
- * - The `@strata` JSDoc block above each entity stores its visual (x, y) canvas coordinates.
+ * - The `@strata {"x":120,"y":180}` JSDoc block above each entity stores its visual (x, y) canvas coordinates.
  *
  * CONCEPT 2: PHYSICAL FOREIGN KEYS (.references)
  * - `students.classroom_id` uses `.references(() => classrooms.id)`.

@@ -63,7 +63,7 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="p-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent flex flex-col gap-0.5 text-[10px] mb-1">
+  <div class="p-2.5 rounded-box bg-accent/10 border border-accent/20 text-accent flex flex-col gap-0.5 text-[10px] mb-1">
     <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace Binding</span>
     <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
   </div>
@@ -71,7 +71,7 @@
   {#each data.columns as col}
 
     <div
-      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
+      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
     >
       <div class="flex items-center justify-between">
@@ -80,7 +80,7 @@
             <div class="flex items-center gap-1 grow">
               <input
                 bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-lg font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
+                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
                 onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
                 data-testid="field-rename-input-{col.name}"
               />
@@ -89,7 +89,7 @@
                 onclick={submitRenameColumn}
                 data-testid="field-rename-submit-{col.name}"
               >
-                <Check class="w-3 h-3 text-primary-content" />
+                <Check class="w-3 h-3" />
               </button>
             </div>
           {:else}
@@ -162,55 +162,55 @@
           class="border-t border-base-300 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200"
         >
           <div class="grid grid-cols-2 gap-2">
-            <div class="flex flex-col gap-1">
-              <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
-                >Value Type</span
+            <fieldset class="fieldset gap-1 p-0">
+              <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
+                >Value Type</legend
               >
               <select
                 bind:value={selectedType}
-                class="select select-xs select-bordered w-full rounded-lg bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] font-medium"
+                class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] font-medium"
               >
-                <option class="bg-base-100 text-base-content" value="string">String</option>
-                <option class="bg-base-100 text-base-content" value="number">Number</option>
-                <option class="bg-base-100 text-base-content" value="boolean">Boolean</option>
-                <option class="bg-base-100 text-base-content" value="any">Any</option>
+                <option value="string">String</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="any">Any</option>
               </select>
-            </div>
-            <div class="flex flex-col gap-1">
-              <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
-                >Expiration TTL (s)</span
+            </fieldset>
+            <fieldset class="fieldset gap-1 p-0">
+              <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
+                >Expiration TTL (s)</legend
               >
               <input
                 type="number"
                 bind:value={selectedTtl}
                 placeholder="None"
                 min="60"
-                class="input input-xs input-bordered w-full rounded-lg bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-[10px]"
+                class="input input-xs input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-[10px]"
               />
-            </div>
+            </fieldset>
           </div>
 
-          <div class="flex flex-col gap-1">
-            <span class="text-[9.5px] font-bold text-base-content/80 uppercase"
-              >Metadata String / Description</span
+          <fieldset class="fieldset gap-1 p-0">
+            <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
+              >Metadata String / Description</legend
             >
             <textarea
               bind:value={selectedMetadata}
               placeholder="e.g. user-profile or system-config"
               rows="2"
-              class="textarea textarea-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:textarea-primary transition-all text-[10.5px] font-mono leading-tight resize-y"
+              class="textarea textarea-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:textarea-primary transition-all text-[10.5px] font-mono leading-tight resize-y"
             ></textarea>
-          </div>
+          </fieldset>
 
           <div class="flex justify-end gap-1.5">
             <button
-              class="btn btn-ghost btn-xs rounded-lg px-3 text-[10px]"
+              class="btn btn-ghost btn-xs rounded-field px-3 text-[10px]"
               onclick={() => (expandedKey = null)}
             >
               Cancel
             </button>
             <button
-              class="btn btn-primary btn-xs rounded-lg px-4 text-[10px] font-semibold text-primary-content"
+              class="btn btn-primary btn-xs rounded-field px-4 text-[10px] font-semibold"
               onclick={() => saveKeySettings(col.name)}
             >
               Save Settings

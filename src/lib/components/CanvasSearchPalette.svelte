@@ -134,12 +134,12 @@
 
 {#if show}
   <div
-    class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-xs pt-20 p-4 animate-in fade-in duration-150"
+    class="fixed inset-0 z-50 flex items-start justify-center bg-neutral/60 backdrop-blur-md pt-20 p-4 animate-in fade-in duration-150"
     role="dialog"
     aria-modal="true"
   >
     <div
-      class="bg-base-100 rounded-3xl w-full max-w-xl shadow-2xl border border-base-300 overflow-hidden flex flex-col"
+      class="bg-base-100 rounded-box w-full max-w-xl shadow-2xl border border-base-300 overflow-hidden flex flex-col"
     >
       <!-- Search Input -->
       <div
@@ -170,7 +170,7 @@
             {@const Icon =
               targetIcons[item.target as keyof typeof targetIcons] || Database}
             <button
-              class="w-full text-left p-3 rounded-2xl flex items-center justify-between transition-all group {index ===
+              class="w-full text-left p-3 rounded-field flex items-center justify-between transition-all group {index ===
               selectedIndex
                 ? 'bg-primary text-primary-content shadow-md'
                 : 'hover:bg-base-200/60 text-base-content'}"
@@ -178,7 +178,7 @@
             >
               <div class="flex items-center gap-3">
                 <div
-                  class="p-2 rounded-xl {index === selectedIndex
+                  class="p-2 rounded-field {index === selectedIndex
                     ? 'bg-primary-content/20 text-primary-content'
                     : 'bg-base-200 text-base-content/70'}"
                 >

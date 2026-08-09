@@ -158,7 +158,7 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-xl overflow-hidden transition-all duration-200 border-t-4 {data.isExternal
+    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 {data.isExternal
       ? 'border-t-neutral-400 opacity-80'
       : config.borderTop} {data.isExternal
       ? 'border-dashed border-base-300'
@@ -176,7 +176,7 @@
         <div
           class="p-1.5 {data.isExternal
             ? 'bg-base-300'
-            : config.bg} rounded-lg {data.isExternal
+            : config.bg} rounded-field {data.isExternal
             ? ''
             : config.bgHover} transition-colors"
         >
@@ -230,7 +230,7 @@
         {@const isPk = col.isPk}
         {@const isFk = col.isReferences}
         <div
-          class="relative px-3 py-2 rounded-lg flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk
+          class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk
             ? 'bg-amber-500/5'
             : ''} {isFk ? 'bg-secondary/5' : ''}"
         >
@@ -287,7 +287,7 @@
 
           <div class="flex items-center gap-1.5">
             <span
-              class="text-[10px] opacity-40 font-mono group-hover/row:opacity-0 transition-opacity bg-base-200 px-1.5 py-0.5 rounded uppercase leading-none"
+              class="text-[10px] opacity-40 font-mono group-hover/row:opacity-0 transition-opacity bg-base-200 px-1.5 py-0.5 rounded-field uppercase leading-none"
             >
               {col.definition
                 .split("(")[0]
@@ -312,7 +312,7 @@
 
       {#if schemaState.compactMode && hiddenColumnsCount > 0}
         <div
-          class="px-3 py-2 text-[10px] opacity-40 font-mono text-center bg-base-200/20 rounded-lg"
+          class="px-3 py-2 text-[10px] opacity-40 font-mono text-center bg-base-200/20 rounded-field"
         >
           + {hiddenColumnsCount} fields hidden
         </div>

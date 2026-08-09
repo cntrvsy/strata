@@ -64,20 +64,19 @@
     <Form.Field {form} name="target">
       <Form.Control>
         {#snippet children({ props })}
-          <Form.Label
-            class="text-[10px] font-bold text-base-content/80 mb-1.5 block uppercase tracking-wider"
-            >Target Entity</Form.Label
-          >
-          <select
-            {...props}
-            bind:value={$formData.target}
-            class="select select-sm select-bordered w-full rounded-xl bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-xs font-medium"
-          >
-            <option class="bg-base-100 text-base-content" value="" disabled selected>Select target...</option>
-            {#each potentialTargets as target}
-              <option class="bg-base-100 text-base-content" value={target}>{target}</option>
-            {/each}
-          </select>
+          <fieldset class="fieldset gap-1 p-0">
+            <legend class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider">Target Entity</legend>
+            <select
+              {...props}
+              bind:value={$formData.target}
+              class="select select-sm select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-xs font-medium"
+            >
+              <option value="" disabled selected>Select target...</option>
+              {#each potentialTargets as target}
+                <option value={target}>{target}</option>
+              {/each}
+            </select>
+          </fieldset>
         {/snippet}
       </Form.Control>
       <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
@@ -86,7 +85,7 @@
     <div class="flex flex-col gap-2 pt-2">
       <button
         type="submit"
-        class="btn btn-primary btn-sm rounded-xl w-full gap-2 shadow-sm font-semibold"
+        class="btn btn-primary btn-sm rounded-field w-full gap-2 shadow-sm font-semibold"
         disabled={!$formData.target}
       >
         <Link class="w-3.5 h-3.5" />

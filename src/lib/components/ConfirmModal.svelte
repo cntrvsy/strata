@@ -36,7 +36,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
-    class="fixed inset-0 z-150 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
+    class="fixed inset-0 z-150 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-4"
     transition:fade={{ duration: 150 }}
     role="dialog"
     aria-modal="true"
@@ -44,14 +44,14 @@
     onkeydown={handleKeyDown}
   >
     <div
-      class="bg-base-100 rounded-3xl w-full max-w-md shadow-2xl border border-base-300 overflow-hidden flex flex-col font-sans"
+      class="bg-base-100 rounded-box w-full max-w-md shadow-2xl border border-base-300 overflow-hidden flex flex-col font-sans"
     >
       <!-- Header -->
       <div
         class="px-6 py-4 bg-base-200/90 border-b border-base-300 flex items-center justify-between"
       >
         <div class="flex items-center gap-2.5">
-          <div class="p-2 bg-error/10 rounded-xl text-error">
+          <div class="p-2 bg-error/10 rounded-field text-error">
             {#if schemaState.confirmModalData.isDanger !== false}
               <Trash2 class="w-4 h-4" />
             {:else}
@@ -85,13 +85,13 @@
         class="px-6 py-3.5 bg-base-200/40 border-t border-base-300/80 flex items-center justify-end gap-2"
       >
         <button
-          class="btn btn-ghost btn-xs rounded-xl font-semibold px-3"
+          class="btn btn-ghost btn-xs rounded-field font-semibold px-3"
           onclick={close}
         >
           Cancel
         </button>
         <button
-          class="btn btn-error btn-xs rounded-xl font-bold px-4 shadow-sm text-error-content"
+          class="btn btn-error btn-xs rounded-field font-bold px-4 shadow-sm"
           onclick={handleConfirm}
         >
           {schemaState.confirmModalData.confirmLabel}

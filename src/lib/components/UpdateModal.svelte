@@ -31,12 +31,12 @@
 
 {#if updateState.showModal}
   <div
-    class="fixed inset-0 bg-base-300/80 backdrop-blur-md z-100 flex items-center justify-center p-4 select-none"
+    class="fixed inset-0 bg-neutral/60 backdrop-blur-md z-100 flex items-center justify-center p-4 select-none"
     transition:fade={{ duration: 150 }}
   >
     <!-- Modal Container -->
     <div
-      class="bg-base-100 border border-base-300/90 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-150 relative"
+      class="bg-base-100 border border-base-300/90 rounded-box shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-150 relative"
       transition:scale={{ duration: 150, start: 0.95 }}
     >
       <!-- Modal Header -->
@@ -45,7 +45,7 @@
       >
         <div class="flex items-center gap-2.5">
           <div
-            class="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner"
+            class="w-8 h-8 rounded-field bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner"
           >
             <CircleArrowUp class="w-4 h-4" />
           </div>
@@ -57,7 +57,7 @@
         </div>
 
         <button
-          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-base-content hover:bg-base-200"
+          class="btn btn-ghost btn-xs btn-square rounded-field text-base-content/60 hover:text-base-content hover:bg-base-200"
           onclick={() => updateState.closeModal()}
           aria-label="Close modal"
         >
@@ -112,7 +112,7 @@
         {:else if updateState.status === "available" && updateState.updateInfo}
           <div class="flex flex-col items-stretch w-full gap-3 text-left">
             <div
-              class="flex items-center justify-between bg-primary/10 border border-primary/25 rounded-xl p-3"
+              class="flex items-center justify-between bg-primary/10 border border-primary/25 rounded-field p-3"
             >
               <div class="flex items-center gap-2">
                 <Sparkles class="w-4 h-4 text-primary" />
@@ -128,7 +128,7 @@
 
             {#if updateState.updateInfo.body}
               <div
-                class="bg-base-200/60 border border-base-300/60 rounded-xl p-3 max-h-36 overflow-y-auto text-xs space-y-1"
+                class="bg-base-200/60 border border-base-300/60 rounded-field p-3 max-h-36 overflow-y-auto text-xs space-y-1"
               >
                 <p
                   class="font-bold text-[11px] text-base-content/75 uppercase tracking-wider"
@@ -220,13 +220,13 @@
       >
         {#if updateState.status === "up-to-date"}
           <button
-            class="btn btn-ghost btn-sm rounded-lg text-xs font-semibold"
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}
           >
             Close
           </button>
           <button
-            class="btn btn-outline btn-sm rounded-lg text-xs font-semibold gap-1.5"
+            class="btn btn-outline btn-sm rounded-field text-xs font-semibold gap-1.5"
             onclick={() => updateState.check()}
           >
             <RefreshCw class="w-3.5 h-3.5" />
@@ -234,13 +234,13 @@
           </button>
         {:else if updateState.status === "available"}
           <button
-            class="btn btn-ghost btn-sm rounded-lg text-xs font-semibold"
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}
           >
             Later
           </button>
           <button
-            class="btn btn-primary btn-sm rounded-lg text-xs font-bold gap-1.5 shadow-md"
+            class="btn btn-primary btn-sm rounded-field text-xs font-bold gap-1.5 shadow-md"
             onclick={() => updateState.downloadAndInstall()}
           >
             <Download class="w-3.5 h-3.5" />
@@ -248,7 +248,7 @@
           </button>
         {:else if updateState.status === "ready"}
           <button
-            class="btn btn-success btn-sm rounded-lg text-xs font-bold text-success-content gap-1.5 shadow-md"
+            class="btn btn-success btn-sm rounded-field text-xs font-bold gap-1.5 shadow-md"
             onclick={() => updateState.relaunch()}
           >
             <RotateCcw class="w-3.5 h-3.5" />
@@ -256,13 +256,13 @@
           </button>
         {:else if updateState.status === "error"}
           <button
-            class="btn btn-ghost btn-sm rounded-lg text-xs font-semibold"
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}
           >
             Close
           </button>
           <button
-            class="btn btn-primary btn-sm rounded-lg text-xs font-semibold gap-1.5"
+            class="btn btn-primary btn-sm rounded-field text-xs font-semibold gap-1.5"
             onclick={() => updateState.check()}
           >
             <RefreshCw class="w-3.5 h-3.5" />
@@ -270,7 +270,7 @@
           </button>
         {:else}
           <button
-            class="btn btn-ghost btn-sm rounded-lg text-xs font-semibold"
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}
             disabled={updateState.status === "downloading"}
           >
