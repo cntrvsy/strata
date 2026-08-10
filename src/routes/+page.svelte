@@ -22,7 +22,7 @@
     diagramPane?.resize(55);
   }
 
-  $effect(() => {
+  onMount(() => {
     schemaState.toggleCodePane = () => {
       if (schemaState.isCodeCollapsed) {
         codePane?.resize(45);

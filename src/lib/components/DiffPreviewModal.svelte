@@ -16,11 +16,9 @@
 
   let { show = $bindable(false) } = $props();
 
-  let containerEl = $state<HTMLDivElement | null>(null);
   let originalCode = $state("");
   let modifiedCode = $derived(schemaState.rawCode);
   let isLoading = $state(true);
-  let mergeViewInstance: MergeView | null = null;
 
   async function loadOriginalCode() {
     isLoading = true;
@@ -40,43 +38,45 @@
   $effect(() => {
     if (show) {
       loadOriginalCode();
-    } else {
-      if (mergeViewInstance) {
-        mergeViewInstance.destroy();
-        mergeViewInstance = null;
-      }
     }
   });
 
-  $effect(() => {
-    if (show && !isLoading && containerEl && !mergeViewInstance) {
-      containerEl.innerHTML = "";
-      mergeViewInstance = new MergeView({
-        parent: containerEl,
-        orientation: "a-b", // Side-by-side: a (original disk) vs b (modified AST)
-        revertControls: "b-to-a",
-        gutter: true,
-        a: {
-          doc: originalCode,
-          extensions: [
-            basicSetup,
-            javascript({ typescript: true }),
-            oneDark,
-            EditorView.editable.of(false),
-          ],
-        },
-        b: {
-          doc: modifiedCode,
-          extensions: [
-            basicSetup,
-            javascript({ typescript: true }),
-            oneDark,
-            EditorView.editable.of(false),
-          ],
-        },
-      });
-    }
-  });
+  function attachMergeView(
+    node: HTMLElement,
+    config: { original: string; modified: string },
+  ) {
+    node.innerHTML = "";
+    const instance = new MergeView({
+      parent: node,
+      orientation: "a-b",
+      revertControls: "b-to-a",
+      gutter: true,
+      a: {
+        doc: config.original,
+        extensions: [
+          basicSetup,
+          javascript({ typescript: true }),
+          oneDark,
+          EditorView.editable.of(false),
+        ],
+      },
+      b: {
+        doc: config.modified,
+        extensions: [
+          basicSetup,
+          javascript({ typescript: true }),
+          oneDark,
+          EditorView.editable.of(false),
+        ],
+      },
+    });
+
+    return {
+      destroy() {
+        instance.destroy();
+      },
+    };
+  }
 
   async function handleSave() {
     await schemaState.saveToFile();
@@ -149,7 +149,7 @@
           </div>
         {:else}
           <div
-            bind:this={containerEl}
+            use:attachMergeView={{ original: originalCode, modified: modifiedCode }}
             class="w-full h-full overflow-auto cm-merge-wrapper"
           ></div>
         {/if}

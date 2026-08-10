@@ -24,7 +24,7 @@
     async onUpdate({ form }) {
       if (form.valid && (schemaState.filePath || schemaState.isSandboxMode)) {
         await schemaState.addRelation(
-          form.data.source,
+          sourceTableName,
           form.data.target,
         );
         onComplete();
@@ -35,9 +35,7 @@
   const { form: formData, enhance } = form;
 
   $effect(() => {
-    if (sourceTableName) {
-      $formData.source = sourceTableName;
-    }
+    $formData.source = sourceTableName;
   });
 
   // Filter out the source table from targets

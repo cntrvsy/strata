@@ -17,17 +17,10 @@
   let editingColumnName = $state<string | null>(null);
   let newColumnName = $state("");
 
-  // Bucket configuration local states
-  let isPublic = $state(false);
-  let customDomain = $state("");
-  let cors = $state(false);
-
-  // Sync local states from incoming node data
-  $effect(() => {
-    isPublic = data.strata?.public || false;
-    customDomain = data.strata?.customDomain || "";
-    cors = data.strata?.cors || false;
-  });
+  // Derived settings from node metadata
+  const isPublic = $derived(data.strata?.public || false);
+  const customDomain = $derived(data.strata?.customDomain || "");
+  const cors = $derived(data.strata?.cors || false);
 
   async function submitRenameColumn() {
     if (!editingColumnName || !newColumnName) return;
@@ -39,12 +32,15 @@
     await schemaState.deleteColumn(tableName, colName);
   }
 
-  async function updateSettings() {
+  async function updateSettings(overrides: { public?: boolean; customDomain?: string; cors?: boolean }) {
     if (isReadOnly) return;
+    const p = overrides.public ?? isPublic;
+    const d = overrides.customDomain ?? customDomain;
+    const c = overrides.cors ?? cors;
     await schemaState.updateTableMetadata(tableName, {
-      public: isPublic,
-      customDomain: isPublic ? customDomain : null,
-      cors,
+      public: p,
+      customDomain: p ? d : null,
+      cors: c,
     });
   }
 </script>
@@ -87,8 +83,8 @@
         type="checkbox"
         class="toggle toggle-primary toggle-sm"
         disabled={isReadOnly}
-        bind:checked={isPublic}
-        onchange={updateSettings}
+        checked={isPublic}
+        onchange={(e) => updateSettings({ public: e.currentTarget.checked })}
       />
     </label>
 
@@ -104,9 +100,9 @@
           placeholder="e.g. assets.my-app.com"
           disabled={isReadOnly}
           class="input input-xs input-bordered w-full rounded-field bg-base-100 border-base-300/60 focus:input-primary transition-all text-xs"
-          bind:value={customDomain}
-          onblur={updateSettings}
-          onkeydown={(e) => e.key === "Enter" && updateSettings()}
+          value={customDomain}
+          onblur={(e) => updateSettings({ customDomain: e.currentTarget.value })}
+          onkeydown={(e) => e.key === "Enter" && updateSettings({ customDomain: e.currentTarget.value })}
         />
       </fieldset>
     {/if}
@@ -121,8 +117,8 @@
         type="checkbox"
         class="toggle toggle-primary toggle-sm"
         disabled={isReadOnly}
-        bind:checked={cors}
-        onchange={updateSettings}
+        checked={cors}
+        onchange={(e) => updateSettings({ cors: e.currentTarget.checked })}
       />
     </label>
   </div>

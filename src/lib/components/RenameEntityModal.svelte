@@ -12,14 +12,19 @@
 
   let newName = $state(schemaState.renameEntityTargetId || "");
   let errorMsg = $state("");
-  let inputEl = $state<HTMLInputElement | null>(null);
+
+  function focusOnMount(node: HTMLInputElement, delay = 50) {
+    const t = setTimeout(() => node.focus(), delay);
+    return {
+      destroy() {
+        clearTimeout(t);
+      },
+    };
+  }
 
   $effect(() => {
     newName = schemaState.renameEntityTargetId || "";
     errorMsg = "";
-    if (inputEl) {
-      setTimeout(() => inputEl?.focus(), 50);
-    }
   });
 
   function validate(val: string): boolean {
@@ -121,7 +126,7 @@
           >
           <input
             id="rename-input"
-            bind:this={inputEl}
+            use:focusOnMount
             type="text"
             class="input input-sm input-bordered w-full rounded-field text-xs bg-base-100 focus:input-secondary font-mono"
             bind:value={newName}

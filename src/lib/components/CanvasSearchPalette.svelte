@@ -21,7 +21,6 @@
 
   let query = $state("");
   let selectedIndex = $state(0);
-  let inputEl = $state<HTMLInputElement | null>(null);
 
   const { fitBounds } = useSvelteFlow();
 
@@ -84,11 +83,19 @@
     return results;
   });
 
+  function focusOnMount(node: HTMLInputElement, delay = 50) {
+    const t = setTimeout(() => node.focus(), delay);
+    return {
+      destroy() {
+        clearTimeout(t);
+      },
+    };
+  }
+
   $effect(() => {
     if (show) {
       query = "";
       selectedIndex = 0;
-      setTimeout(() => inputEl?.focus(), 50);
     }
   });
 
@@ -147,7 +154,7 @@
       >
         <Search class="w-5 h-5 text-primary shrink-0" />
         <input
-          bind:this={inputEl}
+          use:focusOnMount
           bind:value={query}
           onkeydown={handleKeyDown}
           type="text"
