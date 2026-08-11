@@ -31,7 +31,7 @@
 <div class="flex flex-col gap-2">
   {#each data.columns as col}
     <div
-      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
+      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
     >
       <div class="flex items-center justify-between">
@@ -43,7 +43,7 @@
             <div class="flex items-center gap-1 grow">
               <input
                 bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-lg font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
+                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
                 onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
                 data-testid="field-rename-input-{col.name}"
               />
@@ -52,7 +52,7 @@
                 onclick={submitRenameColumn}
                 data-testid="field-rename-submit-{col.name}"
               >
-                <Check class="w-3 h-3 text-primary-content" />
+                <Check class="w-3 h-3" />
               </button>
             </div>
           {:else}
@@ -115,7 +115,7 @@
             type="checkbox"
             checked={col.isPk}
             disabled={isReadOnly}
-            class="checkbox checkbox-xs checkbox-primary rounded-md disabled:opacity-50"
+            class="checkbox checkbox-xs checkbox-primary rounded-field disabled:opacity-50"
             onchange={(e) =>
               schemaState.updateColumnModifiers(tableName, col.name, {
                 isPk: e.currentTarget.checked,
@@ -129,7 +129,7 @@
             type="checkbox"
             checked={col.notNull}
             disabled={isReadOnly}
-            class="checkbox checkbox-xs checkbox-primary rounded-md disabled:opacity-50"
+            class="checkbox checkbox-xs checkbox-primary rounded-field disabled:opacity-50"
             onchange={(e) =>
               schemaState.updateColumnModifiers(tableName, col.name, {
                 notNull: e.currentTarget.checked,
@@ -148,7 +148,7 @@
           placeholder="None"
           value={col.defaultVal || ""}
           disabled={isReadOnly}
-          class="input input-xs input-bordered w-full rounded-lg font-mono text-[10px] bg-base-100/50 border-base-300/60 focus:input-primary transition-all disabled:opacity-50"
+          class="input input-xs input-bordered w-full rounded-field font-mono text-[10px] bg-base-100/50 border-base-300/60 focus:input-primary transition-all disabled:opacity-50"
           onchange={(e) => {
             schemaState.updateColumnModifiers(tableName, col.name, {
               defaultVal: e.currentTarget.value,

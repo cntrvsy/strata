@@ -47,7 +47,7 @@
 <div
   bind:this={menuElement}
   style="top: {y}px; left: {x}px;"
-  class="fixed z-200 w-52 bg-base-100/95 border border-base-300/80 rounded-xl shadow-2xl py-1 flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md"
+  class="fixed z-200 w-52 bg-base-100/95 border border-base-300/80 rounded-box shadow-2xl py-1 flex flex-col font-sans select-none animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md"
 >
   {#if type === "node" && targetId}
     <div

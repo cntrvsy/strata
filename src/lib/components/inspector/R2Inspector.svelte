@@ -17,17 +17,10 @@
   let editingColumnName = $state<string | null>(null);
   let newColumnName = $state("");
 
-  // Bucket configuration local states
-  let isPublic = $state(false);
-  let customDomain = $state("");
-  let cors = $state(false);
-
-  // Sync local states from incoming node data
-  $effect(() => {
-    isPublic = data.strata?.public || false;
-    customDomain = data.strata?.customDomain || "";
-    cors = data.strata?.cors || false;
-  });
+  // Derived settings from node metadata
+  const isPublic = $derived(data.strata?.public || false);
+  const customDomain = $derived(data.strata?.customDomain || "");
+  const cors = $derived(data.strata?.cors || false);
 
   async function submitRenameColumn() {
     if (!editingColumnName || !newColumnName) return;
@@ -39,19 +32,22 @@
     await schemaState.deleteColumn(tableName, colName);
   }
 
-  async function updateSettings() {
+  async function updateSettings(overrides: { public?: boolean; customDomain?: string; cors?: boolean }) {
     if (isReadOnly) return;
+    const p = overrides.public ?? isPublic;
+    const d = overrides.customDomain ?? customDomain;
+    const c = overrides.cors ?? cors;
     await schemaState.updateTableMetadata(tableName, {
-      public: isPublic,
-      customDomain: isPublic ? customDomain : null,
-      cors,
+      public: p,
+      customDomain: p ? d : null,
+      cors: c,
     });
   }
 </script>
 
 <!-- R2 Bucket Configurations Card -->
 <div
-  class="bg-base-200/50 p-4 rounded-2xl border border-base-300 flex flex-col gap-3 mb-4"
+  class="bg-base-200/50 p-4 rounded-box border border-base-300 flex flex-col gap-3 mb-4"
 >
   <div class="flex items-center justify-between">
     <span class="text-[9px] font-black uppercase tracking-widest opacity-40"
@@ -74,7 +70,7 @@
   </div>
 
   <div class="flex flex-col gap-3">
-    <div class="p-2.5 rounded-xl bg-info/10 border border-info/20 text-info flex flex-col gap-0.5 text-[10px]">
+    <div class="p-2.5 rounded-box bg-info/10 border border-info/20 text-info flex flex-col gap-0.5 text-[10px]">
       <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare R2 Object Storage Bucket</span>
       <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
     </div>
@@ -87,28 +83,28 @@
         type="checkbox"
         class="toggle toggle-primary toggle-sm"
         disabled={isReadOnly}
-        bind:checked={isPublic}
-        onchange={updateSettings}
+        checked={isPublic}
+        onchange={(e) => updateSettings({ public: e.currentTarget.checked })}
       />
     </label>
 
     {#if isPublic}
-      <div
-        class="flex flex-col gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-200"
+      <fieldset
+        class="fieldset gap-1 mt-1 p-0 animate-in fade-in slide-in-from-top-1 duration-200"
       >
-        <span class="text-[9px] font-bold uppercase opacity-40"
-          >Custom Domain</span
+        <legend class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
+          >Custom Domain</legend
         >
         <input
           type="text"
           placeholder="e.g. assets.my-app.com"
           disabled={isReadOnly}
-          class="input input-xs input-bordered w-full rounded-lg bg-base-100 border-base-300/60 focus:input-primary transition-all text-xs"
-          bind:value={customDomain}
-          onblur={updateSettings}
-          onkeydown={(e) => e.key === "Enter" && updateSettings()}
+          class="input input-xs input-bordered w-full rounded-field bg-base-100 border-base-300/60 focus:input-primary transition-all text-xs"
+          value={customDomain}
+          onblur={(e) => updateSettings({ customDomain: e.currentTarget.value })}
+          onkeydown={(e) => e.key === "Enter" && updateSettings({ customDomain: e.currentTarget.value })}
         />
-      </div>
+      </fieldset>
     {/if}
 
     <label
@@ -121,8 +117,8 @@
         type="checkbox"
         class="toggle toggle-primary toggle-sm"
         disabled={isReadOnly}
-        bind:checked={cors}
-        onchange={updateSettings}
+        checked={cors}
+        onchange={(e) => updateSettings({ cors: e.currentTarget.checked })}
       />
     </label>
   </div>
@@ -135,7 +131,7 @@
   >
   {#each data.columns as col}
     <div
-      class="bg-base-200/30 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
+      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
       data-testid="field-row-{col.name}"
     >
       <div class="flex items-center justify-between">
@@ -144,7 +140,7 @@
             <div class="flex items-center gap-1 grow">
               <input
                 bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-lg font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all font-mono"
+                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all font-mono"
                 onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
                 data-testid="field-rename-input-{col.name}"
               />
@@ -153,7 +149,7 @@
                 onclick={submitRenameColumn}
                 data-testid="field-rename-submit-{col.name}"
               >
-                <Check class="w-3 h-3 text-primary-content" />
+                <Check class="w-3 h-3" />
               </button>
             </div>
           {:else}

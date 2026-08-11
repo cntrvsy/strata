@@ -50,27 +50,27 @@
       {schemaState.filePath?.split("/").pop() || (schemaState.isSandboxMode ? "Sandbox Demo" : "No Schema")}
     </span>
     {#if schemaState.hasUnsavedChanges}
-      <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_currentColor] text-amber-500 animate-pulse" title="Unsaved Changes"></span>
+      <span class="status status-xs status-warning animate-pulse" title="Unsaved Changes"></span>
     {/if}
   </div>
 
   <div class="flex items-center gap-0.5">
     <button
-      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center rounded"
+      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center rounded-field"
       onclick={minimizeWindow}
       title="Minimize"
     >
       <Minus class="w-2.5 h-2.5 text-base-content" />
     </button>
     <button
-      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center rounded"
+      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 transition-opacity flex items-center justify-center rounded-field"
       onclick={toggleMaximizeWindow}
       title="Maximize"
     >
       <Square class="w-2 h-2 text-base-content" />
     </button>
     <button
-      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 hover:bg-error hover:text-error-content transition-all flex items-center justify-center rounded"
+      class="btn btn-ghost btn-xs btn-square w-6 h-6 opacity-60 hover:opacity-100 hover:bg-error hover:text-error-content transition-all flex items-center justify-center rounded-field"
       onclick={closeWindow}
       title="Close"
     >

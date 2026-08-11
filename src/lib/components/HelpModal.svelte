@@ -699,11 +699,11 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
 
 {#if show}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-6"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-6"
     transition:fade={{ duration: 150 }}
   >
     <div
-      class="bg-base-100 rounded-3xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl border border-base-300 overflow-hidden"
+      class="bg-base-100 rounded-box w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl border border-base-300 overflow-hidden"
       role="dialog"
       aria-modal="true"
       data-testid="help-modal"
@@ -713,7 +713,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
         class="px-8 py-5 bg-base-200/90 border-b border-base-300 flex items-center justify-between gap-4"
       >
         <div class="flex items-center gap-3">
-          <div class="p-2.5 bg-primary/10 rounded-2xl text-primary">
+          <div class="p-2.5 bg-primary/10 rounded-field text-primary">
             <CircleQuestionMark class="w-5 h-5" />
           </div>
           <div>
@@ -731,14 +731,14 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
 
         <div class="flex items-center gap-2">
           <button
-            class="btn btn-secondary btn-xs rounded-xl font-bold gap-1.5 px-3 shadow-xs"
+            class="btn btn-secondary btn-xs rounded-field font-bold gap-1.5 px-3 shadow-xs"
             onclick={() => (activeTab = "starter-templates")}
           >
-            <Sparkles class="w-3 h-3" />
-            Starter Templates
+            <Sparkles class="w-3.5 h-3.5" />
+            <span>Interactive Demos</span>
           </button>
           <button
-            class="btn btn-ghost btn-sm btn-circle text-base-content/65 hover:text-base-content hover:bg-base-300 transition-colors"
+            class="btn btn-ghost btn-xs btn-circle text-base-content/60 hover:text-base-content"
             onclick={() => (show = false)}
           >
             <X class="w-4 h-4" />

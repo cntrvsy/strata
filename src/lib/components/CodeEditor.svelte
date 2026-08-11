@@ -19,16 +19,7 @@
 
   // Sync editor when rawCode is updated from external/diagram operations
   $effect(() => {
-    if (schemaState.rawCode !== localValue) {
-      localValue = schemaState.rawCode;
-    }
-  });
-
-  // Parse and sync whenever localValue changes from user input
-  $effect(() => {
-    if (localValue !== schemaState.rawCode) {
-      handleCodeChange(localValue);
-    }
+    localValue = schemaState.rawCode;
   });
 
   // Debounce parser execution to ensure smooth typing performance
@@ -118,6 +109,7 @@
     <div class="absolute inset-0 overflow-auto scrollbar-hide">
       <CodeMirror
         bind:value={localValue}
+        onchange={(val) => handleCodeChange(val)}
         readonly={false}
         lang={javascript({ typescript: true })}
         theme={oneDark}

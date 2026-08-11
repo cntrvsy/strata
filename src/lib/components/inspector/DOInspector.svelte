@@ -80,7 +80,7 @@
 <div class="flex flex-col gap-4">
   <!-- Class & Wrangler Binding Configuration Card -->
   <div
-    class="bg-base-200/50 p-4 rounded-2xl border border-base-300/70 flex flex-col gap-3"
+    class="bg-base-200/50 p-4 rounded-box border border-base-300/70 flex flex-col gap-3"
   >
     <div class="flex items-center justify-between">
       <span class="text-[9px] font-black uppercase tracking-widest opacity-40">
@@ -107,26 +107,25 @@
     </div>
 
     <!-- Class Name Row -->
-    <div class="flex flex-col gap-1">
-      <label
-        for="do-class-input-{tableName}"
-        class="text-[9px] font-bold uppercase opacity-40"
+    <fieldset class="fieldset gap-1 p-0">
+      <legend
+        class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
       >
         TypeScript Class Name
-      </label>
+      </legend>
       {#if editingClass}
         <div class="flex items-center gap-1">
           <input
             id="do-class-input-{tableName}"
             bind:value={newClassName}
-            class="input input-xs input-bordered w-full rounded-lg bg-base-100 font-mono text-xs focus:input-secondary transition-all"
+            class="input input-xs input-bordered w-full rounded-field bg-base-100 font-mono text-xs focus:input-secondary transition-all"
             onkeydown={(e) => e.key === "Enter" && saveClassMetadata()}
           />
           <button
             class="btn btn-secondary btn-xs btn-circle shrink-0"
             onclick={saveClassMetadata}
           >
-            <Check class="w-3 h-3 text-secondary-content" />
+            <Check class="w-3 h-3" />
           </button>
         </div>
       {:else}
@@ -151,30 +150,29 @@
           {/if}
         </div>
       {/if}
-    </div>
+    </fieldset>
 
     <!-- File Path Row -->
-    <div class="flex flex-col gap-1 border-t border-base-300/40 pt-2">
-      <label
-        for="do-path-input-{tableName}"
-        class="text-[9px] font-bold uppercase opacity-40"
+    <fieldset class="fieldset gap-1 border-t border-base-300/40 pt-2 p-0">
+      <legend
+        class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
       >
         Class Source File Path
-      </label>
+      </legend>
       {#if editingPath}
         <div class="flex items-center gap-1">
           <input
             id="do-path-input-{tableName}"
             bind:value={newPathName}
             placeholder="e.g. ./src/Counter.ts"
-            class="input input-xs input-bordered w-full rounded-lg bg-base-100 font-mono text-xs focus:input-secondary transition-all"
+            class="input input-xs input-bordered w-full rounded-field bg-base-100 font-mono text-xs focus:input-secondary transition-all"
             onkeydown={(e) => e.key === "Enter" && savePathMetadata()}
           />
           <button
             class="btn btn-secondary btn-xs btn-circle shrink-0"
             onclick={savePathMetadata}
           >
-            <Check class="w-3 h-3 text-secondary-content" />
+            <Check class="w-3 h-3" />
           </button>
         </div>
       {:else}
@@ -202,13 +200,13 @@
           {/if}
         </div>
       {/if}
-    </div>
+    </fieldset>
   </div>
 
   <!-- Missing File Warning Banner -->
   {#if missingWarning}
     <div
-      class="p-3 bg-warning/10 border border-warning/20 rounded-2xl text-[11px] text-base-content/90 flex items-start gap-2.5 leading-relaxed"
+      class="p-3 bg-warning/10 border border-warning/20 rounded-box text-[11px] text-base-content/90 flex items-start gap-2.5 leading-relaxed"
     >
       <TriangleAlert class="w-4 h-4 text-warning shrink-0 mt-0.5" />
       <div class="flex flex-col gap-0.5">
@@ -229,7 +227,7 @@
   <div class="flex flex-col gap-2">
     {#if data.columns.length === 0}
       <div
-        class="p-6 bg-base-200/30 border border-base-300/40 rounded-2xl flex flex-col items-center justify-center text-center gap-2"
+        class="p-6 bg-base-200/30 border border-base-300/40 rounded-box flex flex-col items-center justify-center text-center gap-2"
       >
         <Layers class="w-6 h-6 opacity-30 text-secondary" />
         <span class="text-xs font-semibold opacity-70">
@@ -244,7 +242,7 @@
     {:else}
       {#each data.columns as col}
         <div
-          class="bg-base-200/50 p-3 rounded-xl flex flex-col gap-1.5 border border-base-300 hover:border-secondary/40 transition-all group/field"
+          class="bg-base-200/50 p-3 rounded-box flex flex-col gap-1.5 border border-base-300 hover:border-secondary/40 transition-all group/field"
           data-testid="field-row-{col.name}"
         >
           <div class="flex items-start justify-between gap-2">
@@ -253,7 +251,7 @@
                 <div class="flex items-center gap-1 grow">
                   <input
                     bind:value={newColumnName}
-                    class="input input-xs input-bordered w-full rounded-lg font-mono text-xs h-7 bg-base-100 border-base-300 text-base-content focus:input-secondary transition-all"
+                    class="input input-xs input-bordered w-full rounded-field font-mono text-xs h-7 bg-base-100 border-base-300 text-base-content focus:input-secondary transition-all"
                     onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
                     data-testid="field-rename-input-{col.name}"
                   />
@@ -262,7 +260,7 @@
                     onclick={submitRenameColumn}
                     data-testid="field-rename-submit-{col.name}"
                   >
-                    <Check class="w-3 h-3 text-secondary-content" />
+                    <Check class="w-3 h-3" />
                   </button>
                 </div>
               {:else}

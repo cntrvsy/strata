@@ -40,10 +40,18 @@
   let showHelp = $state(false);
   let showDiffPreview = $state(false);
 
+  /** Dismiss active element focus to cleanly close DaisyUI dropdowns */
+  function closeDropdown() {
+    if (typeof document !== "undefined") {
+      (document.activeElement as HTMLElement)?.blur();
+    }
+  }
+
   /**
    * Opens a native file dialog to select a Drizzle schema file.
    */
   async function onOpenFile() {
+    closeDropdown();
     await schemaState.openNewFile();
   }
 
@@ -143,7 +151,7 @@
         <div
           tabindex="0"
           role="button"
-          class="join border border-secondary/40 rounded-lg overflow-hidden bg-secondary/10 p-0.5 shadow-2xs hover:bg-secondary/15 transition-colors cursor-pointer"
+          class="join border border-secondary/40 rounded-field overflow-hidden bg-secondary/10 p-0.5 shadow-2xs hover:bg-secondary/15 transition-colors cursor-pointer"
           title="Playground Sandbox Mode (In-Memory Engine)"
         >
           <div
@@ -163,7 +171,7 @@
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <ul
           tabindex="0"
-          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-auto p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-auto p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
         >
           <li
             class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
@@ -172,9 +180,11 @@
           </li>
           <li>
             <button
-              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] font-medium text-secondary hover:bg-secondary/10"
-              onclick={() =>
-                schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey)}
+              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium text-secondary hover:bg-secondary/10"
+              onclick={() => {
+                closeDropdown();
+                schemaState.loadSandboxDemo(schemaState.sandboxTemplateKey);
+              }}
               data-testid="reset-sandbox-button"
             >
               <RotateCcw class="w-3.5 h-3.5 text-secondary" />
@@ -183,8 +193,11 @@
           </li>
           <li>
             <button
-              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
-              onclick={() => schemaState.closeFile()}
+              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
+              onclick={() => {
+                closeDropdown();
+                schemaState.closeFile();
+              }}
             >
               <X class="w-3.5 h-3.5 text-error" />
               <span>Exit Sandbox Mode</span>
@@ -201,11 +214,14 @@
           {#each Object.values(SAMPLE_TEMPLATES) as tpl}
             <li>
               <button
-                class="flex items-center justify-between rounded-lg py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey ===
+                class="flex items-center justify-between rounded-field py-1.5 px-2 text-[11px] {schemaState.sandboxTemplateKey ===
                 tpl.key
                   ? 'active font-bold'
                   : ''}"
-                onclick={() => schemaState.loadSandboxDemo(tpl.key)}
+                onclick={() => {
+                  closeDropdown();
+                  schemaState.loadSandboxDemo(tpl.key);
+                }}
               >
                 <div class="flex items-center gap-1.5 min-w-0 truncate">
                   <Sparkles class="w-3 h-3 text-secondary shrink-0" />
@@ -222,7 +238,7 @@
         <div
           tabindex="0"
           role="button"
-          class="join border border-base-300/80 rounded-lg overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer"
+          class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer"
           title={schemaState.filePath}
         >
           <div
@@ -239,7 +255,7 @@
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <ul
           tabindex="0"
-          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-52 p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-52 p-1.5 shadow-2xl mt-1.5 text-xs gap-0.5"
         >
           <li
             class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
@@ -248,7 +264,7 @@
           </li>
           <li>
             <button
-              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] font-medium"
+              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
               onclick={onOpenFile}
             >
               <FolderOpen class="w-3.5 h-3.5 text-primary" />
@@ -257,8 +273,11 @@
           </li>
           <li>
             <button
-              class="flex items-center gap-2 rounded-lg py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
-              onclick={() => schemaState.closeFile()}
+              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
+              onclick={() => {
+                closeDropdown();
+                schemaState.closeFile();
+              }}
             >
               <X class="w-3.5 h-3.5 text-error" />
               <span>Close Schema</span>
@@ -269,7 +288,7 @@
     {:else}
       <!-- State A: Empty State (Minimal App Branding, Welcome Overlay Active) -->
       <div class="flex items-center gap-2">
-        <div class="p-1.5 bg-primary/10 rounded-xl ring-1 ring-primary/20">
+        <div class="p-1.5 bg-primary/10 rounded-field ring-1 ring-primary/20">
           <FileCode class="w-4 h-4 text-primary" />
         </div>
         <div class="flex items-center gap-1.5">
@@ -289,7 +308,7 @@
   <div class="navbar-center flex items-center justify-center">
     {#if schemaState.filePath || schemaState.isSandboxMode}
       <div
-        class="join border border-base-300/80 rounded-lg overflow-hidden bg-base-200/40 p-0.5"
+        class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/40 p-0.5"
       >
         <button
           class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isCodeCollapsed
@@ -318,7 +337,7 @@
     {#if schemaState.filePath || schemaState.isSandboxMode}
       <!-- Primary Action: New Table (Solid, bold) -->
       <button
-        class="btn btn-primary btn-sm gap-1 rounded-lg shadow-sm font-semibold h-7 min-h-0 px-3 text-xs"
+        class="btn btn-primary btn-sm gap-1 rounded-field shadow-sm font-semibold h-7 min-h-0 px-3 text-xs"
         onclick={() => (schemaState.showNewTableModal = true)}
         data-testid="new-table-button"
       >
@@ -337,7 +356,7 @@
             : "Enable Compact View"}
         >
           <button
-            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-field text-base-content/70 hover:text-base-content hover:bg-base-200/80"
             onclick={() => (schemaState.compactMode = !schemaState.compactMode)}
           >
             {#if schemaState.compactMode}
@@ -353,7 +372,7 @@
           data-tip="Auto Layout Diagram"
         >
           <button
-            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-base-content/70 hover:text-base-content hover:bg-base-200/80"
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-field text-base-content/70 hover:text-base-content hover:bg-base-200/80"
             onclick={onAutoLayout}
           >
             <Workflow class="w-3.5 h-3.5" />
@@ -365,7 +384,7 @@
           data-tip="Export Diagram as PNG"
         >
           <button
-            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg text-primary/80 hover:text-primary hover:bg-primary/10"
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-field text-primary/80 hover:text-primary hover:bg-primary/10"
             onclick={exportToImage}
             aria-label="Export"
           >
@@ -379,7 +398,7 @@
 
         <!-- Diff Preview Action -->
         <button
-          class="btn btn-outline btn-warning btn-sm gap-1.5 rounded-lg font-semibold h-8 min-h-0 px-2.5 text-xs hover:bg-warning/20"
+          class="btn btn-outline btn-warning btn-sm gap-1.5 rounded-field font-semibold h-8 min-h-0 px-2.5 text-xs hover:bg-warning/20"
           onclick={() => (showDiffPreview = true)}
           title="Preview AST Code Changes"
         >
@@ -389,7 +408,7 @@
 
         <!-- Save Action (Solid warning state) -->
         <button
-          class="btn btn-warning btn-sm gap-1.5 rounded-lg shadow-sm font-semibold text-warning-content h-8 min-h-0 px-3 text-xs animate-pulse hover:animate-none"
+          class="btn btn-warning btn-sm gap-1.5 rounded-field shadow-sm font-semibold text-warning-content h-8 min-h-0 px-3 text-xs animate-pulse hover:animate-none"
           onclick={() => schemaState.saveToFile()}
           data-testid="save-layout-button"
         >
@@ -399,7 +418,7 @@
 
         <!-- Discard Action (Ghost action) -->
         <button
-          class="btn btn-ghost btn-sm rounded-lg hover:bg-error/10 hover:text-error font-semibold h-8 min-h-0 px-2.5 text-xs text-base-content/75"
+          class="btn btn-ghost btn-sm rounded-field hover:bg-error/10 hover:text-error font-semibold h-8 min-h-0 px-2.5 text-xs text-base-content/75"
           onclick={() => schemaState.syncWithFile()}
           data-testid="discard-layout-button"
         >
@@ -416,7 +435,7 @@
       <div
         tabindex="0"
         role="button"
-        class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-lg hover:bg-base-200/80 flex items-center justify-center relative"
+        class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-field hover:bg-base-200/80 flex items-center justify-center relative"
         title="Settings & Help"
       >
         <Menu class="w-3.5 h-3.5 text-base-content/75" />
@@ -429,13 +448,16 @@
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <ul
         tabindex="0"
-        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-xl z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
+        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
       >
         {#if schemaState.filePath || schemaState.isSandboxMode}
           <li>
             <button
-              class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-              onclick={() => (schemaState.showProjectSettingsModal = true)}
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.showProjectSettingsModal = true;
+              }}
             >
               <Settings class="w-3.5 h-3.5 text-base-content/70" />
               <span>Project Settings</span>
@@ -445,8 +467,11 @@
         {/if}
         <li>
           <button
-            class="flex items-center justify-between rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-            onclick={() => updateState.openModal()}
+            class="flex items-center justify-between rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+            onclick={() => {
+              closeDropdown();
+              updateState.openModal();
+            }}
           >
             <div class="flex items-center gap-2">
               <CircleArrowUp class="w-3.5 h-3.5 text-base-content/70" />
@@ -460,8 +485,11 @@
         </li>
         <li>
           <button
-            class="flex items-center gap-2 rounded-lg py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-            onclick={() => (showHelp = true)}
+            class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+            onclick={() => {
+              closeDropdown();
+              showHelp = true;
+            }}
           >
             <BadgeQuestionMark class="w-3.5 h-3.5 text-base-content/70" />
             <span>Help & Shortcuts</span>

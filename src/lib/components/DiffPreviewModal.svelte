@@ -16,11 +16,9 @@
 
   let { show = $bindable(false) } = $props();
 
-  let containerEl = $state<HTMLDivElement | null>(null);
   let originalCode = $state("");
   let modifiedCode = $derived(schemaState.rawCode);
   let isLoading = $state(true);
-  let mergeViewInstance: MergeView | null = null;
 
   async function loadOriginalCode() {
     isLoading = true;
@@ -40,43 +38,45 @@
   $effect(() => {
     if (show) {
       loadOriginalCode();
-    } else {
-      if (mergeViewInstance) {
-        mergeViewInstance.destroy();
-        mergeViewInstance = null;
-      }
     }
   });
 
-  $effect(() => {
-    if (show && !isLoading && containerEl && !mergeViewInstance) {
-      containerEl.innerHTML = "";
-      mergeViewInstance = new MergeView({
-        parent: containerEl,
-        orientation: "a-b", // Side-by-side: a (original disk) vs b (modified AST)
-        revertControls: "b-to-a",
-        gutter: true,
-        a: {
-          doc: originalCode,
-          extensions: [
-            basicSetup,
-            javascript({ typescript: true }),
-            oneDark,
-            EditorView.editable.of(false),
-          ],
-        },
-        b: {
-          doc: modifiedCode,
-          extensions: [
-            basicSetup,
-            javascript({ typescript: true }),
-            oneDark,
-            EditorView.editable.of(false),
-          ],
-        },
-      });
-    }
-  });
+  function attachMergeView(
+    node: HTMLElement,
+    config: { original: string; modified: string },
+  ) {
+    node.innerHTML = "";
+    const instance = new MergeView({
+      parent: node,
+      orientation: "a-b",
+      revertControls: "b-to-a",
+      gutter: true,
+      a: {
+        doc: config.original,
+        extensions: [
+          basicSetup,
+          javascript({ typescript: true }),
+          oneDark,
+          EditorView.editable.of(false),
+        ],
+      },
+      b: {
+        doc: config.modified,
+        extensions: [
+          basicSetup,
+          javascript({ typescript: true }),
+          oneDark,
+          EditorView.editable.of(false),
+        ],
+      },
+    });
+
+    return {
+      destroy() {
+        instance.destroy();
+      },
+    };
+  }
 
   async function handleSave() {
     await schemaState.saveToFile();
@@ -91,19 +91,19 @@
 
 {#if show}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-6 animate-in fade-in duration-200"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-6 animate-in fade-in duration-200"
     role="dialog"
     aria-modal="true"
   >
     <div
-      class="bg-base-100 rounded-3xl w-full max-w-5xl h-[85vh] shadow-2xl border border-base-300 overflow-hidden flex flex-col"
+      class="bg-base-100 rounded-box w-full max-w-5xl h-[85vh] shadow-2xl border border-base-300 overflow-hidden flex flex-col"
     >
       <!-- Header -->
       <div
         class="px-6 py-4 bg-base-200/90 border-b border-base-300 flex items-center justify-between"
       >
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-warning/10 rounded-xl text-warning">
+          <div class="p-2 bg-warning/10 rounded-field text-warning">
             <GitCompare class="w-4 h-4" />
           </div>
           <div>
@@ -129,11 +129,11 @@
         class="grid grid-cols-2 bg-[#21252b] border-b border-white/5 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-white/50 shrink-0"
       >
         <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-error/70"></span>
+          <span class="status status-xs status-error"></span>
           <span>Disk Source (Original schema.ts)</span>
         </div>
         <div class="flex items-center gap-2 pl-4 border-l border-white/5">
-          <span class="w-2 h-2 rounded-full bg-success/70"></span>
+          <span class="status status-xs status-success"></span>
           <span>Pending AST Layout (Modified)</span>
         </div>
       </div>
@@ -149,7 +149,7 @@
           </div>
         {:else}
           <div
-            bind:this={containerEl}
+            use:attachMergeView={{ original: originalCode, modified: modifiedCode }}
             class="w-full h-full overflow-auto cm-merge-wrapper"
           ></div>
         {/if}
@@ -166,7 +166,7 @@
 
         <div class="flex items-center gap-2">
           <button
-            class="btn btn-ghost btn-sm rounded-xl text-xs font-semibold text-error hover:bg-error/10"
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold text-error hover:bg-error/10"
             onclick={handleDiscard}
           >
             <Undo class="w-3.5 h-3.5 mr-1" />
@@ -174,7 +174,7 @@
           </button>
 
           <button
-            class="btn btn-warning btn-sm rounded-xl text-xs font-semibold px-6 text-warning-content shadow-sm"
+            class="btn btn-warning btn-sm rounded-field text-xs font-semibold px-6 text-warning-content shadow-sm"
             onclick={handleSave}
           >
             <Save class="w-3.5 h-3.5 mr-1" />

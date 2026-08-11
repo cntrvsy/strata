@@ -40,34 +40,32 @@
 
   const isBothD1 = $derived(sourceType === "d1" && targetType === "d1");
 
-  let selectedSourceCol = $state("");
-  let selectedTargetCol = $state("");
-  let selectedRelationType = $state<"foreign_key" | "drizzle_relation" | "synthetic">("foreign_key");
-
-  $effect(() => {
-    if (!selectedSourceCol) {
-      if (connection.sourceHandle && connection.sourceHandle !== "source") {
-        selectedSourceCol = connection.sourceHandle;
-      } else {
-        const found = sourceColumns.find((c: any) => c.isReferences || c.name.toLowerCase().includes("id"))?.name;
-        selectedSourceCol = found || (connection.source === connection.target ? "parent_id" : `${connection.target.toLowerCase()}_id`);
-      }
+  const defaultSourceCol = $derived.by(() => {
+    if (connection.sourceHandle && connection.sourceHandle !== "source") {
+      return connection.sourceHandle;
     }
+    const found = sourceColumns.find((c: any) => c.isReferences || c.name.toLowerCase().includes("id"))?.name;
+    return found || (connection.source === connection.target ? "parent_id" : `${connection.target.toLowerCase()}_id`);
   });
 
-  $effect(() => {
-    if (!selectedTargetCol) {
-      if (connection.targetHandle && connection.targetHandle !== "target") {
-        selectedTargetCol = connection.targetHandle;
-      } else {
-        selectedTargetCol = targetColumns.find((c: any) => c.isPk)?.name || targetColumns[0]?.name || "id";
-      }
+  const defaultTargetCol = $derived.by(() => {
+    if (connection.targetHandle && connection.targetHandle !== "target") {
+      return connection.targetHandle;
     }
+    return targetColumns.find((c: any) => c.isPk)?.name || targetColumns[0]?.name || "id";
   });
 
-  $effect(() => {
-    selectedRelationType = isBothD1 ? "foreign_key" : "synthetic";
-  });
+  const defaultRelationType = $derived<"foreign_key" | "drizzle_relation" | "synthetic">(
+    isBothD1 ? "foreign_key" : "synthetic"
+  );
+
+  let customSourceCol = $state<string | null>(null);
+  let customTargetCol = $state<string | null>(null);
+  let customRelationType = $state<"foreign_key" | "drizzle_relation" | "synthetic" | null>(null);
+
+  const selectedSourceCol = $derived(customSourceCol ?? defaultSourceCol);
+  const selectedTargetCol = $derived(customTargetCol ?? defaultTargetCol);
+  const selectedRelationType = $derived(customRelationType ?? defaultRelationType);
 
 
   function handleConfirm() {
@@ -147,7 +145,8 @@
             >
             <select
               id="source-field-select"
-              bind:value={selectedSourceCol}
+              value={selectedSourceCol}
+              onchange={(e) => (customSourceCol = e.currentTarget.value)}
               class="select select-xs select-bordered w-full rounded-xl bg-base-100 text-xs font-mono"
             >
               {#each sourceColumns as col}
@@ -164,7 +163,8 @@
             >
             <select
               id="target-field-select"
-              bind:value={selectedTargetCol}
+              value={selectedTargetCol}
+              onchange={(e) => (customTargetCol = e.currentTarget.value)}
               class="select select-xs select-bordered w-full rounded-xl bg-base-100 text-xs font-mono"
             >
               {#each targetColumns as col}
@@ -194,7 +194,8 @@
               type="radio"
               name="relationType"
               value="foreign_key"
-              bind:group={selectedRelationType}
+              checked={selectedRelationType === 'foreign_key'}
+              onchange={() => (customRelationType = 'foreign_key')}
               class="radio radio-primary radio-xs mt-0.5"
             />
             <div class="flex flex-col gap-0.5 grow">
@@ -235,7 +236,8 @@
               type="radio"
               name="relationType"
               value="drizzle_relation"
-              bind:group={selectedRelationType}
+              checked={selectedRelationType === 'drizzle_relation'}
+              onchange={() => (customRelationType = 'drizzle_relation')}
               class="radio radio-secondary radio-xs mt-0.5"
             />
             <div class="flex flex-col gap-0.5 grow">
@@ -272,7 +274,8 @@
             type="radio"
             name="relationType"
             value="synthetic"
-            bind:group={selectedRelationType}
+            checked={selectedRelationType === 'synthetic'}
+            onchange={() => (customRelationType = 'synthetic')}
             class="radio radio-accent radio-xs mt-0.5"
           />
           <div class="flex flex-col gap-0.5 grow">

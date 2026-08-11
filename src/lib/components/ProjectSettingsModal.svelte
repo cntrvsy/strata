@@ -308,17 +308,17 @@
 </script>
 
 <div
-  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-base-900/65 backdrop-blur-md animate-in fade-in duration-300"
+  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral/60 backdrop-blur-md animate-in fade-in duration-300"
 >
   <div
-    class="bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
+    class="bg-base-100 border border-base-300/80 rounded-box shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
     data-testid="project-settings-modal"
   >
     <div
       class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/40"
     >
       <div class="flex items-center gap-3">
-        <div class="p-2 bg-primary/10 rounded-xl">
+        <div class="p-2 bg-primary/10 rounded-field">
           <Settings class="w-5 h-5 text-primary" />
         </div>
         <h2 class="text-base font-bold tracking-tight">Project Settings</h2>
@@ -333,7 +333,7 @@
 
     <form onsubmit={handleSave} class="p-6 flex flex-col gap-6">
       {#if schemaState.isSandboxMode}
-        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-2.5 text-xs text-warning leading-relaxed">
+        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-field flex items-start gap-2.5 text-xs text-warning leading-relaxed">
           <CircleAlert class="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <span class="font-bold block text-warning">Playground Sandbox Active</span>
@@ -371,7 +371,7 @@
             type="text"
             bind:value={wranglerPath}
             placeholder="e.g. ../../wrangler.toml or wrangler.jsonc"
-            class="input input-bordered w-full pl-10 pr-4 rounded-xl bg-base-100 border-base-300 text-base-content focus:input-primary transition-all font-mono text-xs h-11"
+            class="input input-bordered w-full pl-10 pr-4 rounded-field bg-base-100 border-base-300 text-base-content focus:input-primary transition-all font-mono text-xs h-11"
           />
         </div>
 
@@ -379,7 +379,7 @@
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="btn btn-secondary btn-sm grow rounded-xl font-bold shadow-xs flex items-center gap-1.5"
+            class="btn btn-secondary btn-sm grow rounded-field font-bold shadow-xs flex items-center gap-1.5"
             disabled={isDetecting}
             onclick={autoDetectWrangler}
           >
@@ -393,7 +393,7 @@
           </button>
           <button
             type="button"
-            class="btn btn-outline border-base-300 hover:bg-base-200 text-base-content rounded-xl btn-sm font-semibold flex items-center gap-1.5 shrink-0"
+            class="btn btn-outline border-base-300 hover:bg-base-200 text-base-content rounded-field btn-sm font-semibold flex items-center gap-1.5 shrink-0"
             title="Browse File"
             onclick={browseWrangler}
           >
@@ -409,7 +409,7 @@
             wranglerPath.trim(),
           )}
           <div
-            class="bg-base-200/70 p-3 rounded-xl border border-base-300 flex flex-col gap-1 text-xs"
+            class="bg-base-200/70 p-3 rounded-field border border-base-300 flex flex-col gap-1 text-xs"
           >
             <span class="text-[9.5px] uppercase font-bold text-base-content/60"
               >Resolved Path Location</span
@@ -425,7 +425,7 @@
 
         <!-- Real-Time Validation Status -->
         <div
-          class="mt-1 rounded-xl p-3.5 border transition-all duration-300 bg-base-200/50 border-base-300"
+          class="mt-1 rounded-box p-3.5 border transition-all duration-300 bg-base-200/50 border-base-300"
         >
           {#if validationStatus === "idle"}
             <div
@@ -484,7 +484,7 @@
                 <div class="h-px bg-base-300/40 my-1"></div>
                 <div class="grid grid-cols-3 gap-2 text-center">
                   <div
-                    class="bg-base-200/40 rounded-lg p-1.5 border border-base-300/30"
+                    class="bg-base-200/40 rounded-field p-1.5 border border-base-300/30"
                   >
                     <span class="block text-[14px] font-bold text-base-content"
                       >{bindingCounts.kv}</span
@@ -495,7 +495,7 @@
                     >
                   </div>
                   <div
-                    class="bg-base-200/40 rounded-lg p-1.5 border border-base-300/30"
+                    class="bg-base-200/40 rounded-field p-1.5 border border-base-300/30"
                   >
                     <span class="block text-[14px] font-bold text-base-content"
                       >{bindingCounts.do}</span
@@ -506,7 +506,7 @@
                     >
                   </div>
                   <div
-                    class="bg-base-200/40 rounded-lg p-1.5 border border-base-300/30"
+                    class="bg-base-200/40 rounded-field p-1.5 border border-base-300/30"
                   >
                     <span class="block text-[14px] font-bold text-base-content"
                       >{bindingCounts.r2}</span
@@ -525,7 +525,7 @@
 
       <!-- Cloudflare bindings info -->
       <div
-        class="p-4 bg-info/5 border border-info/10 rounded-2xl text-[11px] leading-relaxed flex gap-2"
+        class="p-4 bg-info/5 border border-info/10 rounded-box text-[11px] leading-relaxed flex gap-2"
       >
         <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
         <div class="flex flex-col gap-1 text-base-content/85">
@@ -544,7 +544,7 @@
       <div class="mt-2 flex flex-col gap-3">
         <button
           type="submit"
-          class="btn btn-primary rounded-xl w-full shadow-sm font-bold"
+          class="btn btn-primary rounded-field w-full shadow-sm font-bold"
         >
           Save Configuration
         </button>

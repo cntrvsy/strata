@@ -86,17 +86,17 @@
 </script>
 
 <div
-  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-base-900/65 backdrop-blur-md animate-in fade-in duration-300"
+  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral/60 backdrop-blur-md animate-in fade-in duration-300"
 >
   <div
-    class="bg-base-100 border border-base-300/80 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
+    class="bg-base-100 border border-base-300/80 rounded-box shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
     data-testid="new-table-modal"
   >
     <div
       class="p-6 border-b border-base-300/60 flex items-center justify-between bg-base-200/40"
     >
       <div class="flex items-center gap-3">
-        <div class="p-2 bg-primary/10 rounded-xl">
+        <div class="p-2 bg-primary/10 rounded-field">
           <Database class="w-5 h-5 text-primary" />
         </div>
         <h2 class="text-base font-bold tracking-tight">Create New Entity</h2>
@@ -114,18 +114,17 @@
       <Form.Field {form} name="name">
         <Form.Control>
           {#snippet children({ props })}
-            <Form.Label
-              class="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1.5 block"
-              >Entity Name</Form.Label
-            >
-            <input
-              {...props}
-              bind:value={$formData.name}
-              placeholder="e.g. users"
-              class="input input-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm {isDuplicateName
-                ? 'input-error'
-                : ''}"
-            />
+            <fieldset class="fieldset gap-1.5 p-0">
+              <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">Entity Name</legend>
+              <input
+                {...props}
+                bind:value={$formData.name}
+                placeholder="e.g. users"
+                class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm {isDuplicateName
+                  ? 'input-error'
+                  : ''}"
+              />
+            </fieldset>
           {/snippet}
         </Form.Control>
         {#if isDuplicateName}
@@ -141,20 +140,19 @@
       <Form.Field {form} name="target">
         <Form.Control>
           {#snippet children({ props })}
-            <Form.Label
-              class="text-[10px] font-bold uppercase tracking-wider opacity-50 mb-1.5 block"
-              >Storage Target</Form.Label
-            >
-            <select
-              {...props}
-              bind:value={$formData.target}
-              class="select select-bordered w-full rounded-xl bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-sm"
-            >
-              <option value="d1">Cloudflare D1 Table</option>
-              <option value="do">Cloudflare Durable Object Pointer</option>
-              <option value="kv">Cloudflare KV Namespace Pointer</option>
-              <option value="r2">Cloudflare R2 Bucket Pointer</option>
-            </select>
+            <fieldset class="fieldset gap-1.5 p-0">
+              <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">Storage Target</legend>
+              <select
+                {...props}
+                bind:value={$formData.target}
+                class="select select-bordered w-full rounded-field bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-sm"
+              >
+                <option value="d1">Cloudflare D1 Table</option>
+                <option value="do">Cloudflare Durable Object Pointer</option>
+                <option value="kv">Cloudflare KV Namespace Pointer</option>
+                <option value="r2">Cloudflare R2 Bucket Pointer</option>
+              </select>
+            </fieldset>
           {/snippet}
         </Form.Control>
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
@@ -163,42 +161,35 @@
       <!-- DO Specific Fields -->
       {#if $formData.target === "do"}
         <div
-          class="p-4 bg-secondary/5 border border-secondary/15 rounded-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200"
+          class="p-4 bg-secondary/5 border border-secondary/15 rounded-box flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200"
         >
-          <div class="flex flex-col gap-1.5">
-            <label
-              for="do-class-input"
-              class="text-[10px] font-bold opacity-60 uppercase"
-              >Target Class Name</label
-            >
+          <fieldset class="fieldset gap-1.5 p-0">
+            <legend class="fieldset-legend text-[10px] font-bold opacity-60 uppercase">Target Class Name</legend>
             <input
               id="do-class-input"
               bind:value={doClass}
               placeholder="e.g. UserSession"
-              class="input input-sm input-bordered w-full rounded-xl bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
               required
             />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label
-              for="do-path-input"
-              class="text-[10px] font-bold opacity-60 uppercase"
-              >Target TS File Path</label
-            >
+          </fieldset>
+
+          <fieldset class="fieldset gap-1.5 p-0">
+            <legend class="fieldset-legend text-[10px] font-bold opacity-60 uppercase">Target TS File Path</legend>
             <input
               id="do-path-input"
               bind:value={doPath}
               placeholder="e.g. ./src/objects/UserSession.ts"
-              class="input input-sm input-bordered w-full rounded-xl bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
               required
             />
-          </div>
+          </fieldset>
         </div>
       {/if}
 
       <!-- Storage Hint -->
       <div
-        class="p-4 bg-info/5 border border-info/10 rounded-2xl text-[11px] leading-relaxed flex gap-2"
+        class="p-4 bg-info/5 border border-info/10 rounded-box text-[11px] leading-relaxed flex gap-2"
       >
         <span class="text-info font-bold text-sm">
           <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
@@ -220,7 +211,7 @@
       <div class="mt-2 flex flex-col gap-3">
         <button
           type="submit"
-          class="btn btn-primary rounded-xl w-full shadow-sm font-bold"
+          class="btn btn-primary rounded-field w-full shadow-sm font-bold"
         >
           Create
         </button>

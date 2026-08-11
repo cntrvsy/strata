@@ -22,7 +22,7 @@
     diagramPane?.resize(55);
   }
 
-  $effect(() => {
+  onMount(() => {
     schemaState.toggleCodePane = () => {
       if (schemaState.isCodeCollapsed) {
         codePane?.resize(45);
@@ -265,19 +265,19 @@
     {#if schemaState.isCodeCollapsed}
       <button
         onclick={() => codePane?.resize(45)}
-        class="absolute left-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-primary btn-sm shadow-md animate-in slide-in-from-left-2 duration-300"
+        class="absolute left-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-neutral btn-sm shadow-md transition-all duration-300"
         title="Show Code Editor"
       >
-        <ChevronRight class="w-4 h-4 text-primary-content" />
+        <ChevronRight class="w-4 h-4" />
       </button>
     {/if}
     {#if schemaState.isDiagramCollapsed}
       <button
         onclick={() => diagramPane?.resize(55)}
-        class="absolute right-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-primary btn-sm shadow-md animate-in slide-in-from-right-2 duration-300"
+        class="absolute right-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-neutral btn-sm shadow-md transition-all duration-300"
         title="Show Diagram Canvas"
       >
-        <ChevronLeft class="w-4 h-4 text-primary-content" />
+        <ChevronLeft class="w-4 h-4" />
       </button>
     {/if}
 
@@ -299,7 +299,7 @@
         </div>
       </Pane>
       <PaneResizer
-        class="w-0.75 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
+        class="w-1 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
         ondblclick={resetLayout}
       />
       <Pane
@@ -322,7 +322,7 @@
               </div>
             </Pane>
             <PaneResizer
-              class="w-0.75 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
+              class="w-1 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
             />
           {/if}
           <Pane order={1}>
