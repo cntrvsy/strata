@@ -53,4 +53,36 @@ describe('Layout Service', () => {
     expect(result).toHaveLength(1);
     schemaState.compactMode = false;
   });
+
+  it('should handle cyclic relationship graphs without crashing', async () => {
+    const nodes: Node[] = [
+      { id: 'nodeA', type: 'table', data: { label: 'nodeA', columns: [] }, position: { x: 0, y: 0 } },
+      { id: 'nodeB', type: 'table', data: { label: 'nodeB', columns: [] }, position: { x: 0, y: 0 } }
+    ];
+    const edges: Edge[] = [
+      { id: 'e-a-b', source: 'nodeA', target: 'nodeB' },
+      { id: 'e-b-a', source: 'nodeB', target: 'nodeA' }
+    ];
+
+    const result = await arrangeLayout(nodes, edges);
+    expect(result).toHaveLength(2);
+    expect(typeof result[0].position.x).toBe('number');
+    expect(typeof result[0].position.y).toBe('number');
+    expect(typeof result[1].position.x).toBe('number');
+    expect(typeof result[1].position.y).toBe('number');
+  });
+
+  it('should handle disconnected subgraphs with multiple isolated node groups', async () => {
+    const nodes: Node[] = [
+      { id: 'group1_a', type: 'table', data: { label: 'group1_a', columns: [] }, position: { x: 0, y: 0 } },
+      { id: 'group1_b', type: 'table', data: { label: 'group1_b', columns: [] }, position: { x: 0, y: 0 } },
+      { id: 'isolated_node', type: 'table', data: { label: 'isolated_node', columns: [] }, position: { x: 0, y: 0 } }
+    ];
+    const edges: Edge[] = [
+      { id: 'e-g1', source: 'group1_a', target: 'group1_b' }
+    ];
+
+    const result = await arrangeLayout(nodes, edges);
+    expect(result).toHaveLength(3);
+  });
 });

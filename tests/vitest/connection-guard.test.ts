@@ -63,4 +63,30 @@ describe('Connection Safety Guard', () => {
 		const parsed = parseSchema(result);
 		expect(parsed.success).toBe(true);
 	});
+
+	it('should not duplicate .references() if column already references another table', () => {
+		const code = `
+			import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+			export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+			export const orders = sqliteTable("orders", {
+				id: integer("id").primaryKey(),
+				user_id: integer("user_id").references(() => users.id),
+			});
+		`;
+
+		const result = addForeignKeyToColumnInSchema(code, 'orders', 'user_id', 'users', 'id');
+		// Should still only have a single .references() call
+		const count = (result.match(/\.references\(/g) || []).length;
+		expect(count).toBe(1);
+	});
+
+	it('should return original code unchanged when source table does not exist', () => {
+		const code = `
+			import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+			export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+		`;
+
+		const result = addForeignKeyToColumnInSchema(code, 'non_existent_table', 'user_id', 'users', 'id');
+		expect(result).toBe(code);
+	});
 });

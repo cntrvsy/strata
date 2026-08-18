@@ -42,4 +42,23 @@ export const users = sqliteTable("users", {
     expect(result1.nodes[0].position).toEqual(result2.nodes[0].position);
     expect(result1.nodes[0].position).toEqual({ x: 42, y: 84 });
   });
+
+  it('should preserve existing non-@strata JSDoc tags (@deprecated, @description) when updating node position', () => {
+    const code = `
+/**
+ * @description Core user profiles table
+ * @deprecated Use v2 profiles table
+ * @strata {"x": 10, "y": 20}
+ */
+export const profiles = sqliteTable("profiles", {
+  id: integer("id").primaryKey(),
+});
+`;
+    const updated = updateNodePositionInSchema(code, 'profiles', 300, 400);
+    expect(updated).toContain('@description Core user profiles table');
+    expect(updated).toContain('@deprecated Use v2 profiles table');
+    
+    const parsed = parseSchema(updated);
+    expect(parsed.nodes[0].position).toEqual({ x: 300, y: 400 });
+  });
 });

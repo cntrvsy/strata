@@ -19,6 +19,7 @@
     X,
     Lightbulb,
     CircleX,
+    Crosshair,
   } from "lucide-svelte";
   import { schemaState } from "$lib/state";
   import { uiState } from "$lib/state/uiStore.svelte";
@@ -411,9 +412,9 @@
               >
                 <span class="opacity-60 flex-1">Coordinates</span>
                 <span
-                  class="font-bold text-secondary truncate max-w-25 text-right"
+                  class="font-bold text-secondary font-mono text-[10px] text-right"
                 >
-                  {Math.round(schemaState.activeCoordinates.x)}, {Math.round(
+                  X: {Math.round(schemaState.activeCoordinates.x)}, Y: {Math.round(
                     schemaState.activeCoordinates.y,
                   )}
                 </span>
@@ -422,10 +423,10 @@
           </div>
 
           <div
-            class="text-[9px] text-base-content/40 leading-normal border-t border-base-300/40 pt-1.5"
+            class="flex items-start gap-1.5 text-[9px] text-base-content/50 leading-normal border-t border-base-300/40 pt-2 mt-0.5"
           >
-            <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" /> Click database tags
-            to isolate node types in the canvas.
+            <Lightbulb class="w-3.5 h-3.5 text-info shrink-0 mt-0.5" />
+            <span>Click database tags to isolate node types in the canvas.</span>
           </div>
         </div>
       </div>
@@ -434,8 +435,8 @@
     <!-- Coordinates (shown when dragging/hovering/selecting in diagram) -->
     {#if schemaState.activeCoordinates}
       <div class="h-3 w-px bg-base-300/80"></div>
-      <div class="flex items-center gap-1 opacity-80">
-        <Layers class="w-3 h-3 text-secondary" />
+      <div class="flex items-center gap-1 opacity-80" title="Active Canvas Selection Coordinates">
+        <Crosshair class="w-3 h-3 text-secondary" />
         <span
           >X: {Math.round(schemaState.activeCoordinates.x)} Y: {Math.round(
             schemaState.activeCoordinates.y,
@@ -448,7 +449,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.0</span
+      title="Strata App Version">v3.1.1</span
     >
   </div>
 </div>

@@ -167,4 +167,20 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     await schemaState.loadSandboxDemo('fullstack');
     expect(schemaState.nodes.some(n => n.id === 'ClassroomSmartBoardDO')).toBe(true);
   });
+
+  it('12. should handle non-existent table deletion in sandbox mode gracefully', async () => {
+    const initialCount = schemaState.nodes.length;
+    await expect(schemaState.deleteTable('ghost_table_does_not_exist')).resolves.not.toThrow();
+    expect(schemaState.nodes.length).toBe(initialCount);
+  });
+
+  it('13. should handle duplicate column addition safely in sandbox mode', async () => {
+    await schemaState.addTable('users_dup_test', 'd1');
+    await schemaState.addColumn('users_dup_test', 'email', 'text');
+    await schemaState.addColumn('users_dup_test', 'email', 'text');
+
+    const node = schemaState.nodes.find(n => n.id === 'users_dup_test');
+    const cols = (node?.data as any).columns;
+    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(2);
+  });
 });

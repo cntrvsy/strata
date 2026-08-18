@@ -81,4 +81,50 @@ describe('Auth Schema & Multi-Dialect Discovery', () => {
     const authNode = result.nodes.find(n => n.id === 'authUser');
     expect(authNode).toBeDefined();
   });
+
+  it('should handle missing external files gracefully without crashing', () => {
+    const mainCode = `
+      import { user } from "./missing-schema";
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+
+      export const posts = sqliteTable("posts", {
+        id: integer("id").primaryKey()
+      });
+    `;
+
+    const externalFiles = new Map<string, string>();
+    const result = parseSchema(mainCode, externalFiles);
+    expect(result.success).toBe(true);
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0].id).toBe('posts');
+  });
+
+  it('should handle circular external imports without infinite loops', () => {
+    const mainCode = `
+      import { tableA } from "./fileA";
+      import { tableB } from "./fileB";
+    `;
+
+    const fileA = `
+      import { tableB } from "./fileB";
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const tableA = sqliteTable("table_a", { id: integer("id").primaryKey() });
+    `;
+
+    const fileB = `
+      import { tableA } from "./fileA";
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const tableB = sqliteTable("table_b", { id: integer("id").primaryKey() });
+    `;
+
+    const externalFiles = new Map<string, string>([
+      ['./fileA', fileA],
+      ['./fileB', fileB]
+    ]);
+
+    const result = parseSchema(mainCode, externalFiles);
+    expect(result.success).toBe(true);
+    expect(result.nodes.some(n => n.id === 'tableA')).toBe(true);
+    expect(result.nodes.some(n => n.id === 'tableB')).toBe(true);
+  });
 });

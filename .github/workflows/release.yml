@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 env:
   CN_APPLICATION: "frstudios/strata"
@@ -123,9 +124,55 @@ jobs:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
 
+  build-macos:
+    name: Build macOS DMG (Apple Silicon) & upload to CrabNebula
+    needs: draft
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> src-tauri/target"
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      # updater feature + createUpdaterArtifacts produces the signed .app.tar.gz + .sig
+      # pair CrabNebula's auto-update flow expects for macOS.
+      - name: build macOS DMG
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: >-
+          npm run tauri build --
+          --target aarch64-apple-darwin
+          --features updater
+          --config '{"bundle":{"targets":["dmg"],"createUpdaterArtifacts":true}}'
+
+      # No rename, no `path:` override — `cn` pairs the .dmg with its auto-generated .app.tar.gz/.sig
+      # sidecar by filename; renaming would orphan it.
+      - name: upload macOS DMG to CrabNebula
+        uses: crabnebula-dev/cloud-release@v0
+        with:
+          command: release upload ${{ env.CN_APPLICATION }} --framework tauri
+          api-key: ${{ secrets.CN_API_KEY }}
+
   publish:
     name: Publish CrabNebula release
-    needs: [build-linux, build-windows]
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
