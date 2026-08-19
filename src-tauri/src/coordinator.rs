@@ -452,3 +452,107 @@ fn mutate_jsonc(
         .map_err(|e| CoordinatorError::WranglerConfig(e.to_string()))?;
     Ok(pretty)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_mutate_toml_add_kv_r2_do() {
+        let initial_toml = r#"
+name = "my-worker"
+main = "src/index.ts"
+"#;
+        // 1. Add KV
+        let res1 = mutate_toml(initial_toml, "add", "kv", "MY_KV", &json!({})).unwrap();
+        assert!(res1.contains("[[kv_namespaces]]"));
+        assert!(res1.contains("binding = \"MY_KV\""));
+
+        // 2. Add R2
+        let res2 = mutate_toml(&res1, "add", "r2", "MY_BUCKET", &json!({})).unwrap();
+        assert!(res2.contains("[[r2_buckets]]"));
+        assert!(res2.contains("binding = \"MY_BUCKET\""));
+
+        // 3. Add DO
+        let res3 = mutate_toml(
+            &res2,
+            "add",
+            "do",
+            "MY_DO",
+            &json!({ "class": "MyDurableObject" }),
+        )
+        .unwrap();
+        assert!(res3.contains("[[durable_objects.bindings]]"));
+        assert!(res3.contains("name = \"MY_DO\""));
+        assert!(res3.contains("class_name = \"MyDurableObject\""));
+    }
+
+    #[test]
+    fn test_mutate_toml_prevent_duplicate_and_remove() {
+        let toml_with_kv = r#"
+name = "my-worker"
+
+[[kv_namespaces]]
+binding = "MY_KV"
+id = "placeholder-id"
+"#;
+        // Adding duplicate should return content unchanged
+        let res_dup = mutate_toml(toml_with_kv, "add", "kv", "MY_KV", &json!({})).unwrap();
+        assert_eq!(res_dup, toml_with_kv);
+
+        // Removing KV binding
+        let res_rem = mutate_toml(toml_with_kv, "remove", "kv", "MY_KV", &json!({})).unwrap();
+        assert!(!res_rem.contains("[[kv_namespaces]]"));
+        assert!(!res_rem.contains("MY_KV"));
+    }
+
+    #[test]
+    fn test_mutate_jsonc_with_comments_add_and_remove() {
+        let jsonc_input = r#"{
+    // Worker configuration
+    "name": "my-worker",
+    /* Block comment
+       about durable objects */
+    "durable_objects": {
+        "bindings": []
+    }
+}"#;
+
+        // Add DO to JSONC
+        let res_add = mutate_jsonc(
+            jsonc_input,
+            "add",
+            "do",
+            "COUNTER_DO",
+            &json!({ "class": "CounterDO" }),
+        )
+        .unwrap();
+
+        assert!(res_add.contains("COUNTER_DO"));
+        assert!(res_add.contains("CounterDO"));
+
+        // Remove DO from JSONC
+        let res_rem = mutate_jsonc(
+            &res_add,
+            "remove",
+            "do",
+            "COUNTER_DO",
+            &json!({}),
+        )
+        .unwrap();
+
+        assert!(!res_rem.contains("COUNTER_DO"));
+    }
+
+    #[test]
+    fn test_mutate_jsonc_invalid_json_returns_error() {
+        let invalid_json = "{ invalid_json: ";
+        let res = mutate_jsonc(invalid_json, "add", "kv", "MY_KV", &json!({}));
+        assert!(res.is_err());
+        match res.unwrap_err() {
+            CoordinatorError::WranglerConfig(msg) => assert!(msg.contains("Invalid JSON format")),
+            _ => panic!("Expected WranglerConfig error"),
+        }
+    }
+}

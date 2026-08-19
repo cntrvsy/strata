@@ -87,4 +87,15 @@ describe('JSDoc Audit & Fault-Tolerant Engine', () => {
 		});
 		expect(result?.issue?.code).toBe('JSDOC_SYNTAX_ERROR');
 	});
+
+	it('should handle non-numeric x/y coordinates in @strata JSDoc gracefully', () => {
+		const text = `
+			/** 
+			 * @strata { "target": "d1", "x": "invalid_num", "y": null } 
+			 */
+		`;
+		const result = extractStrataMetadata(text);
+		expect(result).not.toBeNull();
+		expect(result?.data).toEqual({ target: 'd1', x: 'invalid_num', y: null });
+	});
 });
