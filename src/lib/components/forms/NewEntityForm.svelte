@@ -73,25 +73,29 @@
       label: "D1 Database Table",
       icon: Database,
       color: "text-primary",
-      details: "Creates a standard Drizzle sqliteTable code structure in schema.ts.",
+      details:
+        "Creates a standard Drizzle sqliteTable code structure in schema.ts.",
     },
     do: {
       label: "Durable Object Class Binding",
       icon: Cpu,
       color: "text-secondary",
-      details: "Configures a Durable Object binding in wrangler.toml/json and maps to a TS class.",
+      details:
+        "Configures a Durable Object binding in wrangler.toml/json and maps to a TS class.",
     },
     kv: {
       label: "KV Namespace Binding",
       icon: Zap,
       color: "text-accent",
-      details: "Configures a Key-Value storage binding in wrangler.toml/json & visual ERD node.",
+      details:
+        "Configures a Key-Value storage binding in wrangler.toml/json & visual ERD node.",
     },
     r2: {
       label: "R2 Bucket Binding",
       icon: HardDrive,
       color: "text-info",
-      details: "Configures an R2 Object Storage bucket binding in wrangler.toml/json & visual ERD node.",
+      details:
+        "Configures an R2 Object Storage bucket binding in wrangler.toml/json & visual ERD node.",
     },
   };
 </script>
@@ -101,7 +105,8 @@
 <div
   class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral/60 backdrop-blur-md"
   transition:fade={{ duration: 120 }}
-  onclick={(e) => e.target === e.currentTarget && (schemaState.showNewTableModal = false)}
+  onclick={(e) =>
+    e.target === e.currentTarget && (schemaState.showNewTableModal = false)}
 >
   <div
     class="bg-base-100 border border-base-300/80 rounded-box shadow-2xl w-full max-w-md overflow-hidden"
@@ -140,7 +145,11 @@
               <input
                 {...props}
                 bind:value={$formData.name}
-                placeholder={$formData.target === "kv" ? "e.g. ISITFUN_KV" : $formData.target === "r2" ? "e.g. GAMES_BUCKET" : "e.g. users"}
+                placeholder={$formData.target === "kv"
+                  ? "e.g. ISITFUN_KV"
+                  : $formData.target === "r2"
+                    ? "e.g. GAMES_BUCKET"
+                    : "e.g. users"}
                 class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-primary transition-all font-mono text-sm {isDuplicateName
                   ? 'input-error'
                   : ''}"
@@ -149,9 +158,13 @@
           {/snippet}
         </Form.Control>
         {#if isDuplicateName}
-          <div class="flex items-center gap-1.5 text-[10px] text-error mt-1.5 font-bold">
+          <div
+            class="flex items-center gap-1.5 text-[10px] text-error mt-1.5 font-bold"
+          >
             <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
-            <span>An entity or binding named "{$formData.name}" already exists.</span>
+            <span
+              >An entity or binding named "{$formData.name}" already exists.</span
+            >
           </div>
         {/if}
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
@@ -172,9 +185,15 @@
                 class="select select-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:select-primary transition-all text-sm font-medium"
               >
                 <option value="d1">Cloudflare D1 Table (Drizzle Schema)</option>
-                <option value="do">Cloudflare Durable Object (Class + Wrangler Binding)</option>
-                <option value="kv">Cloudflare KV Namespace (Wrangler Binding)</option>
-                <option value="r2">Cloudflare R2 Bucket (Wrangler Binding)</option>
+                <option value="do"
+                  >Cloudflare Durable Object (Class + Wrangler Binding)</option
+                >
+                <option value="kv"
+                  >Cloudflare KV Namespace (Wrangler Binding)</option
+                >
+                <option value="r2"
+                  >Cloudflare R2 Bucket (Wrangler Binding)</option
+                >
               </select>
             </fieldset>
           {/snippet}
@@ -195,7 +214,7 @@
             <input
               id="kv-id-input"
               bind:value={kvId}
-              placeholder="e.g. 19ac9d9ad7cb48959e05c2766434343419c419"
+              placeholder="e.g. 19ac9d9ad7cd48959e05c276643434342121219"
               class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-xs"
             />
           </fieldset>
@@ -215,7 +234,7 @@
             <input
               id="r2-bucket-input"
               bind:value={r2BucketName}
-              placeholder="e.g. isitfun-games (defaults to binding name)"
+              placeholder="e.g. tutorial-videos (defaults to binding name)"
               class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-info transition-all font-mono text-xs"
             />
           </fieldset>
@@ -285,10 +304,11 @@
           Create Entity
         </button>
         <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
-          Creates a card in <code>schema.ts</code> and syncs bindings with your <code>wrangler.toml</code> / <code>wrangler.json</code>.
+          Creates a card in <code>schema.ts</code> and syncs bindings with your
+          <code>wrangler.toml</code>
+          / <code>wrangler.json</code>.
         </p>
       </div>
     </form>
   </div>
 </div>
-
