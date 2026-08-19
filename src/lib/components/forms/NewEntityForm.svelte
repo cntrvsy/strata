@@ -11,6 +11,8 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { tableSchema } from "$lib/schemas";
   import { schemaState } from "$lib/state";
+  import { fade, scale } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import {
     Database,
     X,
@@ -21,19 +23,32 @@
     TriangleAlert,
   } from "lucide-svelte";
 
+  // Local state for target-specific attributes
+  let doClass = $state("");
+  let doPath = $state("");
+  let kvId = $state("");
+  let r2BucketName = $state("");
+
   const form = superForm(defaults(valibot(tableSchema)), {
     SPA: true,
     validators: valibot(tableSchema),
     async onUpdate({ form }) {
       if (form.valid && (schemaState.filePath || schemaState.isSandboxMode)) {
-        // If target is "do", we also pass class and path
         const extra =
           form.data.target === "do"
             ? {
                 class: doClass.trim() || undefined,
                 path: doPath.trim() || undefined,
               }
-            : undefined;
+            : form.data.target === "kv"
+              ? {
+                  id: kvId.trim() || undefined,
+                }
+              : form.data.target === "r2"
+                ? {
+                    bucket_name: r2BucketName.trim() || undefined,
+                  }
+                : undefined;
 
         await schemaState.addTable(
           form.data.name,
@@ -47,10 +62,6 @@
 
   const { form: formData, enhance } = form;
 
-  // Local state for target-specific DO attributes
-  let doClass = $state("");
-  let doPath = $state("");
-
   const isDuplicateName = $derived(
     schemaState.nodes.some(
       (n) => n.id.toLowerCase() === $formData.name.trim().toLowerCase(),
@@ -62,34 +73,40 @@
       label: "D1 Database Table",
       icon: Database,
       color: "text-primary",
-      details: "Creates a standard Drizzle sqliteTable code structure.",
+      details: "Creates a standard Drizzle sqliteTable code structure in schema.ts.",
     },
     do: {
-      label: "Durable Object Class Pointer",
+      label: "Durable Object Class Binding",
       icon: Cpu,
       color: "text-secondary",
-      details: "Registers a stateful WebSocket class method binding.",
+      details: "Configures a Durable Object binding in wrangler.toml/json and maps to a TS class.",
     },
     kv: {
       label: "KV Namespace Binding",
       icon: Zap,
       color: "text-accent",
-      details: "Creates a Key-Value document schema binding.",
+      details: "Configures a Key-Value storage binding in wrangler.toml/json & visual ERD node.",
     },
     r2: {
       label: "R2 Bucket Binding",
       icon: HardDrive,
       color: "text-info",
-      details: "Creates an object storage bucket & directory mapping.",
+      details: "Configures an R2 Object Storage bucket binding in wrangler.toml/json & visual ERD node.",
     },
   };
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral/60 backdrop-blur-md animate-in fade-in duration-300"
+  class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-neutral/60 backdrop-blur-md"
+  transition:fade={{ duration: 120 }}
+  onclick={(e) => e.target === e.currentTarget && (schemaState.showNewTableModal = false)}
 >
   <div
-    class="bg-base-100 border border-base-300/80 rounded-box shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300"
+    class="bg-base-100 border border-base-300/80 rounded-box shadow-2xl w-full max-w-md overflow-hidden"
+    in:scale={{ duration: 140, start: 0.98, easing: cubicOut }}
+    out:scale={{ duration: 100, start: 0.98 }}
     data-testid="new-table-modal"
   >
     <div
@@ -102,8 +119,9 @@
         <h2 class="text-base font-bold tracking-tight">Create New Entity</h2>
       </div>
       <button
-        class="btn btn-ghost btn-sm btn-circle hover:bg-base-200"
+        class="btn btn-ghost btn-sm btn-circle hover:bg-base-200 transition-colors"
         onclick={() => (schemaState.showNewTableModal = false)}
+        title="Close modal"
       >
         <X class="w-4 h-4 opacity-60" />
       </button>
@@ -115,12 +133,15 @@
         <Form.Control>
           {#snippet children({ props })}
             <fieldset class="fieldset gap-1.5 p-0">
-              <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">Entity Name</legend>
+              <legend
+                class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60"
+                >Entity Name / Binding Variable</legend
+              >
               <input
                 {...props}
                 bind:value={$formData.name}
-                placeholder="e.g. users"
-                class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 focus:input-primary transition-all font-mono text-sm {isDuplicateName
+                placeholder={$formData.target === "kv" ? "e.g. ISITFUN_KV" : $formData.target === "r2" ? "e.g. GAMES_BUCKET" : "e.g. users"}
+                class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-primary transition-all font-mono text-sm {isDuplicateName
                   ? 'input-error'
                   : ''}"
               />
@@ -128,10 +149,10 @@
           {/snippet}
         </Form.Control>
         {#if isDuplicateName}
-          <p class="text-[10px] text-error mt-1 font-bold">
-            <TriangleAlert class="w-4 h-4" /> An entity or binding named "{$formData.name}"
-            already exists.
-          </p>
+          <div class="flex items-center gap-1.5 text-[10px] text-error mt-1.5 font-bold">
+            <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
+            <span>An entity or binding named "{$formData.name}" already exists.</span>
+          </div>
         {/if}
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
       </Form.Field>
@@ -141,16 +162,19 @@
         <Form.Control>
           {#snippet children({ props })}
             <fieldset class="fieldset gap-1.5 p-0">
-              <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">Storage Target</legend>
+              <legend
+                class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60"
+                >Storage Target</legend
+              >
               <select
                 {...props}
                 bind:value={$formData.target}
-                class="select select-bordered w-full rounded-field bg-base-200/40 border-base-300/60 focus:select-primary transition-all text-sm"
+                class="select select-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:select-primary transition-all text-sm font-medium"
               >
-                <option value="d1">Cloudflare D1 Table</option>
-                <option value="do">Cloudflare Durable Object Pointer</option>
-                <option value="kv">Cloudflare KV Namespace Pointer</option>
-                <option value="r2">Cloudflare R2 Bucket Pointer</option>
+                <option value="d1">Cloudflare D1 Table (Drizzle Schema)</option>
+                <option value="do">Cloudflare Durable Object (Class + Wrangler Binding)</option>
+                <option value="kv">Cloudflare KV Namespace (Wrangler Binding)</option>
+                <option value="r2">Cloudflare R2 Bucket (Wrangler Binding)</option>
               </select>
             </fieldset>
           {/snippet}
@@ -158,29 +182,75 @@
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
       </Form.Field>
 
+      <!-- KV Specific Fields -->
+      {#if $formData.target === "kv"}
+        <div
+          class="p-4 bg-accent/5 border border-accent/15 rounded-box flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200"
+        >
+          <fieldset class="fieldset gap-1.5 p-0">
+            <legend
+              class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >KV Namespace ID (Optional)</legend
+            >
+            <input
+              id="kv-id-input"
+              bind:value={kvId}
+              placeholder="e.g. 19ac9d9ad7cb48959e05c2766434343419c419"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-xs"
+            />
+          </fieldset>
+        </div>
+      {/if}
+
+      <!-- R2 Specific Fields -->
+      {#if $formData.target === "r2"}
+        <div
+          class="p-4 bg-info/5 border border-info/15 rounded-box flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200"
+        >
+          <fieldset class="fieldset gap-1.5 p-0">
+            <legend
+              class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >R2 Bucket Name (Optional)</legend
+            >
+            <input
+              id="r2-bucket-input"
+              bind:value={r2BucketName}
+              placeholder="e.g. isitfun-games (defaults to binding name)"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-info transition-all font-mono text-xs"
+            />
+          </fieldset>
+        </div>
+      {/if}
+
       <!-- DO Specific Fields -->
       {#if $formData.target === "do"}
         <div
           class="p-4 bg-secondary/5 border border-secondary/15 rounded-box flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200"
         >
           <fieldset class="fieldset gap-1.5 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold opacity-60 uppercase">Target Class Name</legend>
+            <legend
+              class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >Target Class Name</legend
+            >
             <input
               id="do-class-input"
               bind:value={doClass}
               placeholder="e.g. UserSession"
-              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-secondary transition-all font-mono text-xs"
               required
             />
           </fieldset>
 
           <fieldset class="fieldset gap-1.5 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold opacity-60 uppercase">Target TS File Path</legend>
+            <legend
+              class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >Target TS File Path</legend
+            >
             <input
               id="do-path-input"
               bind:value={doPath}
               placeholder="e.g. ./src/objects/UserSession.ts"
-              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 focus:input-secondary transition-all font-mono text-xs"
+              class="input input-sm input-bordered w-full rounded-field bg-base-100/50 border-base-300/60 hover:border-base-content/30 focus:input-secondary transition-all font-mono text-xs"
               required
             />
           </fieldset>
@@ -189,18 +259,16 @@
 
       <!-- Storage Hint -->
       <div
-        class="p-4 bg-info/5 border border-info/10 rounded-box text-[11px] leading-relaxed flex gap-2"
+        class="p-3.5 bg-info/5 border border-info/10 rounded-box text-[11px] leading-relaxed flex items-start gap-2.5"
       >
-        <span class="text-info font-bold text-sm">
-          <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
-        </span>
-        <div class="flex flex-col gap-1 text-base-content/85">
+        <Lightbulb class="w-4 h-4 text-info/90 shrink-0 mt-0.5" />
+        <div class="flex flex-col gap-0.5 text-base-content/85">
           <span class="font-bold text-base-content">
             {targetConfig[
               ($formData.target as keyof typeof targetConfig) || "d1"
             ].label}
           </span>
-          <span>
+          <span class="text-[10.5px] opacity-80">
             {targetConfig[
               ($formData.target as keyof typeof targetConfig) || "d1"
             ].details}
@@ -211,15 +279,16 @@
       <div class="mt-2 flex flex-col gap-3">
         <button
           type="submit"
-          class="btn btn-primary rounded-field w-full shadow-sm font-bold"
+          class="btn btn-primary rounded-field w-full shadow-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+          disabled={isDuplicateName || !$formData.name.trim()}
         >
-          Create
+          Create Entity
         </button>
         <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
-          This will inject a new entity block into your <code>schema.ts</code> and
-          sync immediately.
+          Creates a card in <code>schema.ts</code> and syncs bindings with your <code>wrangler.toml</code> / <code>wrangler.json</code>.
         </p>
       </div>
     </form>
   </div>
 </div>
+

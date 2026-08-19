@@ -7,6 +7,8 @@
 -->
 <script lang="ts">
   import { X, Save, Undo, GitCompare, Lightbulb } from "lucide-svelte";
+  import { fade, scale } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { schemaState } from "$lib/state";
   import { PlatformService } from "$lib/services/platform";
   import { EditorView, basicSetup } from "codemirror";
@@ -91,12 +93,15 @@
 
 {#if show}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-6 animate-in fade-in duration-200"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-neutral/60 backdrop-blur-md p-6"
+    transition:fade={{ duration: 120 }}
     role="dialog"
     aria-modal="true"
   >
     <div
       class="bg-base-100 rounded-box w-full max-w-5xl h-[85vh] shadow-2xl border border-base-300 overflow-hidden flex flex-col"
+      in:scale={{ duration: 140, start: 0.98, easing: cubicOut }}
+      out:scale={{ duration: 100, start: 0.98 }}
     >
       <!-- Header -->
       <div

@@ -40,13 +40,13 @@
   });
 
   // --- Components ---
-  import DiagramCanvas from "$lib/components/DiagramCanvas.svelte";
-  import Inspector from "$lib/components/Inspector.svelte";
-  import Overlays from "$lib/components/Overlays.svelte";
+  import DiagramCanvas from "$lib/components/diagram/DiagramCanvas.svelte";
+  import Inspector from "$lib/components/inspector/Inspector.svelte";
+  import Overlays from "$lib/components/layout/Overlays.svelte";
   import NewEntityForm from "$lib/components/forms/NewEntityForm.svelte";
-  import CodeEditor from "$lib/components/CodeEditor.svelte";
-  import ConnectionPickerModal from "$lib/components/ConnectionPickerModal.svelte";
-  import CanvasSearchPalette from "$lib/components/CanvasSearchPalette.svelte";
+  import CodeEditor from "$lib/components/editor/CodeEditor.svelte";
+  import ConnectionPickerModal from "$lib/components/modals/ConnectionPickerModal.svelte";
+  import CanvasSearchPalette from "$lib/components/diagram/CanvasSearchPalette.svelte";
 
   let pendingConnection = $state<Connection | null>(null);
   let showSearchPalette = $state(false);
@@ -299,9 +299,11 @@
         </div>
       </Pane>
       <PaneResizer
-        class="w-1 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
+        class="w-1.5 bg-base-300/40 hover:bg-primary/70 active:bg-primary transition-colors duration-150 cursor-col-resize z-10 flex items-center justify-center group"
         ondblclick={resetLayout}
-      />
+      >
+        <div class="w-0.5 h-5 rounded-full bg-base-content/20 group-hover:bg-primary-content transition-colors duration-150"></div>
+      </PaneResizer>
       <Pane
         minSize={20}
         defaultSize={55}
@@ -322,8 +324,10 @@
               </div>
             </Pane>
             <PaneResizer
-              class="w-1 bg-base-300 hover:bg-primary/50 active:bg-primary transition-colors cursor-col-resize z-10"
-            />
+              class="w-1.5 bg-base-300/40 hover:bg-primary/70 active:bg-primary transition-colors duration-150 cursor-col-resize z-10 flex items-center justify-center group"
+            >
+              <div class="w-0.5 h-5 rounded-full bg-base-content/20 group-hover:bg-primary-content transition-colors duration-150"></div>
+            </PaneResizer>
           {/if}
           <Pane order={1}>
             <div

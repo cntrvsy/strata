@@ -319,14 +319,22 @@ fn mutate_toml(
 
         let mut append_text = String::new();
         if binding_type == "kv" {
+            let id_val = extra
+                .get("id")
+                .and_then(|i| i.as_str())
+                .unwrap_or("placeholder-id");
             append_text = format!(
-                "\n\n[[kv_namespaces]]\nbinding = \"{}\"\nid = \"placeholder-id\"",
-                binding_name
+                "\n\n[[kv_namespaces]]\nbinding = \"{}\"\nid = \"{}\"",
+                binding_name, id_val
             );
         } else if binding_type == "r2" {
+            let bucket_val = extra
+                .get("bucket_name")
+                .and_then(|b| b.as_str())
+                .unwrap_or(binding_name);
             append_text = format!(
                 "\n\n[[r2_buckets]]\nbinding = \"{}\"\nbucket_name = \"{}\"",
-                binding_name, binding_name
+                binding_name, bucket_val
             );
         } else if binding_type == "do" {
             let class_name = extra
@@ -395,9 +403,13 @@ fn mutate_jsonc(
                 })?;
 
             if !arr.iter().any(|kv| kv.get("binding").and_then(|b| b.as_str()) == Some(binding_name)) {
+                let id_val = extra
+                    .get("id")
+                    .and_then(|i| i.as_str())
+                    .unwrap_or("placeholder-id");
                 let mut kv_obj = serde_json::Map::new();
                 kv_obj.insert("binding".into(), binding_name.into());
-                kv_obj.insert("id".into(), "placeholder-id".into());
+                kv_obj.insert("id".into(), id_val.into());
                 arr.push(serde_json::Value::Object(kv_obj));
             }
         } else if binding_type == "r2" {
@@ -410,9 +422,12 @@ fn mutate_jsonc(
                 })?;
 
             if !arr.iter().any(|r2| r2.get("binding").and_then(|b| b.as_str()) == Some(binding_name)) {
+                let bucket_val = extra
+                    .get("bucket_name")
+                    .and_then(|b| b.as_str())
+                    .unwrap_or(binding_name);
                 let mut r2_obj = serde_json::Map::new();
-                r2_obj.insert("binding".into(), binding_name.into());
-                r2_obj.insert("bucket_name".into(), binding_name.into());
+                r2_obj.insert("bucket_name".into(), bucket_val.into());
                 arr.push(serde_json::Value::Object(r2_obj));
             }
         } else if binding_type == "do" {
