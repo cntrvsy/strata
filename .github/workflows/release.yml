@@ -170,6 +170,57 @@ jobs:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
 
+  build-msix:
+    name: Build MSIX bundle & upload artifact
+    needs: draft
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> src-tauri/target"
+          
+      - name: install frontend dependencies
+        run: npm ci
+
+      - name: write signing cert
+        shell: pwsh
+        run: |
+          $bytes = [System.Convert]::FromBase64String("${{ secrets.MSIX_SIGNING_CERT_BASE64 }}")
+          [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
+        
+      - name: build MSIX bundle
+        env:
+          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64
+        
+      - name: upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: msix-bundle
+          path: src-tauri/target/msix/*.msixbundle
+
+      - name: upload MSIX to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: src-tauri/target/msix/*.msixbundle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish:
     name: Publish CrabNebula release
     needs: [build-linux, build-windows, build-macos]
