@@ -552,11 +552,6 @@
               href="https://frstudios.co.ke"
               class="hover:text-primary transition-colors">FRstudios</a
             >.
-            <a
-              href="https://frstudios.co.ke/applications/strata"
-              class="hover:text-primary transition-colors"
-              >Want to support us?</a
-            >
           </p>
         </div>
       </div>
