@@ -15,9 +15,9 @@
     useSvelteFlow,
   } from "@xyflow/svelte";
   import { schemaState } from "$lib/state";
-  import TableNode from "$lib/components/TableNode.svelte";
-  import RelationEdge from "$lib/components/RelationEdge.svelte";
-  import ContextMenu from "$lib/components/ContextMenu.svelte";
+  import TableNode from "$lib/components/diagram/TableNode.svelte";
+  import RelationEdge from "$lib/components/diagram/RelationEdge.svelte";
+  import ContextMenu from "$lib/components/diagram/ContextMenu.svelte";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;
@@ -170,7 +170,7 @@
 </div>
 
 <style>
-  @reference "../../routes/layout.css";
+  @reference "../../../routes/layout.css";
 
   :global(.svelte-flow) {
     --bg-color: transparent;

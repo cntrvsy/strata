@@ -24,10 +24,10 @@
   import { uiState } from "$lib/state/uiStore.svelte";
   import AddFieldForm from "$lib/components/forms/AddFieldForm.svelte";
   import AddRelationForm from "$lib/components/forms/AddRelationForm.svelte";
-  import D1Inspector from "$lib/components/inspector/D1Inspector.svelte";
-  import KVInspector from "$lib/components/inspector/KVInspector.svelte";
-  import DOInspector from "$lib/components/inspector/DOInspector.svelte";
-  import R2Inspector from "$lib/components/inspector/R2Inspector.svelte";
+  import D1Inspector from "./D1Inspector.svelte";
+  import KVInspector from "./KVInspector.svelte";
+  import DOInspector from "./DOInspector.svelte";
+  import R2Inspector from "./R2Inspector.svelte";
 
   // --- Local UI State ---
 
@@ -514,9 +514,9 @@
               class="mt-4 p-3.5 bg-base-200/30 border border-base-300/50 rounded-box flex flex-col gap-1.5 text-[10px]"
             >
               <span
-                class="font-bold text-base-content/85 flex items-center gap-1"
+                class="font-bold text-base-content/85 flex items-center gap-1.5"
               >
-                <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" /> Handle Fallbacks
+                <Lightbulb class="w-3.5 h-3.5 text-info shrink-0" /> Handle Fallbacks
               </span>
               <p
                 class="leading-relaxed opacity-80 text-base-content/80 font-medium"
@@ -552,11 +552,6 @@
               href="https://frstudios.co.ke"
               class="hover:text-primary transition-colors">FRstudios</a
             >.
-            <a
-              href="https://frstudios.co.ke/applications/strata"
-              class="hover:text-primary transition-colors"
-              >Want to support us?</a
-            >
           </p>
         </div>
       </div>

@@ -426,7 +426,8 @@
             class="flex items-start gap-1.5 text-[9px] text-base-content/50 leading-normal border-t border-base-300/40 pt-2 mt-0.5"
           >
             <Lightbulb class="w-3.5 h-3.5 text-info shrink-0 mt-0.5" />
-            <span>Click database tags to isolate node types in the canvas.</span>
+            <span>Click database tags to isolate node types in the canvas.</span
+            >
           </div>
         </div>
       </div>
@@ -435,7 +436,10 @@
     <!-- Coordinates (shown when dragging/hovering/selecting in diagram) -->
     {#if schemaState.activeCoordinates}
       <div class="h-3 w-px bg-base-300/80"></div>
-      <div class="flex items-center gap-1 opacity-80" title="Active Canvas Selection Coordinates">
+      <div
+        class="flex items-center gap-1 opacity-80"
+        title="Active Canvas Selection Coordinates"
+      >
         <Crosshair class="w-3 h-3 text-secondary" />
         <span
           >X: {Math.round(schemaState.activeCoordinates.x)} Y: {Math.round(
@@ -449,7 +453,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.1</span
+      title="Strata App Version">v3.1.2</span
     >
   </div>
 </div>

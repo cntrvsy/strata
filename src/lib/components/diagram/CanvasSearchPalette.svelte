@@ -14,6 +14,8 @@
     HardDrive,
     CornerDownLeft,
   } from "lucide-svelte";
+  import { fade, fly } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { schemaState } from "$lib/state";
   import { useSvelteFlow } from "@xyflow/svelte";
 
@@ -141,12 +143,15 @@
 
 {#if show}
   <div
-    class="fixed inset-0 z-50 flex items-start justify-center bg-neutral/60 backdrop-blur-md pt-20 p-4 animate-in fade-in duration-150"
+    class="fixed inset-0 z-50 flex items-start justify-center bg-neutral/60 backdrop-blur-md pt-20 p-4"
+    transition:fade={{ duration: 100 }}
     role="dialog"
     aria-modal="true"
   >
     <div
       class="bg-base-100 rounded-box w-full max-w-xl shadow-2xl border border-base-300 overflow-hidden flex flex-col"
+      in:fly={{ y: -4, duration: 120, easing: cubicOut }}
+      out:fade={{ duration: 80 }}
     >
       <!-- Search Input -->
       <div

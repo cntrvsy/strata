@@ -11,6 +11,8 @@
   import { valibot } from "sveltekit-superforms/adapters";
   import { columnSchema } from "$lib/schemas";
   import { schemaState } from "$lib/state";
+  import { slide } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
   import { X, Check, Lightbulb } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
@@ -58,7 +60,8 @@
 </script>
 
 <div
-  class="flex flex-col gap-5 p-1 animate-in fade-in slide-in-from-top-2 duration-300"
+  class="flex flex-col gap-5 p-1"
+  transition:slide={{ duration: 140, easing: cubicOut }}
 >
   <div
     class="flex items-center justify-between border-b border-base-300/60 pb-3 mb-1"
@@ -71,8 +74,9 @@
           : "Add Field"}
     </h4>
     <button
-      class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
+      class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 transition-colors"
       onclick={onComplete}
+      title="Close form"
     >
       <X class="w-3.5 h-3.5 opacity-60" />
     </button>
@@ -99,7 +103,7 @@
                   : target === "do"
                     ? "e.g. getValue() or getVal(id: number)"
                     : "e.g. id, email"}
-                class="input input-sm input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-xs font-mono"
+                class="input input-sm input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content hover:border-base-content/30 focus:input-primary transition-all text-xs font-mono"
               />
             </fieldset>
           {/snippet}
@@ -122,13 +126,13 @@
                   {...props}
                   bind:value={$formData.type}
                   placeholder="e.g. image/*, application/pdf"
-                  class="input input-sm input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-xs font-mono"
+                  class="input input-sm input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content hover:border-base-content/30 focus:input-primary transition-all text-xs font-mono"
                 />
               {:else}
                 <select
                   {...props}
                   bind:value={$formData.type}
-                  class="select select-sm select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-xs font-medium"
+                  class="select select-sm select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content hover:border-base-content/30 focus:select-primary transition-all text-xs font-medium"
                 >
                   {#if target === "kv"}
                     <option value="string">String</option>
@@ -151,29 +155,25 @@
                   {/if}
                 </select>
                 {#if target === "d1" && $formData.type === "timestamp"}
-                  <p
-                    class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium"
+                  <div
+                    class="flex items-start gap-1.5 p-2 bg-primary/5 rounded-field border border-primary/10 mt-1.5 text-[10px] text-primary font-medium"
                   >
-                    <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
-                    <strong>D1 Date:</strong>
-                    Generates
-                    <code
-                      >integer("{$formData.name || "field"}", &#123; mode:
-                      "timestamp" &#125;)</code
-                    > for native JS Date mapping.
-                  </p>
+                    <Lightbulb class="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <strong>D1 Date:</strong> Generates
+                      <code>integer("{$formData.name || "field"}", &#123; mode: "timestamp" &#125;)</code> for native JS Date mapping.
+                    </div>
+                  </div>
                 {:else if target === "d1" && $formData.type === "boolean_int"}
-                  <p
-                    class="text-[9.5px] text-primary mt-1 font-sans leading-tight font-medium"
+                  <div
+                    class="flex items-start gap-1.5 p-2 bg-primary/5 rounded-field border border-primary/10 mt-1.5 text-[10px] text-primary font-medium"
                   >
-                    <Lightbulb class="w-8 h-8 text-info/85 mt-0.5" />
-                    <strong>D1 Boolean:</strong>
-                    Generates
-                    <code
-                      >integer("{$formData.name || "field"}", &#123; mode:
-                      "boolean" &#125;)</code
-                    > for 0/1 boolean flags.
-                  </p>
+                    <Lightbulb class="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                    <div>
+                      <strong>D1 Boolean:</strong> Generates
+                      <code>integer("{$formData.name || "field"}", &#123; mode: "boolean" &#125;)</code> for 0/1 boolean flags.
+                    </div>
+                  </div>
                 {/if}
               {/if}
             </fieldset>
@@ -202,7 +202,7 @@
                 <select
                   {...props}
                   bind:value={$formData.referencesTable}
-                  class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px]"
+                  class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content hover:border-base-content/30 focus:select-primary transition-all text-[10px]"
                 >
                   <option value="">No Reference</option>
                   {#each potentialTargets as targetName}
@@ -220,7 +220,7 @@
                   {...props}
                   bind:value={$formData.referencesColumn}
                   disabled={!$formData.referencesTable}
-                  class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] disabled:opacity-50"
+                  class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content hover:border-base-content/30 focus:select-primary transition-all text-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">Select col...</option>
                   {#each potentialColumns as col}
@@ -236,7 +236,8 @@
 
     <button
       type="submit"
-      class="btn btn-primary btn-sm rounded-field w-full gap-2 mt-2 shadow-sm font-semibold"
+      class="btn btn-primary btn-sm rounded-field w-full gap-2 mt-2 shadow-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+      disabled={!$formData.name.trim()}
     >
       <Check class="w-3.5 h-3.5" />
       {target === "r2"
@@ -247,3 +248,4 @@
     </button>
   </form>
 </div>
+

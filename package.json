@@ -1,6 +1,6 @@
 {
   "name": "strata",
-  "version": "3.1.1",
+  "version": "3.1.2",
   "description": "Making it easier to visualize your cloudflare applications",
   "type": "module",
   "scripts": {
@@ -13,9 +13,14 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "build:appimage": "NO_STRIP=true APPIMAGE_EXTRACT_AND_RUN=1 tauri build"
+    "build:appimage": "NO_STRIP=true APPIMAGE_EXTRACT_AND_RUN=1 tauri build",
+    "tauri:windows:build": "tauri-windows-bundle build"
   },
   "license": "MIT",
+  "imports": {
+    "#lib": "./src/lib/index.ts",
+    "#lib/*": "./src/lib/*"
+  },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/lang-javascript": "^6.2.5",
@@ -49,18 +54,19 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.57.0",
+    "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^4.1.5",
     "jsdom": "^29.1.1",
-    "svelte": "^5.0.0",
+    "svelte": "^5.56.4",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "~5.6.2",
-    "vite": "^8.0.7",
-    "vitest": "^4.1.5"
+    "typescript": "^5.8.2",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.5",
+    "@choochmeque/tauri-windows-bundle": "^0.1.28"
   }
 }
