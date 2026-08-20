@@ -205,7 +205,7 @@ jobs:
       - name: build MSIX bundle
         env:
           MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
-        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64
+        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm
         
       - name: upload MSIX artifact
         uses: actions/upload-artifact@v4
