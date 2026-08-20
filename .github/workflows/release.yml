@@ -203,10 +203,20 @@ jobs:
           [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
         
       - name: build MSIX bundle
+        id: build_msix
+        continue-on-error: true
         env:
           MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
         run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm
-        
+
+      - name: dump AppxPackaging event log on failure
+        if: steps.build_msix.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Get-WinEvent -LogName "Microsoft-Windows-AppxPackaging/Operational" -MaxEvents 20 |
+            Format-List TimeCreated, Id, Message
+          exit 1
+
       - name: upload MSIX artifact
         uses: actions/upload-artifact@v4
         with:
