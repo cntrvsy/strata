@@ -196,20 +196,43 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
 
-      - name: write and inspect signing cert
+      - name: setup signing certificate
         shell: pwsh
         env:
+          MSIX_CERT_BASE64: ${{ secrets.MSIX_SIGNING_CERT_BASE64 }}
           MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
         run: |
-          $bytes = [System.Convert]::FromBase64String("${{ secrets.MSIX_SIGNING_CERT_BASE64 }}")
-          [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
+          if (-not [string]::IsNullOrWhiteSpace($env:MSIX_CERT_BASE64)) {
+            Write-Host "Found MSIX_SIGNING_CERT_BASE64 in repository secrets. Using provided certificate..."
+            $bytes = [System.Convert]::FromBase64String($env:MSIX_CERT_BASE64)
+            [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
+            $pfxPass = if ([string]::IsNullOrWhiteSpace($env:MSIX_PFX_PASSWORD)) { "" } else { $env:MSIX_PFX_PASSWORD }
+            "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Host "No MSIX_SIGNING_CERT_BASE64 secret configured."
+            Write-Host "Auto-generating self-signed Code Signing certificate (CN=FrStudios)..."
+            $pfxPass = "strata-auto-signed-msix"
+            $secPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
+            $cert = New-SelfSignedCertificate -Type Custom `
+              -Subject "CN=FrStudios" `
+              -KeyUsage DigitalSignature `
+              -FriendlyName "FrStudios Strata" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
+            Export-PfxCertificate -Cert $cert -FilePath "certificate.pfx" -Password $secPass | Out-Null
+            "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+          
           Copy-Item certificate.pfx src-tauri\certificate.pfx -Force
           Copy-Item certificate.pfx src-tauri\gen\windows\certificate.pfx -Force
-          $cert = Get-PfxCertificate -FilePath certificate.pfx -Password (ConvertTo-SecureString -String $env:MSIX_PFX_PASSWORD -AsPlainText -Force)
-          Write-Host "Cert Subject: $($cert.Subject)"
-          Write-Host "Has Private Key: $($cert.HasPrivateKey)"
-          Write-Host "Not After: $($cert.NotAfter)"
-          Write-Host "Enhanced Key Usages: $($cert.EnhancedKeyUsageList.FriendlyName -join ', ')"
+
+          $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
+          $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
+          Write-Host "Certificate Details:"
+          Write-Host "  Subject: $($loadedCert.Subject)"
+          Write-Host "  Has Private Key: $($loadedCert.HasPrivateKey)"
+          Write-Host "  Not After: $($loadedCert.NotAfter)"
+          Write-Host "  Enhanced Key Usages: $($loadedCert.EnhancedKeyUsageList.FriendlyName -join ', ')"
 
       - name: debug signing config
         shell: pwsh
@@ -230,14 +253,14 @@ jobs:
         id: build_msix
         continue-on-error: true
         env:
-          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
         run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm --verbose
 
       - name: debug signtool on failure
         if: steps.build_msix.outcome == 'failure'
         shell: pwsh
         env:
-          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
         run: |
           $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "x64" } | Select-Object -First 1 -ExpandProperty FullName
