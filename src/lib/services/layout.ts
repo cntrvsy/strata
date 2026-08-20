@@ -7,7 +7,7 @@
  */
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { Node, Edge } from '@xyflow/svelte';
-import { schemaState } from '$lib/state';
+import { schemaState } from '#lib/state';
 
 const elk = new ELK();
 

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { updateState, UpdateState } from '$lib/state/updateState.svelte';
-import { PlatformService } from '$lib/services/platform';
+import { updateState, UpdateState } from '#lib/state/updateState.svelte';
+import { PlatformService } from '#lib/services/platform';
 
-vi.mock('$lib/services/platform', () => ({
+vi.mock('#lib/services/platform', () => ({
 	PlatformService: {
 		isTauri: vi.fn(() => true),
 		listenEvent: vi.fn(async (event: string, cb: any) => () => {}),

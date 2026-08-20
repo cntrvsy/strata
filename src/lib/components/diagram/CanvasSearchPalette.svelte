@@ -16,7 +16,7 @@
   } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
   import { useSvelteFlow } from "@xyflow/svelte";
 
   let { show = $bindable(false) } = $props();

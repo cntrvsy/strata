@@ -17,7 +17,7 @@
     ShieldCheck,
     CircleArrowUp,
   } from "lucide-svelte";
-  import { updateState } from "$lib/state/updateState.svelte";
+  import { updateState } from "#lib/state/updateState.svelte";
   import { fade, scale } from "svelte/transition";
 
   function formatBytes(bytes: number): string {

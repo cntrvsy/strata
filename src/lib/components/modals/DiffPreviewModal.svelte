@@ -9,8 +9,8 @@
   import { X, Save, Undo, GitCompare, Lightbulb } from "lucide-svelte";
   import { fade, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { schemaState } from "$lib/state";
-  import { PlatformService } from "$lib/services/platform";
+  import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
   import { EditorView, basicSetup } from "codemirror";
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";

@@ -16,8 +16,8 @@ import {
   updateTableMetadataInSchema,
   resolveRelativePath,
   resolvePathAlias
-} from '$lib/parser';
-import { PlatformService } from '$lib/services/platform';
+} from '#lib/parser';
+import { PlatformService } from '#lib/services/platform';
 
 describe('Parser Core', () => {
   it('should parse simple D1 tables', () => {
@@ -870,11 +870,11 @@ describe('Mutation Logic', () => {
     it('should resolve custom path aliases using tsconfig paths', () => {
       const paths = {
         "@/*": ["./src/*"],
-        "$lib/*": ["./src/lib/*"]
+        "#lib/*": ["./src/lib/*"]
       };
       const tsconfigPath = '/projects/strata/tsconfig.json';
       
-      const resolvedLib = resolvePathAlias('$lib/db/schema', paths, tsconfigPath);
+      const resolvedLib = resolvePathAlias('#lib/db/schema', paths, tsconfigPath);
       expect(resolvedLib).toBe('/projects/strata/src/lib/db/schema.ts');
 
       const resolvedAt = resolvePathAlias('@/components/button', paths, tsconfigPath);

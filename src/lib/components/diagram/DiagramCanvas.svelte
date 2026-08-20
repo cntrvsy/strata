@@ -14,10 +14,10 @@
     ConnectionMode,
     useSvelteFlow,
   } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state";
-  import TableNode from "$lib/components/diagram/TableNode.svelte";
-  import RelationEdge from "$lib/components/diagram/RelationEdge.svelte";
-  import ContextMenu from "$lib/components/diagram/ContextMenu.svelte";
+  import { schemaState } from "#lib/state";
+  import TableNode from "#lib/components/diagram/TableNode.svelte";
+  import RelationEdge from "#lib/components/diagram/RelationEdge.svelte";
+  import ContextMenu from "#lib/components/diagram/ContextMenu.svelte";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;

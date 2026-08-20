@@ -25,8 +25,8 @@
     Copy,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
-  import { schemaState } from "$lib/state";
-  import { SAMPLE_TEMPLATES } from "$lib/mock";
+  import { schemaState } from "#lib/state";
+  import { SAMPLE_TEMPLATES } from "#lib/mock";
 
   let { show = $bindable(false) } = $props();
 

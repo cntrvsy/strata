@@ -6,14 +6,14 @@
  * Output: Synchronized database schema file state and Svelte Flow configurations.
  */
 import { type Node, type Edge } from '@xyflow/svelte';
-import { PlatformService } from "$lib/services/platform";
-import { createStateMachine } from "$lib/state/fsm";
-import { OperationQueue } from "$lib/state/queue";
+import { PlatformService } from "#lib/services/platform";
+import { createStateMachine } from "#lib/state/fsm";
+import { OperationQueue } from "#lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath } from "$lib/parser";
-import type { AuditIssue } from "$lib/parser/types";
-import { uiState } from "$lib/state/uiStore.svelte";
+import { resolveRelativePath } from "#lib/parser";
+import type { AuditIssue } from "#lib/parser/types";
+import { uiState } from "#lib/state/uiStore.svelte";
 
 
 /**
@@ -717,7 +717,7 @@ export class SchemaState {
 	 * Loads a starter schema template into zero-risk in-memory sandbox mode.
 	 */
 	async loadSandboxDemo(templateKey: string = 'fullstack') {
-		const { SAMPLE_TEMPLATES } = await import("$lib/mock");
+		const { SAMPLE_TEMPLATES } = await import("#lib/mock");
 		const template = SAMPLE_TEMPLATES[templateKey] || SAMPLE_TEMPLATES.fullstack;
 
 		this.isSandboxMode = true;

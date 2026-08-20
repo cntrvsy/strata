@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSchema } from '$lib/parser';
+import { parseSchema } from '#lib/parser';
 
 describe('Auth Schema & Multi-Dialect Discovery', () => {
   it('should find imported user and session tables from relative external files', () => {

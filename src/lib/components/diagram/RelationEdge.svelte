@@ -13,7 +13,7 @@
     getSmoothStepPath,
     type EdgeProps,
   } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
 
   let {
     id,

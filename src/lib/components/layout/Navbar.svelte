@@ -21,14 +21,14 @@
     Code,
     DraftingCompass,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
-  import { updateState } from "$lib/state/updateState.svelte";
+  import { schemaState } from "#lib/state";
+  import { updateState } from "#lib/state/updateState.svelte";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
-  import HelpModal from "$lib/components/modals/HelpModal.svelte";
-  import DiffPreviewModal from "$lib/components/modals/DiffPreviewModal.svelte";
-  import UpdateModal from "$lib/components/modals/UpdateModal.svelte";
-  import { arrangeLayout } from "$lib/services/layout";
+  import HelpModal from "#lib/components/modals/HelpModal.svelte";
+  import DiffPreviewModal from "#lib/components/modals/DiffPreviewModal.svelte";
+  import UpdateModal from "#lib/components/modals/UpdateModal.svelte";
+  import { arrangeLayout } from "#lib/services/layout";
 
   let showHelp = $state(false);
   let showDiffPreview = $state(false);

@@ -10,8 +10,8 @@
   import type { Connection } from "@xyflow/svelte";
   import { onMount } from "svelte";
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
-  import { schemaState } from "$lib/state";
-  import { PlatformService } from "$lib/services/platform";
+  import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
   import { ChevronLeft, ChevronRight } from "lucide-svelte";
 
   let codePane = $state<ReturnType<typeof Pane>>();
@@ -40,13 +40,13 @@
   });
 
   // --- Components ---
-  import DiagramCanvas from "$lib/components/diagram/DiagramCanvas.svelte";
-  import Inspector from "$lib/components/inspector/Inspector.svelte";
-  import Overlays from "$lib/components/layout/Overlays.svelte";
-  import NewEntityForm from "$lib/components/forms/NewEntityForm.svelte";
-  import CodeEditor from "$lib/components/editor/CodeEditor.svelte";
-  import ConnectionPickerModal from "$lib/components/modals/ConnectionPickerModal.svelte";
-  import CanvasSearchPalette from "$lib/components/diagram/CanvasSearchPalette.svelte";
+  import DiagramCanvas from "#lib/components/diagram/DiagramCanvas.svelte";
+  import Inspector from "#lib/components/inspector/Inspector.svelte";
+  import Overlays from "#lib/components/layout/Overlays.svelte";
+  import NewEntityForm from "#lib/components/forms/NewEntityForm.svelte";
+  import CodeEditor from "#lib/components/editor/CodeEditor.svelte";
+  import ConnectionPickerModal from "#lib/components/modals/ConnectionPickerModal.svelte";
+  import CanvasSearchPalette from "#lib/components/diagram/CanvasSearchPalette.svelte";
 
   let pendingConnection = $state<Connection | null>(null);
   let showSearchPalette = $state(false);

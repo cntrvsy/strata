@@ -1,12 +1,12 @@
 <script lang="ts">
 	import './layout.css';
-	import Titlebar from '$lib/components/layout/Titlebar.svelte';
-	import Navbar from '$lib/components/layout/Navbar.svelte';
-	import BottomBar from '$lib/components/layout/BottomBar.svelte';
+	import Titlebar from '#lib/components/layout/Titlebar.svelte';
+	import Navbar from '#lib/components/layout/Navbar.svelte';
+	import BottomBar from '#lib/components/layout/BottomBar.svelte';
 	import { onMount } from 'svelte';
 	import { Toaster } from 'svelte-sonner';
-	import { PlatformService } from '$lib/services/platform';
-	import { initDesktopEvents } from '$lib/services/desktopEvents';
+	import { PlatformService } from '#lib/services/platform';
+	import { initDesktopEvents } from '#lib/services/desktopEvents';
 
 	const { children } = $props();
 

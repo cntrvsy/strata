@@ -4,7 +4,7 @@
  * Summary: Reactive global state store using Svelte 5 Runes to manage application software update checks,
  * download progress, modal visibility, and app relaunch.
  */
-import { PlatformService } from "$lib/services/platform";
+import { PlatformService } from "#lib/services/platform";
 
 export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error';
 

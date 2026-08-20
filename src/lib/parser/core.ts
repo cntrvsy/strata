@@ -7,9 +7,9 @@
  */
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
-import type { ParseResult, AuditIssue } from '$lib/parser/types';
-import { createIsolatedProject } from '$lib/parser/project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from '$lib/parser/helpers';
+import type { ParseResult, AuditIssue } from '#lib/parser/types';
+import { createIsolatedProject } from '#lib/parser/project';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, extractStrataMetadata } from '#lib/parser/helpers';
 
 
 /**

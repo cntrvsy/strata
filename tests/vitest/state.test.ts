@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { schemaState } from '$lib/state';
+import { schemaState } from '#lib/state';
 
 // Mock localStorage globally
 const mockStorage: Record<string, string> = {};
@@ -242,8 +242,8 @@ describe('SchemaState FSM & Reactivity', () => {
   });
 });
 
-import { mutateTomlConfig, mutateJsonConfig } from '$lib/state/store.svelte';
-import { PlatformService } from '$lib/services/platform';
+import { mutateTomlConfig, mutateJsonConfig } from '#lib/state/store.svelte';
+import { PlatformService } from '#lib/services/platform';
 
 describe('Wrangler Configuration Sync', () => {
   it('should correctly add/remove KV, R2, DO to TOML configuration', () => {

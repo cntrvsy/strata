@@ -6,7 +6,7 @@
   Output: Dispatches the project config updates to schemaState and saves schema.ts.
 -->
 <script lang="ts">
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
   import { fade, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import {
@@ -22,7 +22,7 @@
     Sparkles,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
-  import { PlatformService } from "$lib/services/platform";
+  import { PlatformService } from "#lib/services/platform";
 
   let wranglerPath = $state(schemaState.wranglerPath || "");
   let isDetecting = $state(false);

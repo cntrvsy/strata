@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addForeignKeyToColumnInSchema, parseSchema } from '$lib/parser';
+import { addForeignKeyToColumnInSchema, parseSchema } from '#lib/parser';
 
 describe('Connection Safety Guard', () => {
 	it('should append .references() to an existing column definition without creating duplicates', () => {
