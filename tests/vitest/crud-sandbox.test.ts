@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { schemaState } from '$lib/state';
+import { schemaState } from '#lib/state';
 
 // Mock localStorage globally
 const mockStorage: Record<string, string> = {};

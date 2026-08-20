@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PlatformService } from '$lib/services/platform';
+import { PlatformService } from '#lib/services/platform';
 
 // Mock Tauri modules
 vi.mock('@tauri-apps/api/core', () => ({

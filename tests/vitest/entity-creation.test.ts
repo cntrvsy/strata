@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { addTableToSchema, sanitizeIdentifier } from '$lib/parser/mutators';
-import { parseSchema } from '$lib/parser';
+import { addTableToSchema, sanitizeIdentifier } from '#lib/parser/mutators';
+import { parseSchema } from '#lib/parser';
 
 describe('Entity Creation & Identifier Safeguards', () => {
 	it('should sanitize invalid JS identifiers (spaces, hyphens, leading numbers)', () => {

@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
   import { Pencil, Trash2, Check } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;

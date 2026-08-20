@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractStrataMetadata } from '$lib/parser/helpers';
-import { parseSchema } from '$lib/parser/core';
+import { extractStrataMetadata } from '#lib/parser/helpers';
+import { parseSchema } from '#lib/parser/core';
 
 describe('JSDoc Audit & Fault-Tolerant Engine', () => {
 	it('should auto-repair single quotes and trailing commas in @strata JSON', () => {

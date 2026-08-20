@@ -21,8 +21,8 @@
     CircleX,
     Crosshair,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
-  import { uiState } from "$lib/state/uiStore.svelte";
+  import { schemaState } from "#lib/state";
+  import { uiState } from "#lib/state/uiStore.svelte";
 
   const stats = $derived.by(() => {
     const nodes = schemaState.nodes;

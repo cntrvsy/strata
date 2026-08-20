@@ -7,7 +7,7 @@
 <script lang="ts">
   import { Pencil, Trash2, Check, SlidersHorizontal } from "lucide-svelte";
   import { toast } from "svelte-sonner";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;

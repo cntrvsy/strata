@@ -16,9 +16,9 @@
     ChevronDown,
     FileCode,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
-  import { PlatformService } from "$lib/services/platform";
-  import { SAMPLE_TEMPLATES } from "$lib/mock";
+  import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
+  import { SAMPLE_TEMPLATES } from "#lib/mock";
 
   /** Dismiss active element focus to cleanly close DaisyUI dropdowns */
   function closeDropdown() {

@@ -8,7 +8,7 @@
 <script lang="ts">
   import { TriangleAlert, X, Trash2 } from "lucide-svelte";
   import { fade } from "svelte/transition";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
 
   function handleConfirm() {
     const data = schemaState.confirmModalData;

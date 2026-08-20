@@ -9,10 +9,10 @@
   import CodeMirror from "svelte-codemirror-editor";
   import { javascript } from "@codemirror/lang-javascript";
   import { oneDark } from "@codemirror/theme-one-dark";
-  import { schemaState } from "$lib/state";
-  import { uiState } from "$lib/state/uiStore.svelte";
+  import { schemaState } from "#lib/state";
+  import { uiState } from "#lib/state/uiStore.svelte";
   import { FileCode, Target } from "lucide-svelte";
-  import { parseSchema } from "$lib/parser";
+  import { parseSchema } from "#lib/parser";
 
   let debounceTimer: any;
   let localValue = $state(schemaState.rawCode);

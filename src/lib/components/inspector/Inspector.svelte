@@ -20,10 +20,10 @@
     Lightbulb,
     TriangleAlert,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
-  import { uiState } from "$lib/state/uiStore.svelte";
-  import AddFieldForm from "$lib/components/forms/AddFieldForm.svelte";
-  import AddRelationForm from "$lib/components/forms/AddRelationForm.svelte";
+  import { schemaState } from "#lib/state";
+  import { uiState } from "#lib/state/uiStore.svelte";
+  import AddFieldForm from "#lib/components/forms/AddFieldForm.svelte";
+  import AddRelationForm from "#lib/components/forms/AddRelationForm.svelte";
   import D1Inspector from "./D1Inspector.svelte";
   import KVInspector from "./KVInspector.svelte";
   import DOInspector from "./DOInspector.svelte";

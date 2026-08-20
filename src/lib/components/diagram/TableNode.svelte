@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
   import {
     Database,
     Key,

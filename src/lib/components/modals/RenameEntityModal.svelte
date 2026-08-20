@@ -8,7 +8,7 @@
 <script lang="ts">
   import { FilePen, X } from "lucide-svelte";
   import { fade } from "svelte/transition";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
 
   let newName = $state(schemaState.renameEntityTargetId || "");
   let errorMsg = $state("");

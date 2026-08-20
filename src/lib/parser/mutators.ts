@@ -17,7 +17,7 @@ import {
 	resolveRelativePath,
 	extractStrataMetadata
 } from './helpers';
-import { PlatformService } from '$lib/services/platform';
+import { PlatformService } from '#lib/services/platform';
 
 /**
  * Updates a node's position inside its @strata JSDoc metadata.

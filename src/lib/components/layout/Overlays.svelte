@@ -16,12 +16,12 @@
     ArrowRight,
     Trash2,
   } from "lucide-svelte";
-  import { schemaState } from "$lib/state";
+  import { schemaState } from "#lib/state";
   import { toast } from "svelte-sonner";
-  import ProjectSettingsModal from "$lib/components/modals/ProjectSettingsModal.svelte";
-  import RenameEntityModal from "$lib/components/modals/RenameEntityModal.svelte";
-  import ConfirmModal from "$lib/components/modals/ConfirmModal.svelte";
-  import { SAMPLE_TEMPLATES } from "$lib/mock";
+  import ProjectSettingsModal from "#lib/components/modals/ProjectSettingsModal.svelte";
+  import RenameEntityModal from "#lib/components/modals/RenameEntityModal.svelte";
+  import ConfirmModal from "#lib/components/modals/ConfirmModal.svelte";
+  import { SAMPLE_TEMPLATES } from "#lib/mock";
 
   let activeTab = $state<"quickstart" | "templates" | "recents">("quickstart");
 

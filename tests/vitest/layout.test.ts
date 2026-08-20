@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { arrangeLayout } from '$lib/services/layout';
-import { schemaState } from '$lib/state';
+import { arrangeLayout } from '#lib/services/layout';
+import { schemaState } from '#lib/state';
 import type { Node, Edge } from '@xyflow/svelte';
 
 describe('Layout Service', () => {

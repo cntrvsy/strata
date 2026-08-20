@@ -9,8 +9,8 @@
   import * as Form from "formsnap";
   import { superForm, defaults } from "sveltekit-superforms";
   import { valibot } from "sveltekit-superforms/adapters";
-  import { relationSchema } from "$lib/schemas";
-  import { schemaState } from "$lib/state";
+  import { relationSchema } from "#lib/schemas";
+  import { schemaState } from "#lib/state";
   import { slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import { Link, X, Info, CircleCheck } from "lucide-svelte";
