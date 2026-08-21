@@ -213,11 +213,11 @@ jobs:
             "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           } else {
             Write-Host "No MSIX_SIGNING_CERT_BASE64 secret configured."
-            Write-Host "Auto-generating self-signed Code Signing certificate (CN=FrStudios)..."
+            Write-Host "Auto-generating self-signed Code Signing certificate (CN=2A6645F7-50D0-4D25-AF43-D299C49EA719)..."
             $pfxPass = "strata-auto-signed-msix"
             $secPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
             $cert = New-SelfSignedCertificate -Type Custom `
-              -Subject "CN=FrStudios" `
+              -Subject "CN=2A6645F7-50D0-4D25-AF43-D299C49EA719" `
               -KeyUsage DigitalSignature `
               -FriendlyName "FrStudios Strata" `
               -CertStoreLocation "Cert:\CurrentUser\My" `
