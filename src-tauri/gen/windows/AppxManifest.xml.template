@@ -14,7 +14,7 @@
     ProcessorArchitecture="{{ARCH}}" />
 
   <Properties>
-    <DisplayName>Strata: Visualize your drizzle &amp; cloudflare apps using JSDocs</DisplayName>
+    <DisplayName>Strata: Visualize your drizzle and cloudflare apps using JSDocs</DisplayName>
     <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -35,7 +35,7 @@
       EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Strata"
-        Description="Strata: Visualize your drizzle &amp; cloudflare apps using JSDocs"
+        Description="Strata: Visualize your drizzle and cloudflare apps using JSDocs"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
