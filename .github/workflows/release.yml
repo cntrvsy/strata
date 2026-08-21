@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
   CN_APPLICATION: "frstudios/strata"
 
@@ -226,54 +229,10 @@ jobs:
           Copy-Item certificate.pfx src-tauri\certificate.pfx -Force
           Copy-Item certificate.pfx src-tauri\gen\windows\certificate.pfx -Force
 
-          $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
-          $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
-          Write-Host "Certificate Details:"
-          Write-Host "  Subject: $($loadedCert.Subject)"
-          Write-Host "  Has Private Key: $($loadedCert.HasPrivateKey)"
-          Write-Host "  Not After: $($loadedCert.NotAfter)"
-          Write-Host "  Enhanced Key Usages: $($loadedCert.EnhancedKeyUsageList.FriendlyName -join ', ')"
-
-      - name: debug signing config
-        shell: pwsh
-        run: |
-          Write-Host "--- bundle.config.json ---"
-          Get-Content src-tauri\gen\windows\bundle.config.json
-          Write-Host "--- cert path candidates ---"
-          Write-Host "certificate.pfx: $(Test-Path certificate.pfx)"
-          Write-Host "src-tauri\certificate.pfx: $(Test-Path src-tauri\certificate.pfx)"
-          Write-Host "src-tauri\gen\windows\certificate.pfx: $(Test-Path src-tauri\gen\windows\certificate.pfx)"
-          Write-Host "--- stray thumbprint check ---"
-          Select-String -Path src-tauri\tauri.conf.json -Pattern "certificateThumbprint" -ErrorAction SilentlyContinue
-          if (Test-Path src-tauri\tauri.windows.conf.json) {
-            Select-String -Path src-tauri\tauri.windows.conf.json -Pattern "certificateThumbprint" -ErrorAction SilentlyContinue
-          }
-
       - name: build MSIX bundle
-        id: build_msix
-        continue-on-error: true
         env:
           MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
-        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm --verbose
-
-      - name: debug signtool on failure
-        if: steps.build_msix.outcome == 'failure'
-        shell: pwsh
-        env:
-          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
-        run: |
-          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1 -ExpandProperty FullName
-          Write-Host "Using signtool: $signtool"
-          $bundle = (Get-ChildItem -Path "src-tauri\target\msix\*.msixbundle" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          if ($bundle) {
-            Write-Host "Running verbose signtool on: $bundle"
-            & $signtool sign /debug /v /fd SHA256 /a /f certificate.pfx /p $env:MSIX_PFX_PASSWORD $bundle
-          } else {
-            Write-Host "No .msixbundle file found in src-tauri\target\msix\"
-            Get-ChildItem -Path "src-tauri\target" -Recurse -Depth 2
-          }
-          exit 1
+        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm
 
       - name: upload MSIX artifact
         uses: actions/upload-artifact@v4
