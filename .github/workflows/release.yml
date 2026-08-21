@@ -205,34 +205,81 @@ jobs:
           MSIX_CERT_BASE64: ${{ secrets.MSIX_SIGNING_CERT_BASE64 }}
           MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
         run: |
+          $expectedPublisher = "CN=2A6645F7-50D0-4D25-AF43-D299C49EA719"
+          $useProvidedCert = $false
+
           if (-not [string]::IsNullOrWhiteSpace($env:MSIX_CERT_BASE64)) {
-            Write-Host "Found MSIX_SIGNING_CERT_BASE64 in repository secrets. Using provided certificate..."
-            $bytes = [System.Convert]::FromBase64String($env:MSIX_CERT_BASE64)
-            [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
-            $pfxPass = if ([string]::IsNullOrWhiteSpace($env:MSIX_PFX_PASSWORD)) { "" } else { $env:MSIX_PFX_PASSWORD }
-            "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          } else {
-            Write-Host "No MSIX_SIGNING_CERT_BASE64 secret configured."
-            Write-Host "Auto-generating self-signed Code Signing certificate (CN=2A6645F7-50D0-4D25-AF43-D299C49EA719)..."
+            Write-Host "Found MSIX_SIGNING_CERT_BASE64 in repository secrets. Inspecting..."
+            try {
+              $bytes = [System.Convert]::FromBase64String($env:MSIX_CERT_BASE64)
+              [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
+              $pfxPass = if ([string]::IsNullOrWhiteSpace($env:MSIX_PFX_PASSWORD)) { "" } else { $env:MSIX_PFX_PASSWORD }
+              $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
+              $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
+              Write-Host "Secret Certificate Subject: $($loadedCert.Subject)"
+              if ($loadedCert.Subject -eq $expectedPublisher) {
+                Write-Host "Certificate subject matches publisher ID ($expectedPublisher). Using secret certificate."
+                $useProvidedCert = $true
+                "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              } else {
+                Write-Warning "Secret certificate Subject ($($loadedCert.Subject)) does not match publisher ID ($expectedPublisher)."
+                Write-Warning "Falling back to auto-generating a fresh certificate matching $expectedPublisher..."
+              }
+            } catch {
+              Write-Warning "Failed to load provided certificate: $_"
+              Write-Warning "Falling back to auto-generating a fresh certificate..."
+            }
+          }
+
+          if (-not $useProvidedCert) {
+            Write-Host "Generating self-signed Code Signing certificate ($expectedPublisher)..."
             $pfxPass = "strata-auto-signed-msix"
             $secPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
             $cert = New-SelfSignedCertificate -Type Custom `
-              -Subject "CN=2A6645F7-50D0-4D25-AF43-D299C49EA719" `
+              -Subject $expectedPublisher `
               -KeyUsage DigitalSignature `
               -FriendlyName "FrStudios Strata" `
               -CertStoreLocation "Cert:\CurrentUser\My" `
               -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
             Export-PfxCertificate -Cert $cert -FilePath "certificate.pfx" -Password $secPass | Out-Null
             "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+            $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
+            $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
+            Write-Host "Active Certificate Details:"
+            Write-Host "  Subject: $($loadedCert.Subject)"
+            Write-Host "  Has Private Key: $($loadedCert.HasPrivateKey)"
           }
           
           Copy-Item certificate.pfx src-tauri\certificate.pfx -Force
           Copy-Item certificate.pfx src-tauri\gen\windows\certificate.pfx -Force
 
       - name: build MSIX bundle
+        id: build_msix
+        continue-on-error: true
         env:
           MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
-        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm
+        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm --verbose
+
+      - name: debug signtool on failure
+        if: steps.build_msix.outcome == 'failure'
+        shell: pwsh
+        env:
+          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
+        run: |
+          Write-Host "=== Inspecting AppxPackaging Events ==="
+          Get-WinEvent -LogName "Microsoft-Windows-AppxPackaging/Operational" -MaxEvents 30 -ErrorAction SilentlyContinue |
+            Format-List TimeCreated, Id, Message
+          Write-Host "=== Running Verbose SignTool Diagnostics ==="
+          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1 -ExpandProperty FullName
+          Write-Host "Using signtool: $signtool"
+          $bundle = (Get-ChildItem -Path "src-tauri\target\msix\*.msixbundle" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if ($bundle) {
+            Write-Host "Testing SignTool on: $bundle"
+            & $signtool sign /debug /v /fd SHA256 /f certificate.pfx /p $env:MSIX_PFX_PASSWORD $bundle
+          }
+          exit 1
 
       - name: upload MSIX artifact
         uses: actions/upload-artifact@v4
