@@ -14,7 +14,7 @@
     ProcessorArchitecture="{{ARCH}}" />
 
   <Properties>
-    <DisplayName>Strata: Visualize your drizzle and cloudflare apps using JSDocs</DisplayName>
+    <DisplayName>Strata</DisplayName>
     <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
