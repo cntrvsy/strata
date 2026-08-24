@@ -7,7 +7,7 @@
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node } from '@xyflow/svelte';
-import { createIsolatedProject } from './project';
+import { createIsolatedProject, withSourceFile } from './project';
 import { 
 	findSqliteTableCall, 
 	isDrizzleTableDeclaration, 
@@ -15,7 +15,8 @@ import {
 	buildColumnChain, 
 	ensureImports,
 	resolveRelativePath,
-	extractStrataMetadata
+	extractStrataMetadata,
+	pluralizeIdentifier
 } from './helpers';
 import { PlatformService } from '#lib/services/platform';
 
@@ -384,7 +385,7 @@ export function addEdgeToSchema(code: string, source: string, target: string): s
 	ensureImports(sf, 'drizzle-orm', ['relations']);
 	const relationName = `${source}Relations`;
 	let relDecl = sf.getVariableDeclaration(relationName);
-	const relPropName = target.endsWith('s') ? target : `${target}s`;
+	const relPropName = pluralizeIdentifier(target);
 
 	if (!relDecl) {
 		sf.addVariableStatement({

@@ -242,80 +242,29 @@ describe('SchemaState FSM & Reactivity', () => {
   });
 });
 
-import { mutateTomlConfig, mutateJsonConfig } from '#lib/state/store.svelte';
+import { parseCleanJson } from '#lib/state/store.svelte';
 import { PlatformService } from '#lib/services/platform';
 
-describe('Wrangler Configuration Sync', () => {
-  it('should correctly add/remove KV, R2, DO to TOML configuration', () => {
-    const originalToml = `name = "my-worker"\n\n[[kv_namespaces]]\nbinding = "EXISTING_KV"\nid = "123"`;
+describe('JSONC Parser & Configuration', () => {
+  it('should safely parse JSONC with comments, trailing commas, and string literals containing commas and brackets', () => {
+    const jsoncContent = `
+      {
+        // Line comment
+        "name": "my-app",
+        /* Block comment */
+        "description": "hello, } world",
+        "nested": {
+          "items": [1, 2, 3, ],
+        },
+        "url": "https://example.com/api?a=1,2&b=3",
+      }
+    `;
 
-    // Add KV namespace
-    let mutated = mutateTomlConfig(originalToml, 'add', { type: 'kv', name: 'NEW_KV' });
-    expect(mutated).toContain('binding = "NEW_KV"');
-    expect(mutated).toContain('binding = "EXISTING_KV"');
-
-    // Add R2 bucket
-    mutated = mutateTomlConfig(mutated, 'add', { type: 'r2', name: 'MY_R2' });
-    expect(mutated).toContain('[[r2_buckets]]');
-    expect(mutated).toContain('bucket_name = "MY_R2"');
-
-    // Add DO binding
-    mutated = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
-    expect(mutated).toContain('[[durable_objects.bindings]]');
-    expect(mutated).toContain('class_name = "MyDOClass"');
-
-    // Add existing DO binding (should be idempotent)
-    const idempotent = mutateTomlConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyDOClass' } });
-    expect(idempotent).toBe(mutated);
-
-    // Remove KV namespace
-    const removedKv = mutateTomlConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
-    expect(removedKv).not.toContain('binding = "EXISTING_KV"');
-    expect(removedKv).toContain('binding = "NEW_KV"');
-
-    // Remove R2 bucket
-    const removedR2 = mutateTomlConfig(mutated, 'remove', { type: 'r2', name: 'MY_R2' });
-    expect(removedR2).not.toContain('MY_R2');
-
-    // Remove DO binding
-    const removedDo = mutateTomlConfig(mutated, 'remove', { type: 'do', name: 'MY_DO' });
-    expect(removedDo).not.toContain('MY_DO');
-  });
-
-  it('should correctly add/remove KV, R2, DO to JSON configuration', () => {
-    const originalJson = `{\n  "name": "my-worker",\n  "kv_namespaces": [\n    { "binding": "EXISTING_KV" }\n  ]\n}`;
-
-    // Add KV namespace
-    let mutated = mutateJsonConfig(originalJson, 'add', { type: 'kv', name: 'NEW_KV' });
-    const parsedAdd = JSON.parse(mutated);
-    expect(parsedAdd.kv_namespaces).toHaveLength(2);
-    expect(parsedAdd.kv_namespaces[1].binding).toBe('NEW_KV');
-
-    // Add R2 binding
-    mutated = mutateJsonConfig(mutated, 'add', { type: 'r2', name: 'MY_R2' });
-    const parsedR2 = JSON.parse(mutated);
-    expect(parsedR2.r2_buckets).toHaveLength(1);
-    expect(parsedR2.r2_buckets[0].binding).toBe('MY_R2');
-
-    // Add DO binding
-    mutated = mutateJsonConfig(mutated, 'add', { type: 'do', name: 'MY_DO', extra: { class: 'MyClass' } });
-    const parsedDO = JSON.parse(mutated);
-    expect(parsedDO.durable_objects.bindings[0].name).toBe('MY_DO');
-
-    // Remove KV namespace
-    const removedKv = mutateJsonConfig(mutated, 'remove', { type: 'kv', name: 'EXISTING_KV' });
-    const parsedRemoveKv = JSON.parse(removedKv);
-    expect(parsedRemoveKv.kv_namespaces).toHaveLength(1);
-
-    // Remove R2 binding
-    const removedR2 = mutateJsonConfig(mutated, 'remove', { type: 'r2', name: 'MY_R2' });
-    const parsedRemoveR2 = JSON.parse(removedR2);
-    expect(parsedRemoveR2.r2_buckets).toHaveLength(0);
-
-    // Remove DO binding
-    const removedDo = mutateJsonConfig(mutated, 'remove', { type: 'do', name: 'MY_DO' });
-    const parsedRemoveDo = JSON.parse(removedDo);
-    expect(parsedRemoveDo.durable_objects.bindings).toHaveLength(0);
+    const parsed = parseCleanJson(jsoncContent);
+    expect(parsed.name).toBe('my-app');
+    expect(parsed.description).toBe('hello, } world');
+    expect(parsed.nested.items).toEqual([1, 2, 3]);
+    expect(parsed.url).toBe('https://example.com/api?a=1,2&b=3');
   });
 
   it('should handle syncMissingWranglerBindings in sandbox and configured modes', async () => {
@@ -334,7 +283,7 @@ describe('Wrangler Configuration Sync', () => {
 
     const mutateSpy = vi.spyOn(PlatformService, 'mutateWranglerConfig').mockResolvedValue(undefined);
     await schemaState.syncMissingWranglerBindings();
-    expect(mutateSpy).toHaveBeenCalled();
+    expect(mutateSpy).toHaveBeenCalledWith('/project/wrangler.toml', 'add', 'kv', 'MY_KV', expect.anything());
     mutateSpy.mockRestore();
   });
 });

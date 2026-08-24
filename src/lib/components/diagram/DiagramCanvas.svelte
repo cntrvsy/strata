@@ -170,11 +170,9 @@
 </div>
 
 <style>
-  @reference "../../../routes/layout.css";
-
   :global(.svelte-flow) {
     --bg-color: transparent;
-    --text-color: oklch(var(--bc));
+    --text-color: var(--color-base-content, #fff);
     --node-border-radius: 12px;
     --node-box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
     -webkit-font-smoothing: antialiased;
@@ -183,11 +181,19 @@
   }
 
   :global(.svelte-flow__controls button) {
-    @apply border-base-300 hover:bg-base-200 transition-colors;
+    border-color: var(--color-base-300);
     fill: currentColor;
+    transition-property: color, background-color, border-color;
+    transition-duration: 150ms;
+  }
+
+  :global(.svelte-flow__controls button:hover) {
+    background-color: var(--color-base-200);
   }
 
   :global(.svelte-flow__minimap) {
-    @apply border-base-300 bg-base-100/80 backdrop-blur-md;
+    border-color: var(--color-base-300);
+    background-color: color-mix(in oklab, var(--color-base-100) 80%, transparent);
+    backdrop-filter: blur(12px);
   }
 </style>

@@ -138,7 +138,7 @@
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
       schemaState.saveToFile();
-    }, 1500);
+    }, 600);
   }
 
   /**
@@ -200,16 +200,6 @@
         unlistenFn = await PlatformService.listenEvent(
           "file-changed",
           async () => {
-            if (schemaState.ignoreNextWatch) {
-              schemaState.ignoreNextWatch = false;
-              return;
-            }
-            if (Date.now() - schemaState.lastWriteTime < 800) {
-              console.log(
-                "[Strata] Ignoring file watch event: recently written by UI",
-              );
-              return;
-            }
             if (
               schemaState.filePath &&
               (schemaState.machine.current === "IDLE" ||

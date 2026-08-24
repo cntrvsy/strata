@@ -9,15 +9,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [
     tailwindcss(),
-    sveltekit({
-      adapter: adapter({
-        fallback: "index.html",
-      }),
-      inspector: {
-        toggleButtonPos: "bottom-left",
-        showToggleButton: "always",
-      },
-    }),
+    sveltekit(),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

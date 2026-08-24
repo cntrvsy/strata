@@ -896,5 +896,47 @@ describe('Mutation Logic', () => {
       readSpy.mockRestore();
       writeSpy.mockRestore();
     });
+
+    it('should correctly pluralize English identifiers when generating Drizzle relations', () => {
+      const schemaCode = `
+        import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+        export const product = sqliteTable("product", { id: integer("id").primaryKey() });
+        export const category = sqliteTable("category", { id: integer("id").primaryKey() });
+        export const address = sqliteTable("address", { id: integer("id").primaryKey() });
+      `;
+
+      // 1. category -> categories
+      const withCategoryRel = addEdgeToSchema(schemaCode, 'product', 'category');
+      expect(withCategoryRel).toContain('categories: many(category)');
+
+      // 2. address -> addresses
+      const withAddressRel = addEdgeToSchema(schemaCode, 'product', 'address');
+      expect(withAddressRel).toContain('addresses: many(address)');
+    });
+
+    it('should parse modular schemas with barrel exports (export * and export { ... })', () => {
+      const rootCode = `
+        export * from "./users";
+        export { posts } from "./posts";
+      `;
+      const externalFiles = new Map<string, string>();
+      externalFiles.set('./users.ts', `
+        import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+        export const users = sqliteTable("users", { id: integer("id").primaryKey(), name: text("name") });
+      `);
+      externalFiles.set('./posts.ts', `
+        import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+        export const posts = sqliteTable("posts", { id: integer("id").primaryKey(), title: text("title") });
+        export const comments = sqliteTable("comments", { id: integer("id").primaryKey() });
+      `);
+
+      const result = parseSchema(rootCode, externalFiles);
+      expect(result.success).toBe(true);
+      expect(result.nodes.map(n => n.id)).toContain('users');
+      expect(result.nodes.map(n => n.id)).toContain('posts');
+      // comments was not in named export of posts
+      expect(result.nodes.map(n => n.id)).not.toContain('comments');
+    });
   });
 });
+
