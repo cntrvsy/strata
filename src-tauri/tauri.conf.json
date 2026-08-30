@@ -17,20 +17,7 @@
         "width": 1000,
         "height": 700,
         "decorations": false,
-        "visible": false,
-        "devtools": true
-      },
-      {
-        "label": "splashscreen",
-        "title": "Strata Loading...",
-        "url": "/splash.html",
-        "width": 400,
-        "height": 300,
-        "decorations": false,
-        "transparent": true,
-        "center": true,
-        "alwaysOnTop": true,
-        "resizable": false,
+        "visible": true,
         "devtools": true
       }
     ],

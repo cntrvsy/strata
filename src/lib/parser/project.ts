@@ -8,39 +8,27 @@
 import { Project, SourceFile } from 'ts-morph';
 
 /**
- * Creates a fresh, lightweight, isolated ts-morph Project and SourceFile context.
- * skipLoadingLibFiles is set to true to ensure fast instantiation times (< 5ms).
- */
-let sharedProject: Project | null = null;
-
-function getSharedProject(): Project {
-	if (!sharedProject) {
-		sharedProject = new Project({
-			useInMemoryFileSystem: true,
-			skipLoadingLibFiles: true
-		});
-	}
-	return sharedProject;
-}
-
-/**
- * Creates or updates a lightweight SourceFile in a cached ts-morph Project context.
- * Reuses the existing Project instance to eliminate compiler initialization overhead.
+ * Creates a fresh, lightweight, fully isolated in-memory ts-morph Project and SourceFile.
+ * skipLoadingLibFiles: true and useInMemoryFileSystem: true ensure instant instantiation (<2ms)
+ * while providing complete isolation across asynchronous parser calls to prevent forgotten node collisions.
  */
 export function createIsolatedProject(filename: string, code: string): { project: Project; sourceFile: SourceFile } {
-	const project = getSharedProject();
-	
-	// Clean up stale or temporary files left behind to prevent memory bloat and AST engine soft-locks
-	for (const sf of project.getSourceFiles()) {
-		const filePath = sf.getFilePath();
-		if (filePath.includes('temp_') || filePath.includes('dummy.ts') || filePath.endsWith(filename)) {
-			try {
-				project.removeSourceFile(sf);
-			} catch (e) {}
-		}
-	}
-
+	const project = new Project({
+		useInMemoryFileSystem: true,
+		skipLoadingLibFiles: true
+	});
 	const sourceFile = project.createSourceFile(filename, code, { overwrite: true });
 	return { project, sourceFile };
 }
 
+/**
+ * Executes an operation on a SourceFile within an isolated project context.
+ */
+export function withSourceFile<T>(
+	filename: string, 
+	code: string, 
+	fn: (sourceFile: SourceFile, project: Project) => T
+): T {
+	const { project, sourceFile } = createIsolatedProject(filename, code);
+	return fn(sourceFile, project);
+}

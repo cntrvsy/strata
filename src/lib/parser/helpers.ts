@@ -99,6 +99,24 @@ export function buildColumnChain(baseCallText: string, modifiers: ChainElement[]
 }
 
 /**
+ * Pluralizes an identifier name properly for Drizzle relation property generation.
+ * Handles common English irregulars and suffixes (e.g. category -> categories, address -> addresses).
+ */
+export function pluralizeIdentifier(name: string): string {
+	if (!name) return name;
+	if (name.endsWith('y') && !/[aeiou]y$/i.test(name)) {
+		return name.slice(0, -1) + 'ies';
+	}
+	if (/(ss|x|z|ch|sh)$/i.test(name)) {
+		return name + 'es';
+	}
+	if (name.endsWith('s')) {
+		return name;
+	}
+	return name + 's';
+}
+
+/**
  * Ensures required imports exist in a file.
  */
 export function ensureImports(sf: SourceFile, module: string, names: string[]) {

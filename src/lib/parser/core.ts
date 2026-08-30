@@ -24,11 +24,22 @@ export function wrapCode(code: string) {
  */
 export function getMapFileContent(map: Map<string, string> | undefined, rawPath: string | undefined): string | undefined {
 	if (!map || !rawPath) return undefined;
-	if (map.has(rawPath)) return map.get(rawPath);
-	const clean = rawPath.replace(/^\.\//, '');
-	if (map.has(clean)) return map.get(clean);
-	const dotSlash = './' + clean;
-	if (map.has(dotSlash)) return map.get(dotSlash);
+	const withExt = rawPath.endsWith('.ts') ? rawPath : rawPath + '.ts';
+	const withoutExt = rawPath.endsWith('.ts') ? rawPath.slice(0, -3) : rawPath;
+
+	const candidates = [
+		rawPath,
+		withExt,
+		withoutExt,
+		withExt.replace(/^\.\//, ''),
+		withoutExt.replace(/^\.\//, ''),
+		'./' + withExt.replace(/^\.\//, ''),
+		'./' + withoutExt.replace(/^\.\//, '')
+	];
+
+	for (const candidate of candidates) {
+		if (map.has(candidate)) return map.get(candidate);
+	}
 	return undefined;
 }
 
@@ -71,6 +82,32 @@ export function parseSchema(
 			if (isExternal) {
 				const names = imp.getNamedImports().map(ni => ni.getAliasNode()?.getText() || ni.getName());
 				// Handle named imports or default/namespace imports
+				externalImports.push({
+					filePath: resolvedPath,
+					importNames: names.length > 0 ? names : ['*']
+				});
+			}
+		}
+
+		// Find all relative or aliased export declarations (e.g. export * from './users'; export { a, b } from './posts')
+		const exportDecls = sf.getExportDeclarations();
+		for (const exp of exportDecls) {
+			const specifier = exp.getModuleSpecifierValue();
+			if (!specifier) continue;
+			let isExternal = specifier.startsWith('.') || specifier.startsWith('..');
+			let resolvedPath = specifier;
+
+			if (!isExternal && paths && tsconfigPath) {
+				const resolved = resolvePathAlias(specifier, paths, tsconfigPath);
+				if (resolved) {
+					isExternal = true;
+					resolvedPath = resolved;
+				}
+			}
+
+			if (isExternal) {
+				const namedExports = exp.getNamedExports();
+				const names = namedExports.map(ne => ne.getAliasNode()?.getText() || ne.getName());
 				externalImports.push({
 					filePath: resolvedPath,
 					importNames: names.length > 0 ? names : ['*']
@@ -325,8 +362,13 @@ export function parseSchema(
 				if (externalPaths.includes(filePath)) {
 					const isSchemaTarget = nodes.some(n => (n.data as any)?.strata?.target === 'schema' && (n.data as any)?.strata?.path === filePath)
 						|| Array.from(tableDeclarations.values()).some(d => {
-							const strata = d.getVariableStatement()?.getJsDocs()[0]?.getText();
-							return strata?.includes('"target": "schema"') && strata?.includes(filePath);
+							if (d.wasForgotten()) return false;
+							try {
+								const strata = d.getVariableStatement()?.getJsDocs()[0]?.getText();
+								return strata?.includes('"target": "schema"') && strata?.includes(filePath);
+							} catch {
+								return false;
+							}
 						});
 					
 					if (isSchemaTarget) {
@@ -383,41 +425,47 @@ export function parseSchema(
 		
 		// Extract Drizzle-native relations
 		for (const [tableName, decl] of tableDeclarations) {
-			const initializer = decl.getInitializer()?.getText() || '';
-			if (initializer.includes('sqliteTable')) {
-				extractRelations(tableName, decl, edges, sf);
-			}
+			if (decl.wasForgotten()) continue;
+			try {
+				const initializer = decl.getInitializer()?.getText() || '';
+				if (initializer.includes('sqliteTable')) {
+					extractRelations(tableName, decl, edges, sf);
+				}
+			} catch {}
 		}
 
 		// Validation: Ensure all synthetic relations point to existing targets
 		const tableNames = new Set(nodes.map(n => n.id));
 		for (const [tableName, decl] of tableDeclarations) {
-			const statement = decl.getVariableStatement();
-			const jsDocs = statement?.getJsDocs() || [];
-			const lineNum = statement?.getStartLineNumber() || 1;
-			for (const doc of jsDocs) {
-				const strataExtracted = extractStrataMetadata(doc.getText());
-				if (strataExtracted?.data?.relations && Array.isArray(strataExtracted.data.relations)) {
-					for (const rel of strataExtracted.data.relations) {
-						if (!tableNames.has(rel.to)) {
-							const msg = `Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`;
-							warnings.push(msg);
-							auditIssues.push({
-								id: `audit_dangling_${tableName}_${rel.to}`,
-								severity: 'warning',
-								code: 'DANGLING_RELATION',
-								message: msg,
-								symbolName: tableName,
-								line: lineNum,
-								suggestedFix: {
-									label: 'Remove Dangling Relation',
-									action: 'auto_repair_jsdoc'
-								}
-							});
+			if (decl.wasForgotten()) continue;
+			try {
+				const statement = decl.getVariableStatement();
+				const jsDocs = statement?.getJsDocs() || [];
+				const lineNum = statement?.getStartLineNumber() || 1;
+				for (const doc of jsDocs) {
+					const strataExtracted = extractStrataMetadata(doc.getText());
+					if (strataExtracted?.data?.relations && Array.isArray(strataExtracted.data.relations)) {
+						for (const rel of strataExtracted.data.relations) {
+							if (!tableNames.has(rel.to)) {
+								const msg = `Synthetic relationship in "${tableName}" points to missing target "${rel.to}"`;
+								warnings.push(msg);
+								auditIssues.push({
+									id: `audit_dangling_${tableName}_${rel.to}`,
+									severity: 'warning',
+									code: 'DANGLING_RELATION',
+									message: msg,
+									symbolName: tableName,
+									line: lineNum,
+									suggestedFix: {
+										label: 'Remove Dangling Relation',
+										action: 'auto_repair_jsdoc'
+									}
+								});
+							}
 						}
 					}
 				}
-			}
+			} catch {}
 		}
 
 		// Cleanup: Ensure all edges point to existing nodes
@@ -458,9 +506,12 @@ export function parseSchema(
 		};
 
 	} finally {
-		for (const sf of tempSourceFiles) {
+		try {
+			project.removeSourceFile(sf);
+		} catch {}
+		for (const tempSf of tempSourceFiles) {
 			try {
-				project.removeSourceFile(sf);
+				project.removeSourceFile(tempSf);
 			} catch (err) {
 				console.warn('Failed to cleanup temporary source file:', err);
 			}

@@ -18,9 +18,10 @@ import { uiState } from "#lib/state/uiStore.svelte";
 
 /**
  * State-machine JSONC parser.
- * Strips line comments (//) and block comments (/* *\/) while preserving string literals (e.g. URLs).
+ * Strips line comments (//) and block comments (/* *\/) and trailing commas safely
+ * while preserving string literals (e.g. URLs, description text with commas).
  */
-function parseCleanJson(text: string): any {
+export function parseCleanJson(text: string): any {
 	let out = '';
 	let inString = false;
 	let quoteChar = '';
@@ -28,6 +29,7 @@ function parseCleanJson(text: string): any {
 	while (i < text.length) {
 		const char = text[i];
 		const nextChar = text[i + 1];
+
 		if (inString) {
 			out += char;
 			if (char === '\\') {
@@ -41,6 +43,8 @@ function parseCleanJson(text: string): any {
 			i++;
 			continue;
 		}
+
+		// String boundary
 		if (char === '"' || char === "'") {
 			inString = true;
 			quoteChar = char;
@@ -48,22 +52,60 @@ function parseCleanJson(text: string): any {
 			i++;
 			continue;
 		}
+
+		// Line comment //
 		if (char === '/' && nextChar === '/') {
 			i += 2;
 			while (i < text.length && text[i] !== '\n' && text[i] !== '\r') i++;
 			continue;
 		}
+
+		// Block comment /* */
 		if (char === '/' && nextChar === '*') {
 			i += 2;
 			while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
 			i += 2;
 			continue;
 		}
+
+		// Trailing comma check outside strings: if comma is followed only by whitespace/comments before } or ], skip it
+		if (char === ',') {
+			let lookAhead = i + 1;
+			let isTrailing = false;
+			while (lookAhead < text.length) {
+				const laChar = text[lookAhead];
+				const laNext = text[lookAhead + 1];
+				if (laChar === ' ' || laChar === '\t' || laChar === '\n' || laChar === '\r') {
+					lookAhead++;
+					continue;
+				}
+				if (laChar === '/' && laNext === '/') {
+					lookAhead += 2;
+					while (lookAhead < text.length && text[lookAhead] !== '\n' && text[lookAhead] !== '\r') lookAhead++;
+					continue;
+				}
+				if (laChar === '/' && laNext === '*') {
+					lookAhead += 2;
+					while (lookAhead < text.length && !(text[lookAhead] === '*' && text[lookAhead + 1] === '/')) lookAhead++;
+					lookAhead += 2;
+					continue;
+				}
+				if (laChar === '}' || laChar === ']') {
+					isTrailing = true;
+				}
+				break;
+			}
+			if (isTrailing) {
+				i++;
+				continue;
+			}
+		}
+
 		out += char;
 		i++;
 	}
-	const cleanCommas = out.replace(/,(\s*[}\]])/g, '$1');
-	return JSON.parse(cleanCommas);
+
+	return JSON.parse(out);
 }
 
 /**
@@ -1168,117 +1210,8 @@ export class SchemaState {
 	}
 }
 
-/**
- * Surgically mutates TOML config string, preserving comments and format.
- */
-export function mutateTomlConfig(content: string, action: 'add' | 'remove', binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }): string {
-	const blocks = content.split(/(?=\[\[)/);
-	
-	if (action === 'remove') {
-		const filteredBlocks = blocks.filter(block => {
-			const trimmed = block.trim();
-			if (!trimmed.startsWith('[[')) return true;
-			
-			const lines = trimmed.split('\n');
-			const header = lines[0].trim();
-			
-			if (binding.type === 'kv' && header.startsWith('[[kv_namespaces]]')) {
-				return !lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)));
-			}
-			if (binding.type === 'r2' && header.startsWith('[[r2_buckets]]')) {
-				return !lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)));
-			}
-			if (binding.type === 'do' && header.startsWith('[[durable_objects.bindings]]')) {
-				return !lines.some(line => line.match(new RegExp(`name\\s*=\\s*["']${binding.name}["']`)));
-			}
-			return true;
-		});
-		return filteredBlocks.join('');
-	} else {
-		let exists = false;
-		for (const block of blocks) {
-			const trimmed = block.trim();
-			if (!trimmed.startsWith('[[')) continue;
-			const lines = trimmed.split('\n');
-			const header = lines[0].trim();
-			
-			if (binding.type === 'kv' && header.startsWith('[[kv_namespaces]]')) {
-				if (lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)))) {
-					exists = true;
-					break;
-				}
-			}
-			if (binding.type === 'r2' && header.startsWith('[[r2_buckets]]')) {
-				if (lines.some(line => line.match(new RegExp(`binding\\s*=\\s*["']${binding.name}["']`)))) {
-					exists = true;
-					break;
-				}
-			}
-			if (binding.type === 'do' && header.startsWith('[[durable_objects.bindings]]')) {
-				if (lines.some(line => line.match(new RegExp(`name\\s*=\\s*["']${binding.name}["']`)))) {
-					exists = true;
-					break;
-				}
-			}
-		}
-		
-		if (exists) return content;
-		
-		let appendText = '';
-		if (binding.type === 'kv') {
-			const idVal = binding.extra?.id || "placeholder-id";
-			appendText = `\n\n[[kv_namespaces]]\nbinding = "${binding.name}"\nid = "${idVal}"`;
-		} else if (binding.type === 'r2') {
-			const bucketVal = binding.extra?.bucket_name || binding.name;
-			appendText = `\n\n[[r2_buckets]]\nbinding = "${binding.name}"\nbucket_name = "${bucketVal}"`;
-		} else if (binding.type === 'do') {
-			const className = binding.extra?.class || binding.name;
-			appendText = `\n\n[[durable_objects.bindings]]\nname = "${binding.name}"\nclass_name = "${className}"`;
-		}
-		return content.trimEnd() + appendText + '\n';
-	}
-}
-
-/**
- * Mutates JSON/JSONC config string by parsing and regenerating formatting.
- */
-export function mutateJsonConfig(content: string, action: 'add' | 'remove', binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }): string {
-	const data = parseCleanJson(content);
-	
-	if (action === 'remove') {
-		if (binding.type === 'kv' && Array.isArray(data.kv_namespaces)) {
-			data.kv_namespaces = data.kv_namespaces.filter((kv: any) => kv?.binding !== binding.name);
-		} else if (binding.type === 'r2' && Array.isArray(data.r2_buckets)) {
-			data.r2_buckets = data.r2_buckets.filter((r2: any) => r2?.binding !== binding.name);
-		} else if (binding.type === 'do' && data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
-			data.durable_objects.bindings = data.durable_objects.bindings.filter((dobj: any) => dobj?.name !== binding.name);
-		}
-	} else {
-		if (binding.type === 'kv') {
-			if (!Array.isArray(data.kv_namespaces)) data.kv_namespaces = [];
-			if (!data.kv_namespaces.some((kv: any) => kv?.binding === binding.name)) {
-				const idVal = binding.extra?.id || "placeholder-id";
-				data.kv_namespaces.push({ binding: binding.name, id: idVal });
-			}
-		} else if (binding.type === 'r2') {
-			if (!Array.isArray(data.r2_buckets)) data.r2_buckets = [];
-			if (!data.r2_buckets.some((r2: any) => r2?.binding === binding.name)) {
-				const bucketVal = binding.extra?.bucket_name || binding.name;
-				data.r2_buckets.push({ binding: binding.name, bucket_name: bucketVal });
-			}
-		} else if (binding.type === 'do') {
-			if (!data.durable_objects) data.durable_objects = {};
-			if (!Array.isArray(data.durable_objects.bindings)) data.durable_objects.bindings = [];
-			if (!data.durable_objects.bindings.some((dobj: any) => dobj?.name === binding.name)) {
-				const className = binding.extra?.class || binding.name;
-				data.durable_objects.bindings.push({ name: binding.name, class_name: className });
-			}
-		}
-	}
-	return JSON.stringify(data, null, 2);
-}
-
 export { uiState };
+
 
 
 

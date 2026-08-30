@@ -11,12 +11,12 @@ export default defineConfig(async () => ({
     tailwindcss(),
     sveltekit({
       adapter: adapter({
-        fallback: "index.html",
+        fallback: "index.html"
       }),
-      inspector: {
-        toggleButtonPos: "bottom-left",
-        showToggleButton: "always",
-      },
+      alias: {
+        "#lib": "./src/lib",
+        "#lib/*": "./src/lib/*"
+      }
     }),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

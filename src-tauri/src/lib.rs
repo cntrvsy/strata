@@ -84,16 +84,6 @@ async fn mutate_wrangler_config(
         .await
 }
 
-#[tauri::command]
-async fn close_splashscreen(app: tauri::AppHandle) {
-    if let Some(splashscreen) = app.get_webview_window("splashscreen") {
-        let _ = splashscreen.close();
-    }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.show();
-    }
-}
-
 #[cfg(target_os = "linux")]
 fn appimage_wayland_preload_fix() {
     use std::os::unix::process::CommandExt;
@@ -198,8 +188,7 @@ pub fn run() {
             watch_file,
             read_schema_file,
             write_schema_file,
-            mutate_wrangler_config,
-            close_splashscreen
+            mutate_wrangler_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
