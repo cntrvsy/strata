@@ -1291,7 +1291,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
         class="px-8 py-5 bg-base-200/50 flex items-center justify-between border-t border-base-200"
       >
         <p class="text-[10px] font-bold opacity-30 tracking-wider font-mono">
-          DESIGNED FOR DRIZZLE ORM + CLOUDFLARE BINDINGS ➔ ZERO LOCK-IN
+          DESIGNED FOR DRIZZLE ORM + CLOUDFLARE BINDINGS
         </p>
         <button
           class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold transition-all active:scale-95"

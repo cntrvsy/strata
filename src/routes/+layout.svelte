@@ -5,25 +5,12 @@
 	import BottomBar from '#lib/components/layout/BottomBar.svelte';
 	import { onMount } from 'svelte';
 	import { Toaster } from 'svelte-sonner';
-	import { PlatformService } from '#lib/services/platform';
 	import { initDesktopEvents } from '#lib/services/desktopEvents';
 
 	const { children } = $props();
 
 	onMount(() => {
 		const cleanupDesktop = initDesktopEvents();
-
-		if (PlatformService.isTauri()) {
-			import('@tauri-apps/api/core')
-				.then(({ invoke }) => {
-					invoke('close_splashscreen').catch((err) => {
-						console.warn('[Strata] Splashscreen close failed:', err);
-					});
-				})
-				.catch((err) => {
-					console.warn('[Strata] Tauri APIs not found (running in browser/test):', err);
-				});
-		}
 
 		return () => {
 			cleanupDesktop();
