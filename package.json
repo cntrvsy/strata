@@ -1,6 +1,6 @@
 {
   "name": "Strata - Drizzle and D1 Studio",
-  "version": "3.1.4",
+  "version": "3.1.5",
   "description": "Making it easier to visualize your cloudflare applications",
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "build:appimage": "NO_STRIP=true APPIMAGE_EXTRACT_AND_RUN=1 tauri build",
-    "tauri:windows:build": "tauri-windows-bundle build"
+    "tauri:windows:build": "powershell -ExecutionPolicy Bypass -File ./build-msix.ps1"
   },
   "license": "MIT",
   "imports": {

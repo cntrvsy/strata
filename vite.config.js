@@ -1,30 +1,17 @@
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
-import adapter from "@sveltejs/adapter-static";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig({
   plugins: [
     tailwindcss(),
-    sveltekit({
-      adapter: adapter({
-        fallback: "index.html"
-      }),
-      alias: {
-        "#lib": "./src/lib",
-        "#lib/*": "./src/lib/*"
-      }
-    }),
+    sveltekit(),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
     strictPort: true,
@@ -32,7 +19,6 @@ export default defineConfig(async () => ({
     cors: { origin: "*" },
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri` and mock schemas to prevent reloads on save
       ignored: ["**/src-tauri/**", "**/src/lib/mock/**"]
     }
   },
@@ -41,4 +27,4 @@ export default defineConfig(async () => ({
     globals: true,
     environment: 'jsdom',
   }
-}));
+});
