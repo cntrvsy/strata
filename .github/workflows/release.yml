@@ -81,7 +81,7 @@ jobs:
           api-key: ${{ secrets.CN_API_KEY }}
 
   build-windows:
-    name: Build MSI (Store + CrabNebula fallback) & upload to CrabNebula
+    name: Build MSI & upload to CrabNebula
     needs: draft
     runs-on: windows-latest
     steps:
@@ -104,11 +104,6 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
 
-      # Same signing identity as Linux: this MSI is the exact artifact submitted to the
-      # Microsoft Store, and ALSO the one sold directly via CrabNebula/your webpage if the
-      # Store rejects it or as an ongoing alternative channel — that copy has no storefront
-      # managing updates for it, so it needs the updater wired in same as Linux.
-      # Offline WebView2 installer mode is required either way for Store submission.
       - name: build MSI
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -118,9 +113,6 @@ jobs:
           --features updater
           --config '{"bundle":{"targets":["msi"],"createUpdaterArtifacts":true,"windows":{"webviewInstallMode":{"type":"offlineInstaller"}}}}'
 
-      # No rename, no `path:` override — same reasoning as the Linux job:
-      # `cn` pairs the .msi with its auto-generated .zip/.sig sidecar by
-      # filename; renaming to strata.msi would orphan it.
       - name: upload MSI to CrabNebula
         uses: crabnebula-dev/cloud-release@v0
         with:
@@ -165,135 +157,11 @@ jobs:
           --features updater
           --config '{"bundle":{"targets":["dmg"],"createUpdaterArtifacts":true}}'
 
-      # No rename, no `path:` override — `cn` pairs the .dmg with its auto-generated .app.tar.gz/.sig
-      # sidecar by filename; renaming would orphan it.
       - name: upload macOS DMG to CrabNebula
         uses: crabnebula-dev/cloud-release@v0
         with:
           command: release upload ${{ env.CN_APPLICATION }} --framework tauri
           api-key: ${{ secrets.CN_API_KEY }}
-
-  build-msix:
-    name: Build MSIX bundle & upload artifact
-    needs: draft
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: "npm"
-          
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> src-tauri/target"
-          
-      - name: install frontend dependencies
-        run: npm ci
-
-      - name: setup signing certificate
-        shell: pwsh
-        env:
-          MSIX_CERT_BASE64: ${{ secrets.MSIX_SIGNING_CERT_BASE64 }}
-          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
-        run: |
-          $expectedPublisher = "CN=2A6645F7-50D0-4D25-AF43-D299C49EA719"
-          $useProvidedCert = $false
-
-          if (-not [string]::IsNullOrWhiteSpace($env:MSIX_CERT_BASE64)) {
-            Write-Host "Found MSIX_SIGNING_CERT_BASE64 in repository secrets. Inspecting..."
-            try {
-              $bytes = [System.Convert]::FromBase64String($env:MSIX_CERT_BASE64)
-              [IO.File]::WriteAllBytes("certificate.pfx", $bytes)
-              $pfxPass = if ([string]::IsNullOrWhiteSpace($env:MSIX_PFX_PASSWORD)) { "" } else { $env:MSIX_PFX_PASSWORD }
-              $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
-              $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
-              Write-Host "Secret Certificate Subject: $($loadedCert.Subject)"
-              if ($loadedCert.Subject -eq $expectedPublisher) {
-                Write-Host "Certificate subject matches publisher ID ($expectedPublisher). Using secret certificate."
-                $useProvidedCert = $true
-                "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-              } else {
-                Write-Warning "Secret certificate Subject ($($loadedCert.Subject)) does not match publisher ID ($expectedPublisher)."
-                Write-Warning "Falling back to auto-generating a fresh certificate matching $expectedPublisher..."
-              }
-            } catch {
-              Write-Warning "Failed to load provided certificate: $_"
-              Write-Warning "Falling back to auto-generating a fresh certificate..."
-            }
-          }
-
-          if (-not $useProvidedCert) {
-            Write-Host "Generating self-signed Code Signing certificate ($expectedPublisher)..."
-            $pfxPass = "strata-auto-signed-msix"
-            $secPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
-            $cert = New-SelfSignedCertificate -Type Custom `
-              -Subject $expectedPublisher `
-              -KeyUsage DigitalSignature `
-              -FriendlyName "FrStudios Strata" `
-              -CertStoreLocation "Cert:\CurrentUser\My" `
-              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
-            Export-PfxCertificate -Cert $cert -FilePath "certificate.pfx" -Password $secPass | Out-Null
-            "MSIX_PFX_PASSWORD=$pfxPass" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-            $inspectPass = ConvertTo-SecureString -String $pfxPass -AsPlainText -Force
-            $loadedCert = Get-PfxCertificate -FilePath certificate.pfx -Password $inspectPass
-            Write-Host "Active Certificate Details:"
-            Write-Host "  Subject: $($loadedCert.Subject)"
-            Write-Host "  Has Private Key: $($loadedCert.HasPrivateKey)"
-          }
-          
-          Copy-Item certificate.pfx src-tauri\certificate.pfx -Force
-          Copy-Item certificate.pfx src-tauri\gen\windows\certificate.pfx -Force
-
-      - name: build MSIX bundle
-        id: build_msix
-        continue-on-error: true
-        env:
-          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
-        run: npx @choochmeque/tauri-windows-bundle build --arch x64,arm64 --runner npm --verbose
-
-      - name: debug signtool on failure
-        if: steps.build_msix.outcome == 'failure'
-        shell: pwsh
-        env:
-          MSIX_PFX_PASSWORD: ${{ env.MSIX_PFX_PASSWORD }}
-        run: |
-          Write-Host "=== Inspecting AppxPackaging Events ==="
-          Get-WinEvent -LogName "Microsoft-Windows-AppxPackaging/Operational" -MaxEvents 30 -ErrorAction SilentlyContinue |
-            Format-List TimeCreated, Id, Message
-          Write-Host "=== Running Verbose SignTool Diagnostics ==="
-          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1 -ExpandProperty FullName
-          Write-Host "Using signtool: $signtool"
-          $bundle = (Get-ChildItem -Path "src-tauri\target\msix\*.msixbundle" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          if ($bundle) {
-            Write-Host "Testing SignTool on: $bundle"
-            & $signtool sign /debug /v /fd SHA256 /f certificate.pfx /p $env:MSIX_PFX_PASSWORD $bundle
-          }
-          exit 1
-
-      - name: upload MSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: msix-bundle
-          path: src-tauri/target/msix/*.msixbundle
-
-      - name: upload MSIX to GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: src-tauri/target/msix/*.msixbundle
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish CrabNebula release
