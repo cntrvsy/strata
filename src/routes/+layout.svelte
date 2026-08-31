@@ -18,7 +18,7 @@
 	});
 </script>
 
-<div class="h-dvh w-full overflow-hidden flex flex-col">
+<div class="h-dvh w-full overflow-hidden overscroll-none flex flex-col">
 	<Toaster
 		theme="dark"
 		position="bottom-right"

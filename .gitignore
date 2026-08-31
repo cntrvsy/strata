@@ -25,4 +25,5 @@ strata_key
 strata_key.pub
 *.key
 *.pem
+*.pfx
 
