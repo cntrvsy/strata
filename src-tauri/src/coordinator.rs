@@ -392,8 +392,7 @@ fn mutate_jsonc(
                 arr.retain(|dobj| dobj.get("name").and_then(|n| n.as_str()) != Some(binding_name));
             }
         }
-    } else {
-        if binding_type == "kv" {
+    } else if binding_type == "kv" {
             let arr = data_obj
                 .entry("kv_namespaces")
                 .or_insert_with(|| serde_json::Value::Array(Vec::new()))
@@ -460,7 +459,6 @@ fn mutate_jsonc(
                 arr.push(serde_json::Value::Object(dobj_obj));
             }
         }
-    }
 
     // Fallback block to serialize mutated JSON format back nicely
     let pretty = serde_json::to_string_pretty(&data)
