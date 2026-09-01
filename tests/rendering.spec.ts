@@ -26,7 +26,7 @@ test.describe('Strata UI Rendering', () => {
   });
 
   test('should show the "Open Schema" button on start', async ({ page }) => {
-    const openBtn = page.getByRole('button', { name: /open schema/i });
+    const openBtn = page.getByRole('button', { name: 'Open Schema...' }).first();
     await expect(openBtn).toBeVisible();
   });
 });
