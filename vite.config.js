@@ -1,7 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
-import adapter from "@sveltejs/adapter-static";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -9,18 +8,30 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    sveltekit({
-      adapter: adapter({
-        fallback: "index.html"
-      }),
-      alias: {
-        "#lib": "./src/lib",
-        "#lib/*": "./src/lib/*"
-      }
-    }),
+    sveltekit(),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/typescript/') || id.includes('node_modules/ts-morph/')) {
+            return 'ts-morph';
+          }
+          if (id.includes('node_modules/@xyflow/') || id.includes('node_modules/@dagrejs/') || id.includes('node_modules/d3-')) {
+            return 'xyflow';
+          }
+          if (id.includes('node_modules/elkjs/')) {
+            return 'elkjs';
+          }
+          if (id.includes('node_modules/codemirror/') || id.includes('node_modules/@codemirror/')) {
+            return 'codemirror';
+          }
+        }
+      }
+    }
+  },
   server: {
     port: 1420,
     strictPort: true,
