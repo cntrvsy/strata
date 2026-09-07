@@ -6,7 +6,7 @@
  */
 import { PlatformService } from "#lib/services/platform";
 
-export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error';
+export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'store-managed' | 'available' | 'downloading' | 'ready' | 'error';
 
 export interface UpdateInfo {
 	version: string;
@@ -29,11 +29,18 @@ export class UpdateState {
 	errorMessage = $state<string | null>(null);
 	hasUnseenUpdate = $state(false);
 	autoCheckOnStartup = $state(true);
+	isStore = $state(false);
 
 	constructor() {
-		// Listen for background update-available event from Rust backend
+		// Detect if running inside Microsoft Store package
 		if (typeof window !== "undefined") {
+			PlatformService.isStore().then((store) => {
+				this.isStore = store;
+			}).catch(() => {});
+
+			// Listen for background update-available event from Rust backend (standalone only)
 			PlatformService.listenEvent("update-available", (event: any) => {
+				if (this.isStore) return;
 				const data = event.payload || event;
 				if (data && data.version) {
 					this.updateInfo = {
@@ -74,6 +81,14 @@ export class UpdateState {
 				return;
 			}
 
+			if (result.isStore) {
+				this.isStore = true;
+				this.status = 'store-managed';
+				this.updateInfo = null;
+				this.hasUnseenUpdate = false;
+				return;
+			}
+
 			if (result.available && result.version) {
 				this.updateInfo = {
 					version: result.version,
@@ -105,7 +120,7 @@ export class UpdateState {
 	}
 
 	async downloadAndInstall() {
-		if (!this.updateInfo) return;
+		if (this.isStore || !this.updateInfo) return;
 		this.status = 'downloading';
 		this.errorMessage = null;
 		this.progress = { downloaded: 0, total: 0, percent: 0 };
@@ -128,6 +143,10 @@ export class UpdateState {
 			this.status = 'error';
 			this.errorMessage = err?.message || "Failed to download update.";
 		}
+	}
+
+	async openStore(url = "ms-windows-store://updates") {
+		await PlatformService.openExternal(url);
 	}
 
 	async relaunch() {

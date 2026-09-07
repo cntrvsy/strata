@@ -1,4 +1,5 @@
 mod coordinator;
+mod distribution;
 
 use coordinator::{CoordinatorError, SchemaCoordinator};
 use notify::{RecursiveMode, Watcher};
@@ -153,20 +154,22 @@ pub fn run() {
                 watcher: Mutex::new(None),
             });
 
-            use tauri_plugin_updater::UpdaterExt;
-            use tauri::Emitter;
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Ok(updater) = handle.updater() {
-                    if let Ok(Some(update)) = updater.check().await {
-                        let _ = handle.emit("update-available", serde_json::json!({
-                            "version": update.version,
-                            "body": update.body,
-                            "date": update.date.map(|d| d.to_string())
-                        }));
+            if distribution::is_standalone() {
+                use tauri_plugin_updater::UpdaterExt;
+                use tauri::Emitter;
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(updater) = handle.updater() {
+                        if let Ok(Some(update)) = updater.check().await {
+                            let _ = handle.emit("update-available", serde_json::json!({
+                                "version": update.version,
+                                "body": update.body,
+                                "date": update.date.map(|d| d.to_string())
+                            }));
+                        }
                     }
-                }
-            });
+                });
+            }
 
             Ok(())
         })
@@ -188,7 +191,8 @@ pub fn run() {
             watch_file,
             read_schema_file,
             write_schema_file,
-            mutate_wrangler_config
+            mutate_wrangler_config,
+            distribution::get_distribution_channel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

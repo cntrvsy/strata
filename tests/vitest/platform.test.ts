@@ -23,6 +23,14 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: vi.fn(async () => '/path/to/schema.ts'),
 }));
 
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: vi.fn(async () => {}),
+}));
+
+vi.mock('@tauri-apps/plugin-updater', () => ({
+  check: vi.fn(async () => null),
+}));
+
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: vi.fn(() => ({
     minimize: vi.fn(async () => {}),
@@ -33,6 +41,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 describe('PlatformService Adapter Unit Tests', () => {
   beforeEach(() => {
+    (PlatformService as any).cachedChannel = null;
     vi.clearAllMocks();
   });
 
@@ -109,6 +118,39 @@ describe('PlatformService Adapter Unit Tests', () => {
     expect(onProgress).toHaveBeenCalledWith(0, 1000);
     expect(onProgress).toHaveBeenCalledWith(400);
     expect(onProgress).toHaveBeenCalledWith(1000);
+  });
+
+  it('should query getDistributionChannel and cache result', async () => {
+    const core = await import('@tauri-apps/api/core');
+    vi.mocked(core.invoke).mockResolvedValueOnce('store');
+
+    const channel1 = await PlatformService.getDistributionChannel();
+    expect(channel1).toBe('store');
+    expect(await PlatformService.isStore()).toBe(true);
+
+    // Second call should return cached value without invoking core again
+    const channel2 = await PlatformService.getDistributionChannel();
+    expect(channel2).toBe('store');
+    expect(core.invoke).toHaveBeenCalledWith('get_distribution_channel');
+  });
+
+  it('should open external URL via plugin-opener', async () => {
+    const opener = await import('@tauri-apps/plugin-opener');
+    await PlatformService.openExternal('ms-windows-store://updates');
+    expect(opener.openUrl).toHaveBeenCalledWith('ms-windows-store://updates');
+  });
+
+  it('should return isStore in checkForUpdate when running in store environment', async () => {
+    vi.spyOn(PlatformService, 'isStore').mockResolvedValueOnce(true);
+    const result = await PlatformService.checkForUpdate();
+    expect(result).toEqual({ available: false, isStore: true });
+  });
+
+  it('should block downloadAndInstallUpdate when running in store environment', async () => {
+    vi.spyOn(PlatformService, 'isStore').mockResolvedValueOnce(true);
+    const mockUpdate = { downloadAndInstall: vi.fn() };
+    await PlatformService.downloadAndInstallUpdate(mockUpdate);
+    expect(mockUpdate.downloadAndInstall).not.toHaveBeenCalled();
   });
 
   describe('Non-Tauri Browser Fallback Behavior', () => {

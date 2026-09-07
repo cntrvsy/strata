@@ -16,6 +16,8 @@
     RotateCcw,
     ShieldCheck,
     CircleArrowUp,
+    ExternalLink,
+    Store,
   } from "lucide-svelte";
   import { updateState } from "#lib/state/updateState.svelte";
   import { fade, scale } from "svelte/transition";
@@ -69,8 +71,32 @@
       <div
         class="p-6 flex flex-col items-center justify-center gap-4 text-center min-h-55"
       >
+        <!-- 0. STORE-MANAGED STATE -->
+        {#if updateState.status === "store-managed" || updateState.isStore}
+          <div class="flex flex-col items-center gap-3 py-2">
+            <div
+              class="w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary"
+            >
+              <Store class="w-6 h-6" />
+            </div>
+            <div class="space-y-1.5 max-w-sm">
+              <div
+                class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold"
+              >
+                <ShieldCheck class="w-3.5 h-3.5" />
+                <span>Microsoft Store Edition</span>
+              </div>
+              <h4 class="text-base font-bold text-base-content pt-1">
+                Managed by Microsoft Store
+              </h4>
+              <p class="text-xs text-base-content/70 leading-relaxed">
+                Strata is installed as a Microsoft Store package. Updates are automatically downloaded and installed in the background by Windows Update.
+              </p>
+            </div>
+          </div>
+
         <!-- 1. CHECKING STATE -->
-        {#if updateState.status === "checking"}
+        {:else if updateState.status === "checking"}
           <div class="flex flex-col items-center gap-3 py-4">
             <div class="relative">
               <div
@@ -218,7 +244,21 @@
       <div
         class="px-5 py-3 border-t border-base-300/70 bg-base-200/40 flex items-center justify-end gap-2"
       >
-        {#if updateState.status === "up-to-date"}
+        {#if updateState.status === "store-managed" || updateState.isStore}
+          <button
+            class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
+            onclick={() => updateState.closeModal()}
+          >
+            Close
+          </button>
+          <button
+            class="btn btn-primary btn-sm rounded-field text-xs font-bold gap-1.5 shadow-md"
+            onclick={() => updateState.openStore()}
+          >
+            <ExternalLink class="w-3.5 h-3.5" />
+            <span>Open Microsoft Store</span>
+          </button>
+        {:else if updateState.status === "up-to-date"}
           <button
             class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}

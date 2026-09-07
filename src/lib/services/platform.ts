@@ -96,14 +96,57 @@ export class PlatformService {
 		await getCurrentWindow().close();
 	}
 
+	private static cachedChannel: "store" | "standalone" | null = null;
+
+	static async getDistributionChannel(): Promise<"store" | "standalone"> {
+		if (this.cachedChannel) return this.cachedChannel;
+		if (!this.isTauri()) {
+			this.cachedChannel = "standalone";
+			return "standalone";
+		}
+		try {
+			const { invoke } = await import("@tauri-apps/api/core");
+			const channel = await invoke<string>("get_distribution_channel");
+			this.cachedChannel = channel === "store" ? "store" : "standalone";
+			return this.cachedChannel;
+		} catch (err) {
+			console.warn("[Strata] Failed to get distribution channel:", err);
+			this.cachedChannel = "standalone";
+			return "standalone";
+		}
+	}
+
+	static async isStore(): Promise<boolean> {
+		return (await this.getDistributionChannel()) === "store";
+	}
+
+	static async openExternal(url: string): Promise<void> {
+		if (!this.isTauri()) {
+			if (typeof window !== "undefined") {
+				window.open(url, "_blank");
+			}
+			return;
+		}
+		try {
+			const { openUrl } = await import("@tauri-apps/plugin-opener");
+			await openUrl(url);
+		} catch (err) {
+			console.warn("[Strata] Failed to open external URL:", url, err);
+		}
+	}
+
 	static async checkForUpdate(): Promise<{
 		available: boolean;
+		isStore?: boolean;
 		version?: string;
 		body?: string;
 		date?: string;
 		rawUpdate?: any;
 	} | null> {
 		if (!this.isTauri()) return null;
+		if (await this.isStore()) {
+			return { available: false, isStore: true };
+		}
 		try {
 			const { check } = await import("@tauri-apps/plugin-updater");
 			const update = await check();
@@ -127,7 +170,7 @@ export class PlatformService {
 		rawUpdate: any,
 		onProgress?: (downloaded: number, contentLength?: number) => void
 	): Promise<void> {
-		if (!this.isTauri() || !rawUpdate) return;
+		if (!this.isTauri() || !rawUpdate || (await this.isStore())) return;
 		let downloadedBytes = 0;
 		await rawUpdate.downloadAndInstall((event: any) => {
 			if (event.event === "Started") {
