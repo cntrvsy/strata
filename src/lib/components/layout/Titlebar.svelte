@@ -15,6 +15,7 @@
     RotateCcw,
     ChevronDown,
     FileCode,
+    ExternalLink,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
@@ -195,6 +196,23 @@
           <li>
             <button
               class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
+              onclick={() => {
+                closeDropdown();
+                if (schemaState.filePath) {
+                  PlatformService.openInEditor(schemaState.filePath);
+                }
+              }}
+              title="Open in external editor (Cursor / VS Code)"
+              data-testid="titlebar-open-in-editor"
+            >
+              <FileCode class="w-3.5 h-3.5 text-primary" />
+              <span>Open in Editor</span>
+              <ExternalLink class="w-3 h-3 text-base-content/40 ml-auto" />
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
               onclick={onOpenFile}
             >
               <FolderOpen class="w-3.5 h-3.5 text-primary" />
@@ -215,6 +233,17 @@
           </li>
         </ul>
       </div>
+
+      <button
+        class="btn btn-ghost btn-xs btn-square w-6 h-6 rounded-field opacity-60 hover:opacity-100 hover:bg-base-200/80 transition-all text-base-content"
+        onclick={() =>
+          schemaState.filePath &&
+          PlatformService.openInEditor(schemaState.filePath)}
+        title="Open in external editor (Cursor / VS Code)"
+        data-testid="titlebar-quick-open-in-editor"
+      >
+        <ExternalLink class="w-3 h-3 text-base-content/70 hover:text-primary" />
+      </button>
     {:else}
       <!-- State A: Empty State -->
       <button

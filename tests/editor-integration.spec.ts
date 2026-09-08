@@ -34,10 +34,13 @@ test.describe('External Editor Integration & Schema Preview', () => {
     await page.waitForSelector('[data-testid="navbar"]');
   });
 
-  test('should display active file badge and open-in-editor button in navbar', async ({ page }) => {
-    const editorBtn = page.locator('[data-testid="navbar-open-in-editor"]');
+  test('should display active file badge and open-in-editor button in titlebar', async ({ page }) => {
+    const titlebar = page.locator('[data-testid="titlebar"]');
+    await expect(titlebar).toBeVisible();
+    await expect(titlebar).toContainText('schema.ts');
+
+    const editorBtn = page.locator('[data-testid="titlebar-quick-open-in-editor"]');
     await expect(editorBtn).toBeVisible();
-    await expect(editorBtn).toContainText('schema.ts');
   });
 
   test('should show contextual Drizzle snippet and open-in-editor button in inspector', async ({ page }) => {
