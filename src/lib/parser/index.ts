@@ -41,7 +41,8 @@ export {
 	renameTableInLayoutManifest,
 	parseDrizzleConfigSchemaPath,
 	createD1ModuleCode,
-	addReExportToBarrel
+	addReExportToBarrel,
+	type TablePresets
 } from './mutators';
 
 

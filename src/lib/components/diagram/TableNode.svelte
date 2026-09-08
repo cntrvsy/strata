@@ -307,7 +307,13 @@
                 class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
                 onclick={(e) => {
                   e.stopPropagation();
-                  schemaState.deleteColumn(data.label, col.name);
+                  schemaState.promptConfirm({
+                    title: "Delete Column",
+                    message: `Are you sure you want to delete column "${col.name}" from table "${data.label}"? This change will be saved to disk.`,
+                    confirmLabel: "Delete Column",
+                    isDanger: true,
+                    onConfirm: () => schemaState.deleteColumn(data.label, col.name),
+                  });
                 }}
                 title="Delete Field"
               >

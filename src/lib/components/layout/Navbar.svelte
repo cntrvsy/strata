@@ -18,6 +18,7 @@
     Menu,
     GitCompare,
     CircleArrowUp,
+    Sparkles,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { updateState } from "#lib/state/updateState.svelte";
@@ -251,6 +252,18 @@
         class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
       >
         {#if schemaState.filePath || schemaState.isSandboxMode}
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.showScaffoldModal = true;
+              }}
+            >
+              <Sparkles class="w-3.5 h-3.5 text-secondary" />
+              <span>Scaffold Architecture...</span>
+            </button>
+          </li>
           <li>
             <button
               class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"

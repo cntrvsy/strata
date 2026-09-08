@@ -181,6 +181,6 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
 
     const node = schemaState.nodes.find(n => n.id === 'users_dup_test');
     const cols = (node?.data as any).columns;
-    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(2);
+    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(1);
   });
 });

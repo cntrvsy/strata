@@ -24,7 +24,13 @@
   }
 
   async function deleteColumn(colName: string) {
-    await schemaState.deleteColumn(tableName, colName);
+    schemaState.promptConfirm({
+      title: "Delete Column",
+      message: `Are you sure you want to delete column "${colName}" from table "${tableName}"? This change will be saved to disk.`,
+      confirmLabel: "Delete Column",
+      isDanger: true,
+      onConfirm: () => schemaState.deleteColumn(tableName, colName),
+    });
   }
 </script>
 

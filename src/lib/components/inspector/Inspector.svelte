@@ -25,7 +25,10 @@
   } from "lucide-svelte";
   import { PlatformService } from "#lib/services/platform";
   import { schemaState } from "#lib/state";
-  import AddFieldForm from "#lib/components/forms/AddFieldForm.svelte";
+  import AddColumnForm from "#lib/components/forms/fields/AddColumnForm.svelte";
+  import AddMethodForm from "#lib/components/forms/fields/AddMethodForm.svelte";
+  import AddFolderForm from "#lib/components/forms/fields/AddFolderForm.svelte";
+  import AddKvKeyForm from "#lib/components/forms/fields/AddKvKeyForm.svelte";
   import AddRelationForm from "#lib/components/forms/AddRelationForm.svelte";
   import D1Inspector from "./D1Inspector.svelte";
   import KVInspector from "./KVInspector.svelte";
@@ -447,10 +450,27 @@
         {/if}
 
         {#if isAddingField}
-          <AddFieldForm
-            tableName={selectedNode.id}
-            onComplete={() => (isAddingField = false)}
-          />
+          {#if data.target === "do"}
+            <AddMethodForm
+              tableName={selectedNode.id}
+              onComplete={() => (isAddingField = false)}
+            />
+          {:else if data.target === "r2"}
+            <AddFolderForm
+              tableName={selectedNode.id}
+              onComplete={() => (isAddingField = false)}
+            />
+          {:else if data.target === "kv"}
+            <AddKvKeyForm
+              tableName={selectedNode.id}
+              onComplete={() => (isAddingField = false)}
+            />
+          {:else}
+            <AddColumnForm
+              tableName={selectedNode.id}
+              onComplete={() => (isAddingField = false)}
+            />
+          {/if}
         {:else if isCreatingRelation}
           <AddRelationForm
             sourceTableName={selectedNode.id}
@@ -484,7 +504,13 @@
                     data-testid="add-field-button"
                   >
                     <span class="text-xs font-semibold uppercase tracking-wider"
-                      >+ Field</span
+                      >{data.target === "do"
+                        ? "+ Method"
+                        : data.target === "r2"
+                          ? "+ Folder"
+                          : data.target === "kv"
+                            ? "+ Key"
+                            : "+ Field"}</span
                     >
                   </button>
                   <button

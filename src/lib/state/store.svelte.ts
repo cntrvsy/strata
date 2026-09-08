@@ -494,6 +494,10 @@ export class SchemaState {
 	get showNewTableModal() { return uiState.showNewTableModal; }
 	set showNewTableModal(val: boolean) { uiState.showNewTableModal = val; }
 
+	/** Whether the 'Scaffold Architecture' modal is currently visible */
+	get showScaffoldModal() { return uiState.showScaffoldModal; }
+	set showScaffoldModal(val: boolean) { uiState.showScaffoldModal = val; }
+
 	/** Custom relative path to wrangler.toml configured in the schema */
 	wranglerPath = $state<string | undefined>(undefined);
 	/** Absolute path to the resolved wrangler configuration file */
@@ -1177,7 +1181,7 @@ export class SchemaState {
 	async addTable(
 		tableName: string, 
 		target: 'd1' | 'do' | 'kv' | 'r2' = 'd1', 
-		extra?: { class?: string; path?: string; id?: string; bucket_name?: string },
+		extra?: { class?: string; path?: string; id?: string; bucket_name?: string; presets?: import("../parser").TablePresets },
 		moduleDestination?: { mode: 'root' | 'existing' | 'new'; targetModule?: string }
 	) {
 		const { addTableToSchema, createD1ModuleCode, addReExportToBarrel, updateLayoutManifestInSchema } = await import("../parser");
@@ -1189,7 +1193,7 @@ export class SchemaState {
 			const newFilePath = `${baseDir}/${fileName}`;
 			const relativeSpecifier = `./${fileName.replace(/\.ts$/, '')}`;
 
-			const newModuleCode = createD1ModuleCode(tableName);
+			const newModuleCode = createD1ModuleCode(tableName, extra?.presets);
 
 			this.ignoreNextWatch = true;
 			await PlatformService.writeText(newFilePath, newModuleCode);

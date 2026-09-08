@@ -68,6 +68,12 @@ test.describe('Inspector UI CRUD Operations', () => {
     // 4. Delete Field
     const deleteFieldBtn = page.getByTestId('field-delete-btn-contact_phone');
     await deleteFieldBtn.click({ force: true });
+
+    const confirmFieldBtn = page.locator('button.btn-error');
+    if (await confirmFieldBtn.isVisible()) {
+      await confirmFieldBtn.click();
+    }
+
     await expect(page.getByTestId('field-row-contact_phone')).not.toBeVisible();
 
     // 5. Rename Entity / Table

@@ -16,8 +16,9 @@
   // --- Components ---
   import DiagramCanvas from "#lib/components/diagram/DiagramCanvas.svelte";
   import Inspector from "#lib/components/inspector/Inspector.svelte";
-  import Overlays from "#lib/components/layout/Overlays.svelte";
-  import NewEntityForm from "#lib/components/forms/NewEntityForm.svelte";
+  import WelcomeLauncher from "#lib/components/layout/WelcomeLauncher.svelte";
+  import LoadingOverlay from "#lib/components/layout/LoadingOverlay.svelte";
+  import GlobalModals from "#lib/components/modals/GlobalModals.svelte";
   import ConnectionPickerModal from "#lib/components/modals/ConnectionPickerModal.svelte";
   import CanvasSearchPalette from "#lib/components/diagram/CanvasSearchPalette.svelte";
 
@@ -226,7 +227,7 @@
 
 <div class="h-full w-full relative overflow-hidden flex bg-base-200">
   {#if !schemaState.filePath && !schemaState.isSandboxMode}
-    <Overlays />
+    <WelcomeLauncher />
   {:else}
     <PaneGroup direction="horizontal" class="w-full h-full">
       <Pane order={0}>
@@ -235,7 +236,7 @@
         >
           <SvelteFlowProvider>
             <DiagramCanvas {onconnect} {onnodedragstop} />
-            <Overlays />
+            <LoadingOverlay />
             <CanvasSearchPalette bind:show={showSearchPalette} />
           </SvelteFlowProvider>
         </div>
@@ -258,9 +259,7 @@
   {/if}
 </div>
 
-{#if schemaState.showNewTableModal}
-  <NewEntityForm />
-{/if}
+<GlobalModals />
 
 {#if pendingConnection}
   <ConnectionPickerModal

@@ -128,6 +128,42 @@ export function sanitizeIdentifier(name: string): string {
 	return clean || 'entity';
 }
 
+export interface TablePresets {
+	primaryKey?: 'int_autoincrement' | 'autoIncrement' | 'uuid';
+	timestamps?: boolean;
+	softDelete?: boolean;
+}
+
+/**
+ * Generates the interior column definition lines and required imports for a D1 table based on presets.
+ */
+export function generateD1TableColumns(tableName: string, presets?: TablePresets): { code: string; imports: string[] } {
+	const imports = ["sqliteTable", "text", "integer"];
+	const lines: string[] = [];
+
+	if (presets?.primaryKey === 'uuid') {
+		lines.push(`  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),`);
+	} else if (presets?.primaryKey === 'autoIncrement' || presets?.primaryKey === 'int_autoincrement') {
+		lines.push(`  id: integer("id").primaryKey({ autoIncrement: true }),`);
+	} else {
+		lines.push(`  id: integer("id").primaryKey(),`);
+	}
+
+	if (presets?.timestamps) {
+		lines.push(`  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),`);
+		lines.push(`  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),`);
+	}
+
+	if (presets?.softDelete) {
+		lines.push(`  deletedAt: integer("deleted_at", { mode: "timestamp" }),`);
+	}
+
+	return {
+		code: lines.join("\n"),
+		imports
+	};
+}
+
 /**
  * Adds a new table or plain object entity to the schema.
  * Automatically sanitizes name and guards against duplicate variable declaration collisions.
@@ -136,7 +172,7 @@ export function addTableToSchema(
 	code: string, 
 	tableName: string, 
 	target: 'd1' | 'do' | 'kv' | 'r2' = 'd1',
-	extra?: { class?: string; path?: string }
+	extra?: { class?: string; path?: string; id?: string; bucket_name?: string; presets?: TablePresets }
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	
@@ -149,10 +185,9 @@ export function addTableToSchema(
 	}
 
 	if (target === 'd1') {
-		ensureImports(sf, "drizzle-orm/sqlite-core", ["sqliteTable", "integer", "text"]);
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {
-  id: integer("id").primaryKey(),
-});\n`;
+		const { code: columnsCode, imports } = generateD1TableColumns(finalName, extra?.presets);
+		ensureImports(sf, "drizzle-orm/sqlite-core", imports);
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'do') {
 		const className = extra?.class || "MyClass";
@@ -160,10 +195,12 @@ export function addTableToSchema(
 		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'r2') {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}} \n */\nexport const ${finalName} = {};\n`;
+		const bucketName = extra?.bucket_name ? `, "bucket": "${extra.bucket_name}"` : '';
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}${bucketName}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}} \n */\nexport const ${finalName} = {};\n`;
+		const kvId = extra?.id ? `, "id": "${extra.id}"` : '';
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}${kvId}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	}
 	return sf.getFullText();
@@ -298,6 +335,10 @@ export async function addColumnToSchema(
 					ensureImports(sf, targetImportPath, [referencesTable]);
 				}
 				columnDef += `.references(() => ${referencesTable}.${referencesColumn})`;
+			}
+
+			if (args[1].getProperty(columnName)) {
+				return code;
 			}
 
 			args[1].addPropertyAssignment({ 
@@ -1321,12 +1362,13 @@ export function renameTableInLayoutManifest(code: string, oldName: string, newNa
 /**
  * Creates clean standalone D1 table code for a new domain module file.
  */
-export function createD1ModuleCode(tableName: string): string {
+export function createD1ModuleCode(tableName: string, presets?: TablePresets): string {
 	const sanitized = sanitizeIdentifier(tableName);
-	return `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+	const { code: columnsCode, imports } = generateD1TableColumns(sanitized, presets);
+	return `import { ${imports.join(", ")} } from "drizzle-orm/sqlite-core";
 
 export const ${sanitized} = sqliteTable("${sanitized}", {
-  id: integer("id").primaryKey(),
+${columnsCode}
 });
 `;
 }

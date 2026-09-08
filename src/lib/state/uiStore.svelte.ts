@@ -23,6 +23,7 @@ export class UIState {
 
 	/** Modal visibility flags */
 	showNewTableModal = $state(false);
+	showScaffoldModal = $state(false);
 	showProjectSettingsModal = $state(false);
 	showHelpModal = $state(false);
 	showExportToast = $state(false);
