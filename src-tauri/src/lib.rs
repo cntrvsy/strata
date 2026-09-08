@@ -29,9 +29,30 @@ async fn watch_file(
     let mut watcher =
         notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
             Ok(event) => {
-                if event.kind.is_modify() {
+                if event.kind.is_modify() || event.kind.is_create() {
                     for p in event.paths {
-                        coordinator.handle_watch_event(p);
+                        // Filter out hidden, temporary, and editor swap files
+                        let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        if file_name.starts_with('.')
+                            || file_name.ends_with('~')
+                            || file_name.ends_with(".tmp")
+                            || file_name.ends_with(".swp")
+                        {
+                            continue;
+                        }
+
+                        // Only respond to relevant schema/config files
+                        if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                            let ext_lower = ext.to_ascii_lowercase();
+                            if ext_lower == "ts"
+                                || ext_lower == "js"
+                                || ext_lower == "toml"
+                                || ext_lower == "jsonc"
+                                || ext_lower == "json"
+                            {
+                                coordinator.handle_watch_event(p);
+                            }
+                        }
                     }
                 }
             }
@@ -39,8 +60,20 @@ async fn watch_file(
         })
         .map_err(|e| e.to_string())?;
 
+    let target_path = std::path::Path::new(&path);
+    // If the path is a file, watch its parent directory so changes to modular schema siblings
+    // (e.g. users.ts, posts.ts, relations.ts alongside index.ts) are captured.
+    let watch_dir = if target_path.is_file() || target_path.extension().is_some() {
+        target_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(target_path)
+    } else {
+        target_path
+    };
+
     watcher
-        .watch(std::path::Path::new(&path), RecursiveMode::NonRecursive)
+        .watch(watch_dir, RecursiveMode::NonRecursive)
         .map_err(|e| e.to_string())?;
 
     *watcher_lock = Some(watcher);
@@ -52,7 +85,7 @@ async fn read_schema_file(
     state: State<'_, CoordinatorState>,
     path: String,
 ) -> Result<String, CoordinatorError> {
-    state.coordinator.read_file(PathBuf::from(path)).await
+    state.coordinator.read_file(PathBuf::from(path))
 }
 
 #[tauri::command]
@@ -61,7 +94,7 @@ async fn write_schema_file(
     path: String,
     content: String,
 ) -> Result<(), CoordinatorError> {
-    state.coordinator.write_file(PathBuf::from(path), content).await
+    state.coordinator.write_file(PathBuf::from(path), content)
 }
 
 #[tauri::command]
@@ -73,16 +106,13 @@ async fn mutate_wrangler_config(
     binding_name: String,
     extra: serde_json::Value,
 ) -> Result<(), CoordinatorError> {
-    state
-        .coordinator
-        .mutate_wrangler(
-            PathBuf::from(config_path),
-            action,
-            binding_type,
-            binding_name,
-            extra,
-        )
-        .await
+    state.coordinator.mutate_wrangler(
+        PathBuf::from(config_path),
+        action,
+        binding_type,
+        binding_name,
+        extra,
+    )
 }
 
 #[cfg(target_os = "linux")]
@@ -175,7 +205,6 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 

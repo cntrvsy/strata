@@ -123,7 +123,10 @@ export class PlatformService {
 	static async openExternal(url: string): Promise<void> {
 		if (!this.isTauri()) {
 			if (typeof window !== "undefined") {
-				window.open(url, "_blank");
+				const targetUrl = url.startsWith("ms-windows-store:")
+					? "https://apps.microsoft.com/"
+					: url;
+				window.open(targetUrl, "_blank", "noopener,noreferrer");
 			}
 			return;
 		}
@@ -131,8 +134,20 @@ export class PlatformService {
 			const { openUrl } = await import("@tauri-apps/plugin-opener");
 			await openUrl(url);
 		} catch (err) {
-			console.warn("[Strata] Failed to open external URL:", url, err);
+			console.warn("[Strata] Failed to open external URL via plugin-opener, falling back to browser window:", url, err);
+			if (typeof window !== "undefined") {
+				const fallbackUrl = url.startsWith("ms-windows-store:")
+					? "https://apps.microsoft.com/"
+					: url;
+				window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+			}
 		}
+	}
+
+	static async openInEditor(filePath: string, line?: number): Promise<void> {
+		if (!filePath) return;
+		const targetUrl = `vscode://file/${filePath}${line ? `:${line}` : ''}`;
+		await this.openExternal(targetUrl);
 	}
 
 	static async checkForUpdate(): Promise<{

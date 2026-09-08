@@ -21,6 +21,7 @@
     HardDrive,
     Lightbulb,
     TriangleAlert,
+    FileCode,
   } from "lucide-svelte";
 
   // Local state for target-specific attributes
@@ -28,6 +29,11 @@
   let doPath = $state("");
   let kvId = $state("");
   let r2BucketName = $state("");
+
+  // Local state for modular destination
+  let destMode = $state<"new" | "existing" | "root">("new");
+  let customFileName = $state("");
+  let selectedExistingModule = $state("");
 
   const form = superForm(defaults(valibot(tableSchema)), {
     SPA: true,
@@ -50,10 +56,24 @@
                   }
                 : undefined;
 
+        const moduleDest =
+          form.data.target === "d1" && schemaState.isModular
+            ? {
+                mode: destMode,
+                targetModule:
+                  destMode === "new"
+                    ? targetFileName
+                    : destMode === "existing"
+                      ? selectedExistingModule
+                      : undefined,
+              }
+            : undefined;
+
         await schemaState.addTable(
           form.data.name,
           form.data.target as any,
           extra,
+          moduleDest,
         );
         schemaState.showNewTableModal = false;
       }
@@ -61,6 +81,22 @@
   });
 
   const { form: formData, enhance } = form;
+
+  const targetFileName = $derived(
+    customFileName.trim() ||
+      ($formData.name.trim()
+        ? `${$formData.name
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9_-]/g, "_")}.ts`
+        : "new_module.ts"),
+  );
+
+  $effect(() => {
+    if (!selectedExistingModule && schemaState.availableModules.length > 0) {
+      selectedExistingModule = schemaState.availableModules[0].filePath;
+    }
+  });
 
   const isDuplicateName = $derived(
     schemaState.nodes.some(
@@ -201,6 +237,109 @@
         <Form.FieldErrors class="text-[10px] text-error mt-1 font-medium" />
       </Form.Field>
 
+      <!-- Modular Target Destination Selection -->
+      {#if $formData.target === "d1" && schemaState.isModular}
+        <div
+          class="p-4 bg-base-200/50 border border-base-300/80 rounded-box flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-[10px] font-bold opacity-65 uppercase tracking-wider flex items-center gap-1.5"
+            >
+              <FileCode class="w-3.5 h-3.5 text-primary" />
+              Module Destination
+            </span>
+            <span class="badge badge-xs badge-primary badge-outline font-mono"
+              >Modular Setup</span
+            >
+          </div>
+
+          <div class="grid grid-cols-3 gap-1.5 p-1 bg-base-300/40 rounded-lg">
+            <button
+              type="button"
+              class="btn btn-xs {destMode === 'new'
+                ? 'btn-primary font-bold shadow-xs'
+                : 'btn-ghost opacity-70'}"
+              onclick={() => (destMode = "new")}
+            >
+              New File
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs {destMode === 'existing'
+                ? 'btn-primary font-bold shadow-xs'
+                : 'btn-ghost opacity-70'} {!schemaState.availableModules.length
+                ? 'opacity-30 cursor-not-allowed'
+                : ''}"
+              disabled={!schemaState.availableModules.length}
+              onclick={() => (destMode = "existing")}
+            >
+              Existing File
+            </button>
+            <button
+              type="button"
+              class="btn btn-xs {destMode === 'root'
+                ? 'btn-primary font-bold shadow-xs'
+                : 'btn-ghost opacity-70'}"
+              onclick={() => (destMode = "root")}
+            >
+              Root Barrel
+            </button>
+          </div>
+
+          {#if destMode === "new"}
+            <fieldset class="fieldset gap-1.5 p-0">
+              <legend
+                class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >
+                Module File Name
+              </legend>
+              <input
+                type="text"
+                bind:value={customFileName}
+                placeholder={targetFileName}
+                class="input input-sm input-bordered w-full rounded-field bg-base-100/60 border-base-300/60 font-mono text-xs focus:input-primary"
+              />
+              <p class="text-[10px] opacity-60 mt-0.5 leading-tight">
+                Generates <span class="font-mono text-primary font-bold"
+                  >{targetFileName}</span
+                >
+                and appends
+                <span class="font-mono opacity-80"
+                  >export * from "./{targetFileName.replace(/\.ts$/, "")}"</span
+                > to barrel root.
+              </p>
+            </fieldset>
+          {:else if destMode === "existing" && schemaState.availableModules.length > 0}
+            <fieldset class="fieldset gap-1.5 p-0">
+              <legend
+                class="fieldset-legend text-[10px] font-bold opacity-60 uppercase"
+              >
+                Select Domain Module
+              </legend>
+              <select
+                bind:value={selectedExistingModule}
+                class="select select-sm select-bordered w-full rounded-field bg-base-100/60 border-base-300/60 font-mono text-xs focus:select-primary"
+              >
+                {#each schemaState.availableModules as mod}
+                  <option value={mod.filePath}>{mod.name}</option>
+                {/each}
+              </select>
+              <p class="text-[10px] opacity-60 mt-0.5 leading-tight">
+                Appends entity directly into selected domain file.
+              </p>
+            </fieldset>
+          {:else}
+            <p class="text-[10.5px] opacity-60 leading-relaxed">
+              Appends entity directly into <span
+                class="font-mono text-primary font-bold"
+                >{schemaState.filePath?.split("/").pop() || "index.ts"}</span
+              >.
+            </p>
+          {/if}
+        </div>
+      {/if}
+
       <!-- KV Specific Fields -->
       {#if $formData.target === "kv"}
         <div
@@ -275,6 +414,52 @@
           </fieldset>
         </div>
       {/if}
+
+      <!-- Quick Identity & Auth Archetypes -->
+      <div
+        class="p-3 bg-base-200/50 border border-base-300 rounded-box flex flex-col gap-2"
+      >
+        <span class="text-[10px] font-bold opacity-65 uppercase tracking-wider">
+          Quick Architecture Templates
+        </span>
+        <div class="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            class="btn btn-xs btn-outline border-secondary/40 hover:bg-secondary/10 hover:border-secondary text-secondary flex flex-col h-auto py-1.5 px-2 gap-0.5 rounded-lg text-left items-start"
+            onclick={async () => {
+              schemaState.showNewTableModal = false;
+              await schemaState.scaffoldBetterAuthCluster();
+            }}
+          >
+            <span class="font-bold text-[10px]">🛡️ Better Auth</span>
+            <span class="text-[8px] opacity-70">user, session, account</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-xs btn-outline border-purple-500/40 hover:bg-purple-500/10 hover:border-purple-500 text-purple-400 flex flex-col h-auto py-1.5 px-2 gap-0.5 rounded-lg text-left items-start"
+            onclick={async () => {
+              schemaState.showNewTableModal = false;
+              await schemaState.scaffoldWebhookMirror("clerk");
+            }}
+          >
+            <span class="font-bold text-[10px]">Clerk Mirror</span>
+            <span class="text-[8px] opacity-70">clerkUsers table</span>
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-xs btn-outline border-emerald-500/40 hover:bg-emerald-500/10 hover:border-emerald-500 text-emerald-400 flex flex-col h-auto py-1.5 px-2 gap-0.5 rounded-lg text-left items-start"
+            onclick={async () => {
+              schemaState.showNewTableModal = false;
+              await schemaState.scaffoldWebhookMirror("workos");
+            }}
+          >
+            <span class="font-bold text-[10px]">🏢 WorkOS SSO</span>
+            <span class="text-[8px] opacity-70">workosUsers table</span>
+          </button>
+        </div>
+      </div>
 
       <!-- Storage Hint -->
       <div

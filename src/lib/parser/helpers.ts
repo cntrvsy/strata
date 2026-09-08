@@ -132,6 +132,47 @@ export function ensureImports(sf: SourceFile, module: string, names: string[]) {
 }
 
 /**
+ * Removes named or default imports if they are not referenced elsewhere in the file.
+ */
+export function cleanUnusedImports(sf: SourceFile, names: string[]) {
+	for (const name of names) {
+		if (!name) continue;
+		const importDeclarations = [...sf.getImportDeclarations()];
+		for (const imp of importDeclarations) {
+			if (imp.wasForgotten()) continue;
+			// Check named imports
+			const namedImport = imp.getNamedImports().find(n => n.getName() === name);
+			if (namedImport) {
+				const identifiers = sf.getDescendantsOfKind(SyntaxKind.Identifier).filter(id => 
+					id.getText() === name && !id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration)
+				);
+				if (identifiers.length === 0) {
+					namedImport.remove();
+					if (imp.getNamedImports().length === 0 && !imp.getDefaultImport() && !imp.getNamespaceImport()) {
+						imp.remove();
+					}
+				}
+			}
+
+			if (imp.wasForgotten()) continue;
+
+			// Check default import
+			const defaultImport = imp.getDefaultImport();
+			if (defaultImport && defaultImport.getText() === name) {
+				const identifiers = sf.getDescendantsOfKind(SyntaxKind.Identifier).filter(id => 
+					id.getText() === name && !id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration)
+				);
+				if (identifiers.length === 0) {
+					if (imp.getNamedImports().length === 0 && !imp.getNamespaceImport()) {
+						imp.remove();
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
  * Helper to resolve relative path from base file path.
  * Normalizes all backslashes to forward slashes for cross-platform portability.
  */
@@ -335,6 +376,70 @@ function trySoftRepairJson(jsonStr: string): any | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file.
+ */
+export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number }> | null {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return null;
+	try {
+		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		return JSON.parse(cleanJson);
+	} catch (err) {
+		const softRepaired = trySoftRepairJson(match[1].replace(/^\s*\*\s?/gm, ''));
+		if (softRepaired) return softRepaired;
+		console.warn('[Strata] Failed to parse @strata-layout manifest:', err);
+		return null;
+	}
+}
+
+/**
+ * Calculates the relative TypeScript module import specifier from one file to another.
+ * e.g., from "/db/posts.ts" to "/db/users.ts" -> "./users"
+ * e.g., from "/db/sub/posts.ts" to "/db/users.ts" -> "../users"
+ */
+export function getRelativeImportSpecifier(fromFilePath: string, toFilePath: string): string | undefined {
+	if (!fromFilePath || !toFilePath || fromFilePath === toFilePath) return undefined;
+
+	const normFrom = fromFilePath.replace(/\\/g, '/');
+	const normTo = toFilePath.replace(/\\/g, '/');
+
+	const fromLastSlash = normFrom.lastIndexOf('/');
+	const toLastSlash = normTo.lastIndexOf('/');
+
+	const fromDir = fromLastSlash >= 0 ? normFrom.substring(0, fromLastSlash) : '';
+	const toDir = toLastSlash >= 0 ? normTo.substring(0, toLastSlash) : '';
+
+	// Strip .ts, .js, .tsx, .jsx extensions
+	const toFileWithoutExt = normTo.replace(/\.[^/.]+$/, '');
+	const toBaseName = toLastSlash >= 0 ? toFileWithoutExt.substring(toLastSlash + 1) : toFileWithoutExt;
+
+	if (fromDir === toDir) {
+		return `./${toBaseName}`;
+	}
+
+	const fromParts = fromDir ? fromDir.split('/').filter(Boolean) : [];
+	const toParts = toDir ? toDir.split('/').filter(Boolean) : [];
+
+	let commonLen = 0;
+	while (commonLen < fromParts.length && commonLen < toParts.length && fromParts[commonLen] === toParts[commonLen]) {
+		commonLen++;
+	}
+
+	const upCount = fromParts.length - commonLen;
+	const relParts: string[] = [];
+	for (let i = 0; i < upCount; i++) {
+		relParts.push('..');
+	}
+	for (let i = commonLen; i < toParts.length; i++) {
+		relParts.push(toParts[i]);
+	}
+	relParts.push(toBaseName);
+
+	const res = relParts.join('/');
+	return res.startsWith('.') ? res : `./${res}`;
 }
 
 

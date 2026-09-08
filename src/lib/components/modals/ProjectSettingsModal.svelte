@@ -243,10 +243,9 @@
     }
     isDetecting = true;
 
-    const dir = schemaState.filePath.substring(
-      0,
-      schemaState.filePath.lastIndexOf("/"),
-    );
+    const normalized = schemaState.filePath.replace(/\\/g, "/");
+    const lastSlash = normalized.lastIndexOf("/");
+    const dir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
 
     let foundPath: string | null = null;
     let currentDir = dir;

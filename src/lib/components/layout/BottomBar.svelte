@@ -22,7 +22,7 @@
     Crosshair,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
-  import { uiState } from "#lib/state/uiStore.svelte";
+  import { PlatformService } from "#lib/services/platform";
 
   const stats = $derived.by(() => {
     const nodes = schemaState.nodes;
@@ -260,8 +260,22 @@
                     {#if issue.line}
                       <button
                         class="px-1.5 py-0.5 rounded-field bg-base-300/60 hover:bg-primary/20 hover:text-primary font-mono text-[9px] transition-colors"
-                        onclick={() => uiState.jumpToCodeLine(issue.line)}
-                        title="Click to jump to line {issue.line} in Code Editor"
+                        onclick={() => {
+                          const targetFile = issue.symbolName
+                            ? (
+                                schemaState.nodes.find(
+                                  (n) => n.id === issue.symbolName,
+                                )?.data as any
+                              )?.moduleInfo?.sourceFilePath ||
+                              schemaState.filePath
+                            : schemaState.filePath;
+                          if (targetFile)
+                            PlatformService.openInEditor(
+                              targetFile,
+                              issue.line,
+                            );
+                        }}
+                        title="Open at line {issue.line} in external editor"
                       >
                         Line {issue.line} ↗
                       </button>
@@ -305,7 +319,7 @@
                   class="btn btn-warning btn-xs rounded-field font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
                   onclick={() => schemaState.syncMissingWranglerBindings()}
                 >
-                  ⚡ Fix & Sync to Wrangler Config
+                  Fix & Sync to Wrangler Config
                 </button>
               {/if}
             </div>

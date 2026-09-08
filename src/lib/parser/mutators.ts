@@ -14,10 +14,13 @@ import {
 	parseColumnChain, 
 	buildColumnChain, 
 	ensureImports,
+	cleanUnusedImports,
 	resolveRelativePath,
 	extractStrataMetadata,
+	extractStrataLayoutManifest,
 	pluralizeIdentifier
 } from './helpers';
+export { extractStrataLayoutManifest } from './helpers';
 import { PlatformService } from '#lib/services/platform';
 
 /**
@@ -105,7 +108,16 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 			sf.insertText(sf.getFullWidth(), content);
 		}
 	}
-	return sf.getFullText();
+	let result = sf.getFullText();
+	const virtualNodes = nodes.filter(n => n.type === 'identity');
+	if (virtualNodes.length > 0) {
+		const positionsMap: Record<string, { x: number; y: number }> = {};
+		for (const vn of virtualNodes) {
+			positionsMap[vn.id] = { x: Math.round(vn.position.x), y: Math.round(vn.position.y) };
+		}
+		result = updateLayoutManifestInSchema(result, positionsMap);
+	}
+	return result;
 }
 
 export function sanitizeIdentifier(name: string): string {
@@ -168,7 +180,8 @@ export async function addColumnToSchema(
 	type: string = 'text',
 	referencesTable?: string,
 	referencesColumn?: string,
-	schemaFilePath?: string
+	schemaFilePath?: string,
+	targetImportPath?: string
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
@@ -281,6 +294,9 @@ export async function addColumnToSchema(
 			ensureImports(sf, "drizzle-orm/sqlite-core", [importType]);
 
 			if (referencesTable && referencesColumn) {
+				if (targetImportPath && !sf.getVariableDeclaration(referencesTable)) {
+					ensureImports(sf, targetImportPath, [referencesTable]);
+				}
 				columnDef += `.references(() => ${referencesTable}.${referencesColumn})`;
 			}
 
@@ -306,7 +322,8 @@ export function addForeignKeyToColumnInSchema(
 	sourceTable: string,
 	sourceCol: string,
 	targetTable: string,
-	targetCol: string = 'id'
+	targetCol: string = 'id',
+	targetImportPath?: string
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(sourceTable);
@@ -323,6 +340,10 @@ export function addForeignKeyToColumnInSchema(
 
 	const objLit = args[1].asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
 	const prop = objLit.getProperty(sourceCol);
+
+	if (targetImportPath && !sf.getVariableDeclaration(targetTable)) {
+		ensureImports(sf, targetImportPath, [targetTable]);
+	}
 
 	const refString = `.references(() => ${targetTable}.${targetCol})`;
 
@@ -352,17 +373,26 @@ export function addForeignKeyToColumnInSchema(
  * Detects if it should use Drizzle relations() or Synthetic JSDoc relations.
  */
 
-export function addEdgeToSchema(code: string, source: string, target: string): string {
+export function addEdgeToSchema(
+	code: string, 
+	source: string, 
+	target: string,
+	targetImportPath?: string
+): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	const targetDecl = sf.getVariableDeclaration(target);
-	if (!sourceDecl || !targetDecl) return code;
+	if (!sourceDecl) return code;
+
+	if (targetImportPath && !targetDecl) {
+		ensureImports(sf, targetImportPath, [target]);
+	}
 
 	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
-	const isTargetTable = targetDecl.getInitializer()?.getText().includes('sqliteTable');
+	const isTargetTable = targetDecl ? targetDecl.getInitializer()?.getText().includes('sqliteTable') : true;
 
 	// --- Synthetic Relations (KV/DO) ---
-	if (!isSourceTable || !isTargetTable) {
+	if (targetDecl && (!isSourceTable || !isTargetTable)) {
 		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
@@ -493,7 +523,8 @@ export function removeTableFromSchema(code: string, tableName: string): string {
 		sf.getVariableStatement(s => s.getDeclarations().some(d => d.getName() === relName))?.remove();
 	}
 	
-	return sf.getFullText();
+	const fullCode = sf.getFullText();
+	return removeTableFromLayoutManifest(fullCode, tableName);
 }
 
 /**
@@ -502,35 +533,37 @@ export function removeTableFromSchema(code: string, tableName: string): string {
 export function removeEdgeFromSchema(code: string, source: string, target: string, name?: string): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
-	if (!sourceDecl) return code;
+	const relName = `${source}Relations`;
+	const relDecl = sf.getVariableDeclaration(relName);
 
-	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
+	if (!sourceDecl && !relDecl) return code;
 
 	// --- Synthetic Relations ---
-	if (!isSourceTable) {
-		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
-		if (jsDoc) {
-			const fullText = jsDoc.getFullText();
-			const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-			if (match) {
-				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
-					if (strata.relations && Array.isArray(strata.relations)) {
-						strata.relations = strata.relations.filter((r: any) => r.to !== target);
-						if (strata.relations.length === 0) {
-							delete strata.relations;
+	if (sourceDecl) {
+		const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
+		if (!isSourceTable) {
+			const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
+			if (jsDoc) {
+				const fullText = jsDoc.getFullText();
+				const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (match) {
+					try {
+						const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						if (strata.relations && Array.isArray(strata.relations)) {
+							strata.relations = strata.relations.filter((r: any) => r.to !== target);
+							if (strata.relations.length === 0) {
+								delete strata.relations;
+							}
+							jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 						}
-						jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
-					}
-				} catch (e) { console.error(e); }
+					} catch (e) { console.error(e); }
+				}
 			}
+			return sf.getFullText();
 		}
-		return sf.getFullText();
 	}
 
 	// --- Logical Drizzle Relations ---
-	const relName = `${source}Relations`;
-	const relDecl = sf.getVariableDeclaration(relName);
 	if (relDecl) {
 		const init = relDecl.getInitializer();
 		if (init?.isKind(SyntaxKind.CallExpression)) {
@@ -557,23 +590,26 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 	}
 
 	// --- Physical Foreign Keys ---
-	const initializer = sourceDecl.getInitializer();
-	const tableCall = initializer ? findSqliteTableCall(initializer) : null;
-	if (tableCall) {
-		const args = tableCall.getArguments();
-		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
-			for (const prop of args[1].getProperties()) {
-				if (prop.isKind(SyntaxKind.PropertyAssignment)) {
-					const initNode = prop.getInitializer();
-					if (initNode) {
-						const { baseCallText, modifiers: chainMods } = parseColumnChain(initNode);
-						const refIdx = chainMods.findIndex(m => m.name === 'references');
-						if (refIdx !== -1 && chainMods[refIdx].args.length > 0) {
-							const refArg = chainMods[refIdx].args[0];
-							if (refArg.includes(`${target}.`)) {
-								chainMods.splice(refIdx, 1);
-								const newColDef = buildColumnChain(baseCallText, chainMods);
-								prop.setInitializer(newColDef);
+	if (sourceDecl) {
+		const initializer = sourceDecl.getInitializer();
+		const tableCall = initializer ? findSqliteTableCall(initializer) : null;
+		if (tableCall) {
+			const args = tableCall.getArguments();
+			if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+				for (const prop of args[1].getProperties()) {
+					if (prop.isKind(SyntaxKind.PropertyAssignment)) {
+						if (name && prop.getName() !== name) continue;
+						const initNode = prop.getInitializer();
+						if (initNode) {
+							const { baseCallText, modifiers: chainMods } = parseColumnChain(initNode);
+							const refIdx = chainMods.findIndex(m => m.name === 'references');
+							if (refIdx !== -1 && chainMods[refIdx].args.length > 0) {
+								const refArg = chainMods[refIdx].args[0];
+								if (refArg.includes(`${target}.`)) {
+									chainMods.splice(refIdx, 1);
+									const newColDef = buildColumnChain(baseCallText, chainMods);
+									prop.setInitializer(newColDef);
+								}
 							}
 						}
 					}
@@ -581,6 +617,9 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 			}
 		}
 	}
+
+	// Clean up unused imports for target, source, and relations
+	cleanUnusedImports(sf, [target, source, 'relations']);
 
 	return sf.getFullText();
 }
@@ -712,7 +751,8 @@ export function renameTableInSchema(code: string, oldName: string, newName: stri
 		}
 	}
 	
-	return sf.getFullText();
+	const fullCode = sf.getFullText();
+	return renameTableInLayoutManifest(fullCode, oldName, cleanNewName);
 }
 
 
@@ -1068,3 +1108,302 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 	}
 	return sf.getFullText();
 }
+
+/**
+ * Scaffolds the standard Better Auth Drizzle D1 table cluster (user, session, account, verification).
+ */
+export function scaffoldBetterAuthClusterInSchema(code: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	const tablesToScaffold = [
+		{
+			name: 'user',
+			code: `export const user = sqliteTable("user", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	email: text("email").notNull().unique(),
+	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+	image: text("image"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});\n`
+		},
+		{
+			name: 'session',
+			code: `export const session = sqliteTable("session", {
+	id: text("id").primaryKey(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	token: text("token").notNull().unique(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id").notNull().references(() => user.id)
+});\n`
+		},
+		{
+			name: 'account',
+			code: `export const account = sqliteTable("account", {
+	id: text("id").primaryKey(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id").notNull().references(() => user.id),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
+	refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+	scope: text("scope"),
+	password: text("password"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});\n`
+		},
+		{
+			name: 'verification',
+			code: `export const verification = sqliteTable("verification", {
+	id: text("id").primaryKey(),
+	identifier: text("identifier").notNull(),
+	value: text("value").notNull(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`
+		}
+	];
+
+	for (const tbl of tablesToScaffold) {
+		if (!sf.getVariableDeclaration(tbl.name)) {
+			sf.insertText(sf.getFullWidth(), `\n${tbl.code}`);
+		}
+	}
+
+	return sf.getFullText();
+}
+
+/**
+ * Scaffolds a local D1 mirror table for Clerk webhooks.
+ */
+export function scaffoldClerkMirrorTableInSchema(code: string, tableName = 'users'): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	let targetName = tableName;
+	let counter = 1;
+	while (sf.getVariableDeclaration(targetName)) {
+		targetName = `${tableName}${counter++}`;
+	}
+
+	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
+	id: text("id").primaryKey(),
+	clerkUserId: text("clerk_user_id").notNull().unique(),
+	email: text("email").notNull(),
+	firstName: text("first_name"),
+	lastName: text("last_name"),
+	imageUrl: text("image_url"),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`;
+
+	sf.insertText(sf.getFullWidth(), snippet);
+	return sf.getFullText();
+}
+
+/**
+ * Scaffolds a local D1 mirror table for WorkOS Directory Sync / SSO.
+ */
+export function scaffoldWorkOSMirrorTableInSchema(code: string, tableName = 'workosUsers'): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	let targetName = tableName;
+	let counter = 1;
+	while (sf.getVariableDeclaration(targetName)) {
+		targetName = `${tableName}${counter++}`;
+	}
+
+	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
+	id: text("id").primaryKey(),
+	workosUserId: text("workos_user_id").notNull().unique(),
+	workosOrgId: text("workos_org_id"),
+	email: text("email").notNull(),
+	firstName: text("first_name"),
+	lastName: text("last_name"),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`;
+
+	sf.insertText(sf.getFullWidth(), snippet);
+	return sf.getFullText();
+}
+
+/**
+ * Updates or creates the consolidated @strata-layout JSDoc manifest in the root schema file.
+ * This keeps domain files (users.ts, posts.ts) 100% clean in Git diffs when dragging nodes.
+ */
+export function updateLayoutManifestInSchema(
+	code: string,
+	positions: Record<string, { x: number; y: number }>,
+	pruneMissing: boolean = false
+): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	
+	if (match) {
+		let currentManifest: Record<string, { x: number; y: number }> = {};
+		try {
+			const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+			currentManifest = JSON.parse(cleanJson);
+		} catch {}
+
+		const merged = pruneMissing ? { ...positions } : { ...currentManifest, ...positions };
+		const formattedJson = JSON.stringify(merged, null, 2)
+			.split('\n')
+			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+			.join('\n');
+
+		return code.replace(match[0], `@strata-layout ${formattedJson}`);
+	} else {
+		// Prepend manifest at the top of the root file
+		const formattedJson = JSON.stringify(positions, null, 2)
+			.split('\n')
+			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+			.join('\n');
+
+		const manifestComment = `/**\n * @strata-layout ${formattedJson}\n */\n\n`;
+		return manifestComment + code;
+	}
+}
+
+/**
+ * Removes a table from the consolidated @strata-layout manifest if present.
+ */
+export function removeTableFromLayoutManifest(code: string, tableName: string): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return code;
+	try {
+		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const manifest = JSON.parse(cleanJson);
+		if (tableName in manifest) {
+			delete manifest[tableName];
+			const formattedJson = JSON.stringify(manifest, null, 2)
+				.split('\n')
+				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+				.join('\n');
+			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+		}
+	} catch {}
+	return code;
+}
+
+/**
+ * Renames a table key in the consolidated @strata-layout manifest if present.
+ */
+export function renameTableInLayoutManifest(code: string, oldName: string, newName: string): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return code;
+	try {
+		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const manifest = JSON.parse(cleanJson);
+		if (oldName in manifest) {
+			manifest[newName] = manifest[oldName];
+			delete manifest[oldName];
+			const formattedJson = JSON.stringify(manifest, null, 2)
+				.split('\n')
+				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+				.join('\n');
+			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+		}
+	} catch {}
+	return code;
+}
+
+/**
+ * Creates clean standalone D1 table code for a new domain module file.
+ */
+export function createD1ModuleCode(tableName: string): string {
+	const sanitized = sanitizeIdentifier(tableName);
+	return `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+export const ${sanitized} = sqliteTable("${sanitized}", {
+  id: integer("id").primaryKey(),
+});
+`;
+}
+
+/**
+ * Ensures a barrel file (e.g. index.ts) re-exports a given module specifier.
+ * Example: export * from "./comments";
+ */
+export function addReExportToBarrel(barrelCode: string, moduleSpecifier: string): string {
+	const cleanSpecifier = moduleSpecifier.replace(/^\.\//, '').replace(/\.ts$/, '');
+	const regex = new RegExp(`export\\s*\\*\\s*from\\s*["'](\\.\\/)?${cleanSpecifier}(\\.js|\\.ts)?["']`, 'i');
+	if (regex.test(barrelCode)) {
+		return barrelCode;
+	}
+
+	const normalizedExport = moduleSpecifier.startsWith('.') ? moduleSpecifier.replace(/\.ts$/, '') : `./${moduleSpecifier.replace(/\.ts$/, '')}`;
+	const trimmed = barrelCode.trimEnd();
+	return trimmed ? `${trimmed}\nexport * from "${normalizedExport}";\n` : `export * from "${normalizedExport}";\n`;
+}
+
+/**
+ * Resolves the primary schema file or barrel index from drizzle.config.ts contents.
+ * Supports string literals, backtick template strings, string arrays, trailing slashes, and glob patterns.
+ */
+export function parseDrizzleConfigSchemaPath(configCode: string, configFilePath: string): string | null {
+	let candidatePath: string | null = null;
+
+	// 1. Check for array of schemas: schema: [ ... ]
+	const arrayMatch = configCode.match(/schema:\s*\[([\s\S]*?)\]/);
+	if (arrayMatch) {
+		const rawItems = [...arrayMatch[1].matchAll(/["'`]((?:\\.|[^"'`])+)["'`]/g)].map(m => m[1].trim());
+		if (rawItems.length > 0) {
+			candidatePath = rawItems.find(p => p.includes('index.ts') || p.includes('schema.ts') || p.includes('*')) || rawItems[0];
+		}
+	}
+
+	if (!candidatePath) {
+		// 2. Check for single string (single quotes, double quotes, or backticks)
+		const singleMatch = configCode.match(/schema:\s*["'`]((?:\\.|[^"'`])+)["'`]/);
+		if (singleMatch) {
+			candidatePath = singleMatch[1].trim();
+		}
+	}
+
+	if (!candidatePath) return null;
+
+	let rawPath = candidatePath;
+	const baseDir = configFilePath.replace(/\\/g, '/').replace(/\/[^/]+$/, '');
+
+	// Strip glob patterns like /*, /**, /*.ts
+	if (rawPath.endsWith('/**')) {
+		rawPath = rawPath.slice(0, -3);
+	} else if (rawPath.endsWith('/*.ts')) {
+		rawPath = rawPath.slice(0, -5);
+	} else if (rawPath.endsWith('/*')) {
+		rawPath = rawPath.slice(0, -2);
+	}
+
+	// Strip trailing slashes
+	rawPath = rawPath.replace(/\/+$/, '');
+
+	if (!rawPath.endsWith('.ts')) {
+		rawPath = `${rawPath}/index.ts`;
+	}
+
+	if (rawPath.startsWith('.')) {
+		const parts = `${baseDir}/${rawPath}`.split('/');
+		const resolved: string[] = [];
+		for (const part of parts) {
+			if (part === '.' || part === '') continue;
+			if (part === '..') resolved.pop();
+			else resolved.push(part);
+		}
+		return (configFilePath.startsWith('/') ? '/' : '') + resolved.join('/');
+	}
+
+	return rawPath;
+}
+
+

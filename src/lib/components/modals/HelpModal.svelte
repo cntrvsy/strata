@@ -23,6 +23,8 @@
     Braces,
     Wrench,
     Copy,
+    Layers,
+    ShieldCheck,
   } from "lucide-svelte";
   import { fade } from "svelte/transition";
   import { schemaState } from "#lib/state";
@@ -64,6 +66,19 @@ ${plainContent.trim()}
   }
 
   // JSDoc Builder State
+  let builderMode = $state<"barrel" | "single">("barrel");
+
+  // Barrel Mode (Pattern A: @strata-layout)
+  let barrelEntities = $state("users, posts, comments, profiles");
+  let includeClerkBoundary = $state(true);
+  let includeWorkosBoundary = $state(false);
+  let barrelColumns = $state(2);
+  let barrelSpacingX = $state(420);
+  let barrelSpacingY = $state(320);
+  let barrelStartX = $state(100);
+  let barrelStartY = $state(150);
+
+  // Single-File Mode (Pattern B: @strata)
   let builderTarget = $state("d1");
   let builderX = $state(100);
   let builderY = $state(100);
@@ -77,7 +92,40 @@ ${plainContent.trim()}
   let builderR2Folders = $state("avatars:image/*, files:application/pdf");
   let builderCopied = $state(false);
 
-  // Validation Checkers
+  // Barrel Validation Checker
+  const barrelError = $derived.by(() => {
+    if (!barrelEntities.trim()) return "Enter at least one entity or table name.";
+    const items = barrelEntities.split(",");
+    for (const item of items) {
+      const name = item.trim();
+      if (name && !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+        return `"${name}" is not a valid alphanumeric identifier.`;
+      }
+    }
+    return "";
+  });
+
+  // Barrel Presets
+  function loadBarrelPreset(type: "blog" | "ecommerce" | "saas") {
+    if (type === "blog") {
+      barrelEntities = "users, posts, comments, categories, tags";
+      includeClerkBoundary = true;
+      includeWorkosBoundary = false;
+      barrelColumns = 2;
+    } else if (type === "ecommerce") {
+      barrelEntities = "customers, orders, orderItems, products, inventory";
+      includeClerkBoundary = false;
+      includeWorkosBoundary = true;
+      barrelColumns = 2;
+    } else if (type === "saas") {
+      barrelEntities = "organizations, members, workspaces, projects, auditLogs";
+      includeClerkBoundary = true;
+      includeWorkosBoundary = true;
+      barrelColumns = 3;
+    }
+  }
+
+  // Validation Checkers for Single-File Mode
   const relationsError = $derived.by(() => {
     if (!builderD1Relations.trim()) return "";
     const items = builderD1Relations.split(",");
@@ -164,6 +212,39 @@ ${plainContent.trim()}
     }
   }
 
+  const generatedBarrelLayout = $derived.by(() => {
+    const names = barrelEntities
+      .split(",")
+      .map((n) => n.trim())
+      .filter((n) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(n));
+
+    const layout: Record<string, { x: number; y: number }> = {};
+
+    if (includeClerkBoundary) {
+      layout["__clerk_identity__"] = { x: -280, y: Number(barrelStartY) || 150 };
+    }
+    if (includeWorkosBoundary) {
+      layout["__workos_identity__"] = { x: -280, y: (Number(barrelStartY) || 150) + 240 };
+    }
+
+    const cols = Math.max(1, Number(barrelColumns) || 2);
+    const startX = Number(barrelStartX) || 100;
+    const startY = Number(barrelStartY) || 150;
+    const gapX = Number(barrelSpacingX) || 420;
+    const gapY = Number(barrelSpacingY) || 320;
+
+    names.forEach((name, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      layout[name] = {
+        x: startX + col * gapX,
+        y: startY + row * gapY,
+      };
+    });
+
+    return `/**\n * @strata-layout ${JSON.stringify(layout, null, 2).split("\n").join("\n * ")}\n */`;
+  });
+
   const generatedJSDoc = $derived.by(() => {
     const data: any = {
       target: builderTarget,
@@ -224,9 +305,13 @@ ${plainContent.trim()}
     return `/**\n * @strata ${JSON.stringify(data, null, 2).split("\n").join("\n * ")}\n */`;
   });
 
+  const activeJSDocOutput = $derived.by(() => {
+    return builderMode === "barrel" ? generatedBarrelLayout : generatedJSDoc;
+  });
+
   async function copyBuilderJSDoc() {
     try {
-      await navigator.clipboard.writeText(generatedJSDoc);
+      await navigator.clipboard.writeText(activeJSDocOutput);
       builderCopied = true;
       setTimeout(() => (builderCopied = false), 2000);
     } catch (e) {
@@ -243,8 +328,18 @@ ${plainContent.trim()}
     },
     {
       id: "getting-started",
-      label: "Getting Started",
+      label: "Getting Started & IDE",
       icon: FingerprintPattern,
+    },
+    {
+      id: "modular-architecture",
+      label: "Multi-Schema & Barrel Mode",
+      icon: Layers,
+    },
+    {
+      id: "identity-auth",
+      label: "Identity & Auth (Better Auth / Clerk / WorkOS)",
+      icon: ShieldCheck,
     },
     { id: "cloudflare", label: "Cloudflare Bindings", icon: Database },
     { id: "relationships", label: "ERD Relationships", icon: Share2 },
@@ -272,15 +367,121 @@ ${plainContent.trim()}
     {
       id: "onboarding-policy",
       category: "getting-started",
-      title: "Capabilities & Live Visual Mapping",
-      tags: ["onboarding", "sync", "ast", "watch", "start"],
+      title: "Capabilities & Live Visual Architecture",
+      tags: ["onboarding", "sync", "ast", "watch", "start", "modular", "ide"],
       summary:
-        "Strata is an interactive ERD tool for Drizzle + Cloudflare. We parse schema.ts variables and render them as custom database nodes.",
+        "Strata is a local-first visual architecture canvas for Drizzle ORM and Cloudflare Workers (D1, KV, Durable Objects, R2, and Cloud Identity).",
       content: `<p class="mb-2">Strata reads your codebase as the absolute single source of truth:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Bi-directional Sync:</strong> Visual edits trigger AST updates to your TypeScript files.</li>
-                  <li><strong>Live File Watcher:</strong> Saving schemas in external IDEs updates the ERD canvas instantly.</li>
-                  <li><strong>Tauri Desktop Integration:</strong> Works locally in your filesystem with native write permissions.</li>
+                  <li><strong>Dual-Archetype Support:</strong> Seamlessly handles both Single-File Monoliths (<code>schema.ts</code>) and Modern Modular Barrels (<code>schema/index.ts</code> re-exporting domain modules).</li>
+                  <li><strong>External IDE Pairing:</strong> Designed to run directly alongside VS Code, Cursor, or WebStorm. The native Rust file watcher updates the canvas in milliseconds upon save.</li>
+                  <li><strong>Targeted Domain File Writes:</strong> Visual mutations route directly to the originating domain file (e.g. <code>users.ts</code>), preserving custom formatting and imports.</li>
+                  <li><strong>Git-Clean History:</strong> Re-arranging nodes on the canvas touches only the root barrel manifest, leaving domain files 100% clean and free of Git merge conflicts.</li>
+                </ul>`,
+    },
+    {
+      id: "which-archetype-guide",
+      category: "getting-started",
+      title: "Which Default Should I Choose? (Monolith vs. Barrel)",
+      tags: ["default", "recommendation", "monolith", "barrel", "architecture", "choice", "teams"],
+      summary:
+        "Strata recommends Modular Barrel (schema/index.ts) as the default for teams and production apps. Here is why and when each pattern is best.",
+      content: `<p class="mb-2">Strata supports two official architecture patterns. Here is how to decide which to use:</p>
+                <div class="space-y-2.5 my-2">
+                  <div class="p-2.5 rounded-xl bg-primary/10 border border-primary/20">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="badge badge-primary badge-xs font-bold uppercase text-[9px]">Recommended Default</span>
+                      <strong class="text-xs text-primary">Modular Barrel (<code>schema/index.ts</code>)</strong>
+                    </div>
+                    <ul class="list-disc pl-4 space-y-1 text-xs text-base-content/80">
+                      <li><strong>Best for:</strong> Teams, growing codebases, micro-domain partitioning, and production applications.</li>
+                      <li><strong>Why:</strong> All canvas coordinates live inside <code>@strata-layout</code> in <code>index.ts</code>. Rearranging cards on the canvas touches <strong>0 domain files</strong> (<code>users.ts</code>, <code>posts.ts</code>), eliminating Git merge conflicts.</li>
+                      <li><strong>Cross-File Dependencies:</strong> Strata automatically manages TypeScript imports (e.g. <code>import { users } from "./users"</code>) when connecting tables across files.</li>
+                    </ul>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-base-200/60 border border-base-300">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="badge badge-ghost badge-xs font-bold uppercase text-[9px] opacity-75">Secondary Option</span>
+                      <strong class="text-xs text-base-content">Single-File Monolith (<code>schema.ts</code>)</strong>
+                    </div>
+                    <ul class="list-disc pl-4 space-y-1 text-xs text-base-content/80">
+                      <li><strong>Best for:</strong> Solo developers, hackathons, MVPs, and schemas with fewer than 10 tables.</li>
+                      <li><strong>Why:</strong> Fast to browse in a single editor tab. Metadata comments sit directly above declarations: <code>/** @strata { "target": "d1", "x": 100, "y": 200 } */</code>.</li>
+                    </ul>
+                  </div>
+                </div>
+                <p class="text-xs text-base-content/70"><strong>Note:</strong> You can also open <code>drizzle.config.ts</code> directly, and Strata will automatically resolve either pattern from your config path!</p>`,
+    },
+    {
+      id: "modular-architecture-guide",
+      category: "modular-architecture",
+      title: "Multi-File Schemas & The Git-Clean Barrel Pattern",
+      tags: ["modular", "barrel", "index", "modules", "multi-file", "git-clean", "layout"],
+      summary:
+        "How Strata ingests, mutates, and organizes modular Drizzle setups without creating Git merge noise.",
+      content: `<p class="mb-2">Modern Drizzle architectures split schema definitions across specialized domain files. Strata embraces this natively:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Barrel Re-Export Discovery:</strong> Point Strata to your <code>schema/index.ts</code>. It parses all re-exported domain files (e.g. <code>export * from './users';</code>) into a unified project AST.</li>
+                  <li><strong>Targeted File Writes:</strong> Adding a column or modifying an entity in <code>users.ts</code> writes directly to <code>users.ts</code> without touching other schema modules.</li>
+                  <li><strong>Git-Clean Layout Manifest (<code>@strata-layout</code>):</strong> In barrel mode, node coordinates are stored in a consolidated JSDoc manifest inside <code>index.ts</code>. Moving nodes on the canvas never modifies domain files, eliminating visual merge conflicts in Git.</li>
+                  <li><strong>Scoped Entity Creation:</strong> When adding a new table, choose between scaffolding a new module file (e.g. <code>comments.ts</code>), appending to an existing module, or adding to the root.</li>
+                </ul>`,
+    },
+    {
+      id: "cross-module-relations",
+      category: "modular-architecture",
+      title: "Cross-Module Relationships & Auto-Imports",
+      tags: ["relations", "foreign-key", "cross-module", "imports", "references"],
+      summary:
+        "Connect tables across different files with automated TypeScript imports and standalone relations.ts support.",
+      content: `<p class="mb-2">Strata handles cross-file dependencies automatically:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Auto-Import Injection:</strong> When you connect a child table in <code>posts.ts</code> to a parent table in <code>users.ts</code>, Strata adds <code>.references(() => users.id)</code> and automatically injects <code>import { users } from "./users";</code>.</li>
+                  <li><strong>Dedicated <code>relations.ts</code> Resolution:</strong> If your project separates query relations into a standalone <code>relations.ts</code> file, Strata discovers and resolves them across all modules.</li>
+                  <li><strong>Unused Import Cleanup:</strong> Deleting a relation or foreign key automatically prunes unused import statements, keeping your TypeScript codebase clean.</li>
+                </ul>`,
+    },
+    {
+      id: "identity-boundary-guide",
+      category: "identity-auth",
+      title: "Identity Architecture: Better Auth, Clerk & WorkOS",
+      tags: ["identity", "auth", "better-auth", "clerk", "workos", "sso", "mirror"],
+      summary:
+        "Model D1-resident authentication clusters and external Cloud Identity Providers as first-class visual nodes.",
+      content: `<p class="mb-2">Strata treats identity as a core architectural topology layer:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>D1-Resident Auth (Better Auth / Lucia):</strong> Strata automatically detects standard auth tables (<code>user</code>, <code>session</code>, <code>account</code>, <code>verification</code>) and tags them with <code>🛡️ Better Auth</code>. Add custom fields (e.g. <code>stripeCustomerId</code>, <code>role</code>) directly to the user table without breaking CLI compatibility.</li>
+                  <li><strong>Cloud IdP Boundaries (Clerk & WorkOS):</strong> When tables contain external identity references (e.g. <code>clerkUserId</code> or <code>workosOrgId</code>), Strata spawns visual Identity Boundary Nodes with animated connection edges.</li>
+                  <li><strong>1-Click Webhook Mirror Scaffolding:</strong> Easily generate local D1 mirror tables (<code>clerkUsers</code> or <code>workosUsers</code>) for fast local joins and webhook sync, complete with copyable Drizzle migration definitions.</li>
+                  <li><strong>Tailored Identity Inspector:</strong> Selecting an identity node provides provider-specific branding, bound table navigation, official documentation links, and webhook configuration status.</li>
+                </ul>`,
+    },
+    {
+      id: "ide-workflow-guide",
+      category: "getting-started",
+      title: "External IDE Pairing & Zero-Jitter Workflow",
+      tags: ["ide", "vscode", "cursor", "editor", "pairing", "workflow", "preview"],
+      summary:
+        "Strata is designed to run side-by-side with VS Code, Cursor, or WebStorm rather than replacing your editor.",
+      content: `<p class="mb-2">Strata pairs with your primary developer environment:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>"Open in Editor" Integration:</strong> Click the active file pill in the Navbar or the Editor button in the Inspector to jump directly to your code in VS Code or Cursor.</li>
+                  <li><strong>Instant Diagnostic Navigation:</strong> Clicking any schema warning (e.g. <code>Line 42 ↗</code>) opens your external editor directly to that exact line of code.</li>
+                  <li><strong>Contextual Drizzle Previews:</strong> Inspect any table to view syntax-highlighted Drizzle definitions and copy code snippets in one click.</li>
+                  <li><strong>Self-Trigger Watcher Debounce:</strong> AST mutations initiated within Strata bypass the file watcher so you never experience feedback loops or jitter while editing.</li>
+                </ul>`,
+    },
+    {
+      id: "drizzle-config-guide",
+      category: "getting-started",
+      title: "drizzle.config.ts Workspace Auto-Detection",
+      tags: ["drizzle.config", "workspace", "detection", "globs", "open"],
+      summary:
+        "Open drizzle.config.ts directly or let Strata auto-resolve complex glob and array schema paths.",
+      content: `<p class="mb-2">Strata natively understands your Drizzle configuration:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Direct Configuration Selection:</strong> Opening <code>drizzle.config.ts</code> automatically inspects the <code>schema</code> field and loads the primary entrypoint or barrel directory.</li>
+                  <li><strong>Diverse Syntax Support:</strong> Seamlessly resolves double quotes, single quotes, template literal backticks (<code>\`./src/db/schema.ts\`</code>), string arrays (<code>schema: ["./src/db/schema/*"]</code>), and trailing directory slashes.</li>
                 </ul>`,
     },
     {
@@ -416,7 +617,7 @@ export const users = sqliteTable("users", {});</pre>
       tags: ["error", "parse", "syntax", "tsmorph", "fail"],
       summary:
         "Steps to fix errors when the parser blocks workspace synchronization due to invalid TypeScript code.",
-      content: `<p class="mb-2">If Strata shows parse errors after editing code in the code tab:</p>
+      content: `<p class="mb-2">If Strata shows parse errors after saving changes in your external editor:</p>
                 <ul class="list-disc pl-4 space-y-1">
                   <li>Ensure all typescript imports (e.g. from <code>drizzle-orm/sqlite-core</code>) are valid.</li>
                   <li>Look at the parse failure console logs or toast warning messages for line/column highlights.</li>
@@ -548,7 +749,7 @@ export const users = sqliteTable("users", {});</pre>
       tags: ["ai", "prompt", "co-design", "copilot", "gpt", "claude"],
       summary:
         "How to use our specialized AI architect prompt to co-design schemas with Large Language Models.",
-      content: `<p class="mb-2">Copy the prompt below and paste it to your favorite LLM. It guides the AI to output correctly structured, Drizzle ORM-compliant code decorated with <code>@strata</code> metadata comments, facilitating seamless bi-directional synchronization.</p>`,
+      content: `<p class="mb-2">Copy the prompt below and paste it to your favorite LLM (Claude, ChatGPT, Gemini, Copilot). It guides the AI to output correctly structured, Drizzle ORM-compliant code decorated with <code>@strata-layout</code> barrel manifests or inline <code>@strata</code> metadata comments, facilitating seamless bi-directional synchronization with Strata and your external IDE.</p>`,
     },
     {
       id: "gotcha-git-undo",
@@ -557,9 +758,10 @@ export const users = sqliteTable("users", {});</pre>
       tags: ["git", "undo", "revert", "history", "checkout"],
       summary:
         "Strata has no internal undo/redo history stack because it uses Git. Learn how to revert unwanted changes.",
-      content: `<p class="mb-2">Strata does not manage a proprietary undo state history. Because your <code>schema.ts</code> file is the absolute single source of truth, standard Git features handle history management:</p>
+      content: `<p class="mb-2">Strata does not manage a proprietary undo state history. Because your schema codebase is the absolute single source of truth, standard Git features handle history management:</p>
                 <ul class="list-disc pl-4 space-y-1 mb-2">
-                  <li><strong>Reverting Node Positions:</strong> Discard dragged changes directly in your repository: <code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">git checkout -- src/lib/db/schema.ts</code>.</li>
+                  <li><strong>Reverting Node Positions:</strong> Discard layout changes directly in your repository: <code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">git checkout -- src/lib/db/schema.ts</code> (or your <code>schema/index.ts</code> in modular setups).</li>
+                  <li><strong>Git-Clean Domain Files:</strong> In modular setups, dragging nodes on the canvas touches only <code>@strata-layout</code> in the root barrel file, leaving domain files (<code>users.ts</code>, <code>posts.ts</code>) untouched.</li>
                   <li><strong>Branch isolation:</strong> Create safe feature branches when prototyping visual layouts to avoid mutating main files.</li>
                 </ul>
                 <p>This design guarantees zero hidden state or database sidecar files.</p>`,
@@ -606,27 +808,47 @@ export const users = sqliteTable("users", {});</pre>
     },
   ];
 
-  const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare Workers (D1 SQLite, KV, Durable Objects, R2).
-We are using Strata, an interactive ERD tool that parses and bi-directionally syncs our \`schema.ts\` file.
+  const aiPrompt = `You are an expert software architect specialized in Drizzle ORM and Cloudflare Workers (D1 SQLite, KV, Durable Objects, R2, and Modern Auth).
+We are using Strata, an interactive visual architecture canvas for Drizzle ORM + Cloudflare D1.
 
 You MUST follow these design & layout rules when writing or modifying Drizzle schema code for me:
 
-1. AESTHETICS & METADATA: Every table or collection declaration MUST be preceded by a standard JSDoc comment containing Strata visual coordinates in valid JSON format:
-   /**
-    * @strata { "target": "d1", "x": 100, "y": 200 }
-    */
+1. ARCHITECTURE ARCHETYPES:
+   - Modular Barrel (schema/index.ts) [Recommended for Teams]: Separate domain files (users.ts, posts.ts) and aggregate them in index.ts:
+     export * from "./users";
+     export * from "./posts";
+     In barrel mode, layout coordinates live EXCLUSIVELY in a root @strata-layout comment to eliminate Git merge conflicts:
+     /**
+      * @strata-layout {
+      *   "users": { "x": 100, "y": 150 },
+      *   "posts": { "x": 520, "y": 150 },
+      *   "__clerk_identity__": { "x": -250, "y": 150 }
+      * }
+      */
+     CRITICAL: NEVER put @strata position comments inside individual domain files (users.ts, posts.ts). Keep domain files pure Drizzle code!
+   - Single-File Monolith (schema.ts): Place entity JSDoc metadata directly above declarations:
+     /** @strata { "target": "d1", "x": 100, "y": 200 } */
+     export const users = sqliteTable("users", { ... });
 
-2. GRID LAYOUT: Pre-calculate visual layout positions (x, y coordinates) for new tables. Space them out logically (e.g. 350px apart horizontally, 250px apart vertically) to prevent canvas overlaps.
-
-3. DATATYPES & DIALECTS (Cloudflare D1 / SQLite):
+2. DATATYPES & DIALECTS (Cloudflare D1 / SQLite):
    - Always import table builders cleanly: import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
    - SQLite does not have a native Date type. Always map dates using:
      integer("created_at", { mode: "timestamp" }) or integer("created_at", { mode: "timestamp_ms" })
    - Booleans must map to: integer("is_active", { mode: "boolean" })
 
-4. DRIZZLE RELATIONS:
-   - Physical Foreign Keys: Use .references(() => parentTable.id, { onDelete: 'cascade' }) on foreign key columns.
-   - Logical Relations: Use Drizzle's relations() query builder API:
+3. MODERN AUTH & IDENTITY BOUNDARIES:
+   - D1-Resident (Better Auth): Standard table cluster (user, session, account, verification). Custom fields (e.g. stripeCustomerId, role) live on the user table.
+   - Cloud IdP Boundaries (Clerk / WorkOS): When using external IdPs, name foreign key columns clerkUserId or workosOrgId:
+     clerkUserId: text("clerk_user_id").notNull()
+     workosOrgId: text("workos_org_id")
+     Strata automatically spawns visual Identity Boundary Nodes on the canvas with animated edge connections.
+   - Webhook Mirror Tables: For local querying and joins with external users, scaffold a local mirror table (e.g. clerkUsers or workosUsers).
+
+4. DRIZZLE RELATIONS & CROSS-MODULE DEPENDENCIES:
+   - Cross-Module Foreign Keys: When referencing tables in other files, explicitly import the parent table:
+     import { users } from "./users";
+     and add: .references(() => users.id, { onDelete: 'cascade' })
+   - Logical Relations: Use Drizzle's relations() query builder API, either in domain files or a dedicated relations.ts:
      export const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }));
 
 5. CLOUDFLARE STORAGE TARGETS (KV, DO, R2 JSDoc Overrides):
@@ -649,6 +871,10 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
      /**
       * @strata { "target": "d1", "x": 100, "y": 100, "relations": [{ "to": "SESSIONS_KV" }] }
       */
+
+7. EXTERNAL IDE PAIRING & ZERO-JITTER WORKFLOW:
+   - Strata pairs side-by-side with your primary editor (VS Code, Cursor). Changes saved to disk update the canvas in real-time.
+   - Generate standard, clean Drizzle TypeScript files without proprietary runtime sidecars or config files.
 
 Generate only valid, production-ready TypeScript code inside standard markdown codeblocks without conversational fluff.`;
 
@@ -839,7 +1065,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
               <p class="text-base-content/75 leading-relaxed">
                 Explore pre-built Cloudflare D1, KV, Durable Object, and R2
                 schema architectures. Loading a template populates the visual
-                canvas and CodeMirror editor instantly.
+                architecture canvas and interactive inspector instantly.
               </p>
 
               <div class="grid grid-cols-1 gap-3.5 mt-1">
@@ -880,241 +1106,383 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
             <!-- JSDoc Metadata Builder GUI -->
             <div class="flex flex-col gap-4 font-sans text-xs">
               <div
-                class="flex items-center gap-2 border-b border-base-300 pb-2 mb-2"
+                class="flex items-center justify-between border-b border-base-300 pb-2 mb-1"
               >
-                <Wrench class="w-4 h-4 text-primary" />
-                <h3
-                  class="font-black text-sm uppercase tracking-wide text-base-content"
-                >
-                  JSDoc Metadata Builder
-                </h3>
-              </div>
-              <p class="text-base-content/75 leading-relaxed">
-                Use this interactive tool to build standard <code>@strata</code>
-                comments. Paste the generated block directly above your table, object,
-                or connection declarations in your Drizzle
-                <code>schema.ts</code> file.
-              </p>
+                <div class="flex items-center gap-2">
+                  <Wrench class="w-4 h-4 text-primary" />
+                  <h3
+                    class="font-black text-sm uppercase tracking-wide text-base-content"
+                  >
+                    JSDoc Metadata Builder
+                  </h3>
+                </div>
 
-              <!-- Basic Fields -->
-              <div
-                class="grid grid-cols-3 gap-3 bg-base-200/50 p-4 rounded-2xl border border-base-300/60 mt-1"
-              >
-                <label class="flex flex-col gap-1 cursor-pointer">
-                  <div class="flex items-center justify-between">
+                <!-- Pattern Archetype Switcher -->
+                <div
+                  class="flex items-center gap-1 p-1 bg-base-200 rounded-xl border border-base-300"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-xs rounded-lg px-2.5 transition-all {builderMode === 'barrel' ? 'btn-primary font-bold shadow-sm' : 'btn-ghost text-base-content/70'}"
+                    onclick={() => (builderMode = "barrel")}
+                  >
+                    <Layers class="w-3 h-3" />
+                    <span>Modular Barrel (@strata-layout)</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-xs rounded-lg px-2.5 transition-all {builderMode === 'single' ? 'btn-primary font-bold shadow-sm' : 'btn-ghost text-base-content/70'}"
+                    onclick={() => (builderMode = "single")}
+                  >
+                    <Database class="w-3 h-3" />
+                    <span>Single-File Entity (@strata)</span>
+                  </button>
+                </div>
+              </div>
+
+              {#if builderMode === "barrel"}
+                <p class="text-base-content/75 leading-relaxed">
+                  Generate the consolidated <code>@strata-layout</code> manifest for your barrel file (<code>schema/index.ts</code>).
+                  This stores all canvas coordinates in one central manifest, ensuring <strong>zero Git diff noise</strong> in your domain files (<code>users.ts</code>, <code>posts.ts</code>).
+                </p>
+
+                <!-- Barrel Controls -->
+                <div
+                  class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3.5"
+                >
+                  <div class="flex items-center justify-between border-b border-base-300/50 pb-1.5">
+                    <span class="font-bold text-[10px] uppercase text-primary tracking-wider">Barrel Entities & Quick Presets</span>
+                    <div class="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
+                        onclick={() => loadBarrelPreset("blog")}
+                      >
+                        Blog + Clerk
+                      </button>
+                      <button
+                        type="button"
+                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
+                        onclick={() => loadBarrelPreset("ecommerce")}
+                      >
+                        E-Commerce + WorkOS
+                      </button>
+                      <button
+                        type="button"
+                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
+                        onclick={() => loadBarrelPreset("saas")}
+                      >
+                        Multi-Tenant SaaS
+                      </button>
+                    </div>
+                  </div>
+
+                  <label class="flex flex-col gap-1 cursor-pointer">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-[10px] uppercase text-base-content/65">Entities / Table Names</span>
+                      <span class="text-[9px] opacity-50">Comma-separated module identifiers</span>
+                    </div>
+                    <input
+                      type="text"
+                      bind:value={barrelEntities}
+                      placeholder="e.g. users, posts, comments, categories"
+                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                    />
+                    {#if barrelError}
+                      <span class="text-[9px] text-error font-semibold mt-0.5">{barrelError}</span>
+                    {:else}
+                      <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Enter domain entity names. Each name will be assigned grid coordinates in the layout manifest.</span>
+                    {/if}
+                  </label>
+
+                  <!-- Virtual Identity Boundary Options -->
+                  <div class="flex items-center gap-6 py-1 border-t border-base-300/40 pt-2.5">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                      <input
+                        type="checkbox"
+                        bind:checked={includeClerkBoundary}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                      />
+                      <span>Include Clerk Node (__clerk_identity__)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                      <input
+                        type="checkbox"
+                        bind:checked={includeWorkosBoundary}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                      />
+                      <span>Include WorkOS Node (__workos_identity__)</span>
+                    </label>
+                  </div>
+
+                  <!-- Layout Grid Parameters -->
+                  <div class="grid grid-cols-4 gap-3 border-t border-base-300/40 pt-2.5">
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <span class="font-bold text-[10px] uppercase text-base-content/60">Grid Columns</span>
+                      <input
+                        type="number"
+                        bind:value={barrelColumns}
+                        min="1"
+                        max="6"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <span class="font-bold text-[10px] uppercase text-base-content/60">Col Gap (px)</span>
+                      <input
+                        type="number"
+                        bind:value={barrelSpacingX}
+                        step="20"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <span class="font-bold text-[10px] uppercase text-base-content/60">Row Gap (px)</span>
+                      <input
+                        type="number"
+                        bind:value={barrelSpacingY}
+                        step="20"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <span class="font-bold text-[10px] uppercase text-base-content/60">Start X (px)</span>
+                      <input
+                        type="number"
+                        bind:value={barrelStartX}
+                        step="20"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+              {:else}
+                <p class="text-base-content/75 leading-relaxed">
+                  Use this interactive tool to build inline <code>@strata</code> comments for single-file schemas (<code>schema.ts</code>).
+                  Paste the generated block directly above your table, object, or connection declarations.
+                </p>
+
+                <!-- Basic Fields -->
+                <div
+                  class="grid grid-cols-3 gap-3 bg-base-200/50 p-4 rounded-2xl border border-base-300/60 mt-1"
+                >
+                  <label class="flex flex-col gap-1 cursor-pointer">
+                    <div class="flex items-center justify-between">
+                      <span
+                        class="font-bold text-[10px] uppercase text-base-content/60"
+                        >Storage Target</span
+                      >
+                      <button
+                        type="button"
+                        class="text-[9px] text-primary hover:underline font-bold"
+                        onclick={loadSamplePreset}
+                      >
+                        Load Sample
+                      </button>
+                    </div>
+                    <select
+                      bind:value={builderTarget}
+                      class="select select-sm select-bordered rounded-lg bg-base-100 w-full font-medium text-xs h-8 min-h-8"
+                    >
+                      <option value="d1">D1 (SQLite Table)</option>
+                      <option value="do">DO (Durable Object)</option>
+                      <option value="kv">KV (Key-Value Store)</option>
+                      <option value="r2">R2 (Storage Bucket)</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1 cursor-pointer">
                     <span
                       class="font-bold text-[10px] uppercase text-base-content/60"
-                      >Storage Target</span
+                      >Position X (px)</span
                     >
-                    <button
-                      type="button"
-                      class="text-[9px] text-primary hover:underline font-bold"
-                      onclick={loadSamplePreset}
+                    <input
+                      type="number"
+                      bind:value={builderX}
+                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1 cursor-pointer">
+                    <span
+                      class="font-bold text-[10px] uppercase text-base-content/60"
+                      >Position Y (px)</span
                     >
-                      Load Sample
-                    </button>
-                  </div>
-                  <select
-                    bind:value={builderTarget}
-                    class="select select-sm select-bordered rounded-lg bg-base-100 w-full font-medium text-xs h-8 min-h-8"
-                  >
-                    <option value="d1">D1 (SQLite Table)</option>
-                    <option value="do">DO (Durable Object)</option>
-                    <option value="kv">KV (Key-Value Store)</option>
-                    <option value="r2">R2 (Storage Bucket)</option>
-                  </select>
-                </label>
-                <label class="flex flex-col gap-1 cursor-pointer">
-                  <span
-                    class="font-bold text-[10px] uppercase text-base-content/60"
-                    >Position X (px)</span
-                  >
-                  <input
-                    type="number"
-                    bind:value={builderX}
-                    class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                  />
-                </label>
-                <label class="flex flex-col gap-1 cursor-pointer">
-                  <span
-                    class="font-bold text-[10px] uppercase text-base-content/60"
-                    >Position Y (px)</span
-                  >
-                  <input
-                    type="number"
-                    bind:value={builderY}
-                    class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                  />
-                </label>
-              </div>
+                    <input
+                      type="number"
+                      bind:value={builderY}
+                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                    />
+                  </label>
+                </div>
 
-              <!-- Target Specific Parameters -->
-              <div
-                class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3"
-              >
-                <h4
-                  class="font-bold text-[10px] uppercase tracking-wider text-primary border-b border-base-300/50 pb-1"
+                <!-- Target Specific Parameters -->
+                <div
+                  class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3"
                 >
-                  Target Configurations
-                </h4>
+                  <h4
+                    class="font-bold text-[10px] uppercase tracking-wider text-primary border-b border-base-300/50 pb-1"
+                  >
+                    Target Configurations
+                  </h4>
 
-                {#if builderTarget === "d1"}
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >Synthetic Relations</span
-                      >
-                      <span class="text-[9px] opacity-50"
-                        >Comma-separated target node names</span
-                      >
-                    </div>
-                    <input
-                      type="text"
-                      bind:value={builderD1Relations}
-                      placeholder="e.g. USERS_KV, IMAGES_R2"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                    {#if relationsError}
-                      <span class="text-[9px] text-error font-semibold mt-0.5"
-                        >{relationsError}</span
-                      >
-                    {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                        >Tip: Points to targets in your diagram (e.g. KV
-                        namespaces or buckets).</span
-                      >
-                    {/if}
-                  </label>
-                {:else if builderTarget === "do"}
-                  <div class="grid grid-cols-2 gap-3">
+                  {#if builderTarget === "d1"}
                     <label class="flex flex-col gap-1 cursor-pointer">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >DO Class File Path</span
-                      >
+                      <div class="flex items-center justify-between">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >Synthetic Relations</span
+                        >
+                        <span class="text-[9px] opacity-50"
+                          >Comma-separated target node names</span
+                        >
+                      </div>
                       <input
                         type="text"
-                        bind:value={builderDOPath}
-                        placeholder="e.g. ./src/do/UserDO.ts"
+                        bind:value={builderD1Relations}
+                        placeholder="e.g. USERS_KV, IMAGES_R2"
                         class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                       />
+                      {#if relationsError}
+                        <span class="text-[9px] text-error font-semibold mt-0.5"
+                          >{relationsError}</span
+                        >
+                      {:else}
+                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                          >Tip: Points to targets in your diagram (e.g. KV
+                          namespaces or buckets).</span
+                        >
+                      {/if}
                     </label>
+                  {:else if builderTarget === "do"}
+                    <div class="grid grid-cols-2 gap-3">
+                      <label class="flex flex-col gap-1 cursor-pointer">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >DO Class File Path</span
+                        >
+                        <input
+                          type="text"
+                          bind:value={builderDOPath}
+                          placeholder="e.g. ./src/do/UserDO.ts"
+                          class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                        />
+                      </label>
+                      <label class="flex flex-col gap-1 cursor-pointer">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >DO Class Name</span
+                        >
+                        <input
+                          type="text"
+                          bind:value={builderDOClass}
+                          placeholder="e.g. UserDO"
+                          class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                        />
+                      </label>
+                    </div>
                     <label class="flex flex-col gap-1 cursor-pointer">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >DO Class Name</span
-                      >
+                      <div class="flex items-center justify-between">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >Public Methods</span
+                        >
+                        <span class="text-[9px] opacity-50"
+                          >Comma-separated list</span
+                        >
+                      </div>
                       <input
                         type="text"
-                        bind:value={builderDOClass}
-                        placeholder="e.g. UserDO"
+                        bind:value={builderDOMethods}
+                        placeholder="e.g. login, logout, getProfile"
                         class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                       />
-                    </label>
-                  </div>
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >Public Methods</span
-                      >
-                      <span class="text-[9px] opacity-50"
-                        >Comma-separated list</span
-                      >
-                    </div>
-                    <input
-                      type="text"
-                      bind:value={builderDOMethods}
-                      placeholder="e.g. login, logout, getProfile"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                    <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                      >Tip: Declare custom method names and signatures (e.g. <code
-                        >fetchData(id: string)</code
-                      >).</span
-                    >
-                  </label>
-                {:else if builderTarget === "kv"}
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >KV Key Mappings</span
-                      >
-                      <span class="text-[9px] opacity-50"
-                        >Comma-separated key:type mappings</span
-                      >
-                    </div>
-                    <input
-                      type="text"
-                      bind:value={builderKVMappings}
-                      placeholder="e.g. sessionToken:string, attempts:number, meta:any"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                    {#if kvError}
-                      <span class="text-[9px] text-error font-semibold mt-0.5"
-                        >{kvError}</span
-                      >
-                    {:else}
                       <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                        >Tip: Enter <code>keyName:type</code> pairs (supported types:
-                        string, number, boolean, any).</span
+                        >Tip: Declare custom method names and signatures (e.g. <code
+                          >fetchData(id: string)</code
+                        >).</span
                       >
-                    {/if}
-                  </label>
-                {:else if builderTarget === "r2"}
-                  <div class="flex items-center gap-6 py-1">
-                    <label
-                      class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
-                    >
-                      <input
-                        type="checkbox"
-                        bind:checked={builderR2Public}
-                        class="checkbox checkbox-xs checkbox-primary rounded"
-                      />
-                      <span>Public Access Enabled</span>
                     </label>
-                    <label
-                      class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
-                    >
+                  {:else if builderTarget === "kv"}
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <div class="flex items-center justify-between">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >KV Key Mappings</span
+                        >
+                        <span class="text-[9px] opacity-50"
+                          >Comma-separated key:type mappings</span
+                        >
+                      </div>
                       <input
-                        type="checkbox"
-                        bind:checked={builderR2Cors}
-                        class="checkbox checkbox-xs checkbox-primary rounded"
+                        type="text"
+                        bind:value={builderKVMappings}
+                        placeholder="e.g. sessionToken:string, attempts:number, meta:any"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
                       />
-                      <span>CORS Enabled</span>
+                      {#if kvError}
+                        <span class="text-[9px] text-error font-semibold mt-0.5"
+                          >{kvError}</span
+                        >
+                      {:else}
+                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                          >Tip: Enter <code>keyName:type</code> pairs (supported types:
+                          string, number, boolean, any).</span
+                        >
+                      {/if}
                     </label>
-                  </div>
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/65"
-                        >Folder Filters</span
+                  {:else if builderTarget === "r2"}
+                    <div class="flex items-center gap-6 py-1">
+                      <label
+                        class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
                       >
-                      <span class="text-[9px] opacity-50"
-                        >Comma-separated folderName:mime/type pairs</span
+                        <input
+                          type="checkbox"
+                          bind:checked={builderR2Public}
+                          class="checkbox checkbox-xs checkbox-primary rounded"
+                        />
+                        <span>Public Access Enabled</span>
+                      </label>
+                      <label
+                        class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
                       >
+                        <input
+                          type="checkbox"
+                          bind:checked={builderR2Cors}
+                          class="checkbox checkbox-xs checkbox-primary rounded"
+                        />
+                        <span>CORS Enabled</span>
+                      </label>
                     </div>
-                    <input
-                      type="text"
-                      bind:value={builderR2Folders}
-                      placeholder="e.g. avatars:image/*, data:application/json"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                    {#if r2Error}
-                      <span class="text-[9px] text-error font-semibold mt-0.5"
-                        >{r2Error}</span
-                      >
-                    {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                        >Tip: Enter <code>folderName:mime/type</code> (e.g.
-                        <code>avatars:image/*</code>).</span
-                      >
-                    {/if}
-                  </label>
-                {/if}
-              </div>
+                    <label class="flex flex-col gap-1 cursor-pointer">
+                      <div class="flex items-center justify-between">
+                        <span
+                          class="font-bold text-[10px] uppercase text-base-content/65"
+                          >Folder Filters</span
+                        >
+                        <span class="text-[9px] opacity-50"
+                          >Comma-separated folderName:mime/type pairs</span
+                        >
+                      </div>
+                      <input
+                        type="text"
+                        bind:value={builderR2Folders}
+                        placeholder="e.g. avatars:image/*, data:application/json"
+                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      />
+                      {#if r2Error}
+                        <span class="text-[9px] text-error font-semibold mt-0.5"
+                          >{r2Error}</span
+                        >
+                      {:else}
+                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
+                          >Tip: Enter <code>folderName:mime/type</code> (e.g.
+                          <code>avatars:image/*</code>).</span
+                        >
+                      {/if}
+                    </label>
+                  {/if}
+                </div>
+              {/if}
 
               <!-- Output Display -->
               <div
@@ -1125,8 +1493,11 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                 >
                   <span
                     class="font-bold text-[10px] uppercase tracking-wider text-success"
-                    >Generated JSDoc Code</span
                   >
+                    {builderMode === "barrel"
+                      ? "Generated Barrel Manifest (schema/index.ts)"
+                      : "Generated Entity JSDoc (schema.ts)"}
+                  </span>
                   <button
                     class="btn btn-success btn-xs rounded-lg font-bold flex items-center gap-1 hover:shadow-md transition-all active:scale-95 text-success-content"
                     onclick={copyBuilderJSDoc}
@@ -1140,7 +1511,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                   </button>
                 </div>
                 <pre
-                  class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{generatedJSDoc}</pre>
+                  class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{activeJSDocOutput}</pre>
               </div>
             </div>
           {:else}

@@ -12,7 +12,9 @@ export {
 
 export {
 	resolveRelativePath,
-	resolvePathAlias
+	resolvePathAlias,
+	getRelativeImportSpecifier,
+	cleanUnusedImports
 } from './helpers';
 
 export { 
@@ -29,7 +31,17 @@ export {
 	updateColumnModifiersInSchema,
 	updateProjectConfigInSchema,
 	updateTableMetadataInSchema,
-	addForeignKeyToColumnInSchema
+	addForeignKeyToColumnInSchema,
+	scaffoldBetterAuthClusterInSchema,
+	scaffoldClerkMirrorTableInSchema,
+	scaffoldWorkOSMirrorTableInSchema,
+	extractStrataLayoutManifest,
+	updateLayoutManifestInSchema,
+	removeTableFromLayoutManifest,
+	renameTableInLayoutManifest,
+	parseDrizzleConfigSchemaPath,
+	createD1ModuleCode,
+	addReExportToBarrel
 } from './mutators';
 
 

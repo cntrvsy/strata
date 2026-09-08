@@ -19,15 +19,19 @@
     Wrench,
     Lightbulb,
     TriangleAlert,
+    Copy,
+    ExternalLink,
+    Code,
   } from "lucide-svelte";
+  import { PlatformService } from "#lib/services/platform";
   import { schemaState } from "#lib/state";
-  import { uiState } from "#lib/state/uiStore.svelte";
   import AddFieldForm from "#lib/components/forms/AddFieldForm.svelte";
   import AddRelationForm from "#lib/components/forms/AddRelationForm.svelte";
   import D1Inspector from "./D1Inspector.svelte";
   import KVInspector from "./KVInspector.svelte";
   import DOInspector from "./DOInspector.svelte";
   import R2Inspector from "./R2Inspector.svelte";
+  import IdentityInspector from "./IdentityInspector.svelte";
 
   // --- Local UI State ---
 
@@ -138,11 +142,74 @@
   );
   const isReadOnly = $derived(
     !!selectedNode &&
-      ((selectedNode.data as any)?.isExternal ||
-        (selectedNode.data as any)?.target === "do" ||
+      ((selectedNode.data as any)?.target === "do" ||
         (selectedNode.data as any)?.target === "kv" ||
         (selectedNode.data as any)?.target === "r2"),
   );
+
+  let copied = $state(false);
+
+  function copySnippet() {
+    if (!drizzleSnippet) return;
+    navigator.clipboard.writeText(drizzleSnippet);
+    copied = true;
+    setTimeout(() => {
+      copied = false;
+    }, 2000);
+  }
+
+  function getTableSnippet(node: any, rawCode: string): string {
+    if (!node) return "";
+    const name = node.id;
+    const target = (node.data as any)?.target || "d1";
+
+    if (target === "d1" && rawCode) {
+      const pattern = new RegExp(
+        `(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
+        "m"
+      );
+      const match = rawCode.match(pattern);
+      if (match) {
+        return match[0].trim();
+      }
+    }
+
+    if (target === "d1") {
+      const cols = ((node.data as any)?.columns || [])
+        .map((col: any) => {
+          let def = col.definition || "text";
+          let chain = `${def}("${col.name}")`;
+          if (col.isPk) chain += ".primaryKey()";
+          if (col.isNotNull) chain += ".notNull()";
+          if (col.isUnique) chain += ".unique()";
+          if (col.default !== undefined) chain += `.default(${JSON.stringify(col.default)})`;
+          return `  ${col.name}: ${chain},`;
+        })
+        .join("\n");
+      return `export const ${name} = sqliteTable("${name}", {\n${cols}\n});`;
+    } else if (target === "kv") {
+      const fields = ((node.data as any)?.columns || [])
+        .map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
+        .join("\n");
+      return `export interface ${name}Schema {\n${fields}\n}`;
+    } else if (target === "r2") {
+      const fields = ((node.data as any)?.columns || [])
+        .map((c: any) => `  "${c.name}": string;`)
+        .join("\n");
+      return `export interface ${name}Bucket {\n${fields}\n}`;
+    } else if (target === "do") {
+      const methods = ((node.data as any)?.columns || [])
+        .map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
+        .join("\n");
+      return `export class ${name} {\n${methods}\n}`;
+    }
+    return "";
+  }
+
+  const drizzleSnippet = $derived.by(() => {
+    if (!selectedNode) return "";
+    return getTableSnippet(selectedNode, schemaState.rawCode);
+  });
 </script>
 
 {#if schemaState.activeInspectorNodeId}
@@ -150,14 +217,17 @@
     (n) => n.id === schemaState.activeInspectorNodeId,
   )}
   {#if selectedNode}
-    {@const data = selectedNode.data as any}
-    {@const config =
-      targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
+    {#if selectedNode.type === "identity"}
+      <IdentityInspector node={selectedNode} onDismiss={dismiss} />
+    {:else}
+      {@const data = selectedNode.data as any}
+      {@const config =
+        targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
 
-    <div
-      class="w-full h-full max-h-full bg-base-100 border-r border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-left-8 duration-300"
-      data-testid="inspector-panel"
-    >
+      <div
+        class="w-full h-full max-h-full bg-base-100 border-l border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-right-8 duration-300"
+        data-testid="inspector-panel"
+      >
       <!-- Header -->
       <div
         class="p-5 border-b border-base-300 flex items-center justify-between bg-base-200/50"
@@ -242,6 +312,19 @@
             {/if}
           {/if}
           <button
+            class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 text-base-content/70 hover:text-primary transition-all"
+            onclick={() => {
+              const targetPath = (data as any)?.moduleInfo?.sourceFilePath || schemaState.filePath;
+              if (targetPath) {
+                PlatformService.openInEditor(targetPath);
+              }
+            }}
+            title="Open in external editor (Cursor / VS Code)"
+            data-testid="inspector-open-in-editor"
+          >
+            <ExternalLink class="w-3.5 h-3.5" />
+          </button>
+          <button
             class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
             onclick={dismiss}
           >
@@ -265,7 +348,11 @@
             {#if issue.line}
               <button
                 class="text-[9px] font-mono underline hover:opacity-80"
-                onclick={() => uiState.jumpToCodeLine(issue.line)}
+                onclick={() => {
+                  const targetPath = (selectedNode?.data as any)?.moduleInfo?.sourceFilePath || schemaState.filePath;
+                  if (targetPath) PlatformService.openInEditor(targetPath, issue.line);
+                }}
+                title="Open at line {issue.line} in external editor"
               >
                 Line {issue.line} ↗
               </button>
@@ -354,9 +441,7 @@
           >
             <span>ℹ️</span>
             <span
-              >This entity's structure is read-only (parsed dynamically from
-              external source code or wrangler.toml configuration). Modifying
-              its fields is disabled.</span
+              >This entity is a Cloudflare binding target (KV, Durable Object, or R2) managed via your wrangler configuration. SQL column additions apply to D1 database tables.</span
             >
           </div>
         {/if}
@@ -539,6 +624,35 @@
             {/if}
           </div>
         {/if}
+
+        {#if drizzleSnippet}
+          <!-- Drizzle TypeScript Definition Snippet Card -->
+          <div class="flex flex-col gap-2 pt-3 border-t border-base-300/60">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider flex items-center gap-1.5">
+                <Code class="w-3 h-3 text-primary" />
+                <span>Definition</span>
+              </span>
+              <button
+                class="btn btn-ghost btn-xs gap-1 font-mono text-[10px] h-5 min-h-0 px-2 rounded hover:bg-base-200 text-base-content/70 hover:text-primary transition-all"
+                onclick={copySnippet}
+                title="Copy Drizzle definition to clipboard"
+                data-testid="inspector-copy-snippet"
+              >
+                {#if copied}
+                  <Check class="w-3 h-3 text-success" />
+                  <span class="text-success font-semibold">Copied!</span>
+                {:else}
+                  <Copy class="w-3 h-3" />
+                  <span>Copy</span>
+                {/if}
+              </button>
+            </div>
+            <div class="relative rounded-box bg-base-200/50 border border-base-300/80 p-3 overflow-x-auto text-[11px] font-mono leading-relaxed text-base-content/90 max-h-48 scrollbar-thin select-text">
+              <pre class="whitespace-pre"><code>{drizzleSnippet}</code></pre>
+            </div>
+          </div>
+        {/if}
       </div>
 
       <!-- Footer Stats/Hint -->
@@ -556,5 +670,6 @@
         </div>
       </div>
     </div>
+    {/if}
   {/if}
 {/if}

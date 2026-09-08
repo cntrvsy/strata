@@ -30,6 +30,11 @@
       }>;
       target?: "d1" | "do" | "kv" | "r2";
       isExternal?: boolean;
+      moduleInfo?: {
+        sourceFilePath: string;
+        moduleName: string;
+        isRootFile: boolean;
+      };
     };
     selected?: boolean;
     dragging?: boolean;
@@ -158,13 +163,9 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 {data.isExternal
-      ? 'border-t-neutral-400 opacity-80'
-      : config.borderTop} {data.isExternal
-      ? 'border-dashed border-base-300'
-      : selected
-        ? `border-${config.color} ring-2 ring-${config.color}/30`
-        : `border-base-300 ${config.border}`} {dragging
+    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected
+      ? `border-${config.color} ring-2 ring-${config.color}/30`
+      : `border-base-300 ${config.border}`} {dragging
       ? 'shadow-2xl scale-[1.02]'
       : 'shadow-md'}"
   >
@@ -174,28 +175,30 @@
     >
       <div class="flex items-center gap-2">
         <div
-          class="p-1.5 {data.isExternal
-            ? 'bg-base-300'
-            : config.bg} rounded-field {data.isExternal
-            ? ''
-            : config.bgHover} transition-colors"
+          class="p-1.5 {config.bg} rounded-field {config.bgHover} transition-colors"
         >
           <config.icon
-            class="w-4 h-4 {data.isExternal
-              ? 'text-base-content/50'
-              : config.text}"
+            class="w-4 h-4 {config.text}"
           />
         </div>
         <span
-          class="font-bold text-xs tracking-wide uppercase {data.isExternal
-            ? 'text-base-content/60'
-            : ''}">{data.label}</span
+          class="font-bold text-xs tracking-wide uppercase">{data.label}</span
         >
-        {#if data.isExternal}
+        {#if data.moduleInfo && !data.moduleInfo.isRootFile}
           <span
-            class="badge badge-neutral badge-xs font-semibold uppercase text-[8px] opacity-75"
-            >External</span
+            class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded gap-1"
+            title={`Defined in ${data.moduleInfo.sourceFilePath}`}
           >
+            📁 {data.moduleInfo.moduleName}
+          </span>
+        {/if}
+        {#if (data as any).isBetterAuth}
+          <span
+            class="badge badge-sm badge-secondary/20 border border-secondary/40 text-secondary font-semibold text-[9px] px-1.5 py-0.5 rounded gap-1"
+            title="Managed by Better Auth"
+          >
+            🛡️ Better Auth
+          </span>
         {/if}
       </div>
       <div class="flex items-center gap-1.5">
@@ -283,6 +286,11 @@
             >
               {col.name}
             </span>
+            {#if (col as any).isAuthCore}
+              <span class="badge badge-ghost badge-xs text-[8px] opacity-60 font-mono py-0 px-1" title="Better Auth Core Field">core</span>
+            {:else if (col as any).isCustomField}
+              <span class="badge badge-primary/20 border-primary/40 text-primary badge-xs text-[8px] font-mono py-0 px-1" title="Custom App Field">custom</span>
+            {/if}
           </div>
 
           <div class="flex items-center gap-1.5">
@@ -294,7 +302,7 @@
                 .replace("text", "txt")
                 .replace("integer", "int")}
             </span>
-            {#if !data.isExternal}
+            {#if data.target === "d1" || !data.target}
               <button
                 class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
                 onclick={(e) => {

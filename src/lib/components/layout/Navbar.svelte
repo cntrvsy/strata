@@ -18,11 +18,12 @@
     Menu,
     GitCompare,
     CircleArrowUp,
-    Code,
-    DraftingCompass,
+    FileCode,
+    ExternalLink,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { updateState } from "#lib/state/updateState.svelte";
+  import { PlatformService } from "#lib/services/platform";
   import { toPng } from "html-to-image";
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import HelpModal from "#lib/components/modals/HelpModal.svelte";
@@ -128,32 +129,38 @@
   class="navbar w-full h-11 border-b border-base-300/80 bg-base-100/90 backdrop-blur-md z-30 px-4 select-none shrink-0"
   data-testid="navbar"
 >
-  <!-- Left Side: View Mode Segment Switch (Sleek pill switch) -->
+  <!-- Left Side: Active Schema / File Badge + Open in Editor -->
   <div class="navbar-start flex items-center gap-2">
-    {#if schemaState.filePath || schemaState.isSandboxMode}
-      <div
-        class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/40 p-0.5"
-      >
+    {#if schemaState.filePath}
+      <div class="flex items-center gap-1.5">
         <button
-          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isCodeCollapsed
-            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
-            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
-          onclick={() => schemaState.toggleCodePane()}
-          title="Toggle Code Editor View"
+          class="btn btn-xs btn-ghost gap-1.5 font-medium px-2.5 h-6 min-h-0 border border-base-300/80 rounded-field hover:bg-base-200/80 transition-all text-[11px] text-base-content/80 group"
+          onclick={() =>
+            schemaState.filePath &&
+            PlatformService.openInEditor(schemaState.filePath)}
+          title="Open in external editor (Cursor / VS Code)"
+          data-testid="navbar-open-in-editor"
         >
-          <Code class="w-3.5 h-3.5" />
-          <span>Code</span>
+          <FileCode
+            class="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform"
+          />
+          <span
+            class="font-mono text-[10.5px] truncate max-w-50 font-semibold text-base-content"
+          >
+            {schemaState.filePath.split(/[/\\]/).pop()}
+          </span>
+          <ExternalLink
+            class="w-3 h-3 text-base-content/40 group-hover:text-primary transition-colors"
+          />
         </button>
-        <button
-          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isDiagramCollapsed
-            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
-            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
-          onclick={() => schemaState.toggleDiagramPane()}
-          title="Toggle Diagram Canvas View"
+      </div>
+    {:else if schemaState.isSandboxMode}
+      <div class="flex items-center gap-1.5">
+        <span
+          class="badge badge-sm badge-ghost border-base-300/80 text-[10px] font-mono font-semibold px-2 py-1"
         >
-          <DraftingCompass class="w-3.5 h-3.5" />
-          <span>Diagram</span>
-        </button>
+          Demo Sandbox
+        </span>
       </div>
     {/if}
   </div>

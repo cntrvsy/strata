@@ -187,12 +187,30 @@
               >
                 Select or Drop Schema File
               </span>
-              <p class="text-[11px] text-base-content/60 mt-1 max-w-sm">
-                Open a local Drizzle <code
-                  class="bg-base-200 px-1 py-0.5 rounded-field text-primary font-mono text-[10px]"
-                  >schema.ts</code
-                > to generate & visualize ER diagrams automatically.
+              <p class="text-[11px] text-base-content/60 mt-1 max-w-md leading-relaxed">
+                Open your Drizzle schema (<code class="bg-base-200 px-1 py-0.5 rounded-field text-primary font-mono text-[10px]">schema/index.ts</code> or <code class="bg-base-200 px-1 py-0.5 rounded-field text-primary font-mono text-[10px]">schema.ts</code>) or <code class="bg-base-200 px-1 py-0.5 rounded-field text-primary font-mono text-[10px]">drizzle.config.ts</code>.
               </p>
+
+              <!-- Archetype Guidance Cards -->
+              <div class="grid grid-cols-2 gap-2.5 mt-3.5 text-left w-full max-w-md">
+                <div class="bg-base-100/90 border border-primary/25 rounded-xl p-2.5 flex flex-col gap-0.5 shadow-xs">
+                  <div class="flex items-center gap-1.5">
+                    <span class="badge badge-primary badge-xs font-bold text-[8px] uppercase">Recommended</span>
+                    <span class="font-bold text-[11px] text-base-content">Modular Barrel</span>
+                  </div>
+                  <code class="text-[10px] text-primary font-mono font-semibold">schema/index.ts</code>
+                  <span class="text-[10px] text-base-content/60 leading-tight">Zero Git merge conflicts on domain files via <code>@strata-layout</code>. Best for teams & production.</span>
+                </div>
+                <div class="bg-base-100/60 border border-base-300/80 rounded-xl p-2.5 flex flex-col gap-0.5">
+                  <div class="flex items-center gap-1.5">
+                    <span class="badge badge-ghost badge-xs font-bold text-[8px] uppercase opacity-75">Single-File</span>
+                    <span class="font-bold text-[11px] text-base-content">Monolith</span>
+                  </div>
+                  <code class="text-[10px] text-base-content/75 font-mono font-semibold">schema.ts</code>
+                  <span class="text-[10px] text-base-content/60 leading-tight">All-in-one schema file with inline <code>@strata</code> tags. Best for solo MVPs & quick prototypes.</span>
+                </div>
+              </div>
+
               <span
                 class="btn btn-primary btn-sm rounded-field px-5 mt-4 shadow-xs font-semibold text-xs"
               >

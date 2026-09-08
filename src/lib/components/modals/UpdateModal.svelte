@@ -20,6 +20,7 @@
     Store,
   } from "lucide-svelte";
   import { updateState } from "#lib/state/updateState.svelte";
+  import { PlatformService } from "#lib/services/platform";
   import { fade, scale } from "svelte/transition";
 
   function formatBytes(bytes: number): string {
@@ -251,13 +252,21 @@
           >
             Close
           </button>
-          <button
-            class="btn btn-primary btn-sm rounded-field text-xs font-bold gap-1.5 shadow-md"
-            onclick={() => updateState.openStore()}
+          <a
+            href={PlatformService.isTauri() ? "ms-windows-store://updates" : "https://apps.microsoft.com/"}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-primary btn-sm rounded-field text-xs font-bold gap-1.5 shadow-md inline-flex items-center"
+            onclick={(e) => {
+              if (PlatformService.isTauri()) {
+                e.preventDefault();
+                updateState.openStore("ms-windows-store://updates");
+              }
+            }}
           >
             <ExternalLink class="w-3.5 h-3.5" />
             <span>Open Microsoft Store</span>
-          </button>
+          </a>
         {:else if updateState.status === "up-to-date"}
           <button
             class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"

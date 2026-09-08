@@ -43,3 +43,9 @@ export interface ChainElement {
 	args: string[];
 }
 
+export interface ModuleInfo {
+	sourceFilePath: string;
+	moduleName: string;
+	isRootFile: boolean;
+}
+

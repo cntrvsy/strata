@@ -12,39 +12,12 @@
   import { PaneGroup, Pane, PaneResizer } from "paneforge";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
-  import { ChevronLeft, ChevronRight } from "lucide-svelte";
-
-  let codePane = $state<ReturnType<typeof Pane>>();
-  let diagramPane = $state<ReturnType<typeof Pane>>();
-
-  function resetLayout() {
-    codePane?.resize(45);
-    diagramPane?.resize(55);
-  }
-
-  onMount(() => {
-    schemaState.toggleCodePane = () => {
-      if (schemaState.isCodeCollapsed) {
-        codePane?.resize(45);
-      } else {
-        codePane?.collapse();
-      }
-    };
-    schemaState.toggleDiagramPane = () => {
-      if (schemaState.isDiagramCollapsed) {
-        diagramPane?.resize(55);
-      } else {
-        diagramPane?.collapse();
-      }
-    };
-  });
 
   // --- Components ---
   import DiagramCanvas from "#lib/components/diagram/DiagramCanvas.svelte";
   import Inspector from "#lib/components/inspector/Inspector.svelte";
   import Overlays from "#lib/components/layout/Overlays.svelte";
   import NewEntityForm from "#lib/components/forms/NewEntityForm.svelte";
-  import CodeEditor from "#lib/components/editor/CodeEditor.svelte";
   import ConnectionPickerModal from "#lib/components/modals/ConnectionPickerModal.svelte";
   import CanvasSearchPalette from "#lib/components/diagram/CanvasSearchPalette.svelte";
 
@@ -200,6 +173,10 @@
         unlistenFn = await PlatformService.listenEvent(
           "file-changed",
           async () => {
+            if (schemaState.ignoreNextWatch) {
+              schemaState.ignoreNextWatch = false;
+              return;
+            }
             if (
               schemaState.filePath &&
               (schemaState.machine.current === "IDLE" ||
@@ -251,87 +228,32 @@
   {#if !schemaState.filePath && !schemaState.isSandboxMode}
     <Overlays />
   {:else}
-    <!-- Floating expand triggers when panes are collapsed -->
-    {#if schemaState.isCodeCollapsed}
-      <button
-        onclick={() => codePane?.resize(45)}
-        class="absolute left-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-neutral btn-sm shadow-md transition-all duration-300"
-        title="Show Code Editor"
-      >
-        <ChevronRight class="w-4 h-4" />
-      </button>
-    {/if}
-    {#if schemaState.isDiagramCollapsed}
-      <button
-        onclick={() => diagramPane?.resize(55)}
-        class="absolute right-3 top-1/2 -translate-y-1/2 z-40 btn btn-circle btn-neutral btn-sm shadow-md transition-all duration-300"
-        title="Show Diagram Canvas"
-      >
-        <ChevronLeft class="w-4 h-4" />
-      </button>
-    {/if}
-
     <PaneGroup direction="horizontal" class="w-full h-full">
-      <Pane
-        minSize={15}
-        defaultSize={45}
-        order={0}
-        collapsible={true}
-        collapsedSize={0}
-        bind:this={codePane}
-        onCollapse={() => (schemaState.isCodeCollapsed = true)}
-        onExpand={() => (schemaState.isCodeCollapsed = false)}
-      >
+      <Pane order={0}>
         <div
           class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
         >
-          <CodeEditor />
+          <SvelteFlowProvider>
+            <DiagramCanvas {onconnect} {onnodedragstop} />
+            <Overlays />
+            <CanvasSearchPalette bind:show={showSearchPalette} />
+          </SvelteFlowProvider>
         </div>
       </Pane>
-      <PaneResizer
-        class="w-1.5 bg-base-300/40 hover:bg-primary/70 active:bg-primary transition-colors duration-150 cursor-col-resize z-10 flex items-center justify-center group"
-        ondblclick={resetLayout}
-      >
-        <div class="w-0.5 h-5 rounded-full bg-base-content/20 group-hover:bg-primary-content transition-colors duration-150"></div>
-      </PaneResizer>
-      <Pane
-        minSize={20}
-        defaultSize={55}
-        order={1}
-        collapsible={true}
-        collapsedSize={0}
-        bind:this={diagramPane}
-        onCollapse={() => (schemaState.isDiagramCollapsed = true)}
-        onExpand={() => (schemaState.isDiagramCollapsed = false)}
-      >
-        <PaneGroup direction="horizontal" class="w-full h-full">
-          {#if schemaState.activeInspectorNodeId}
-            <Pane minSize={15} defaultSize={25} order={0}>
-              <div
-                class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
-              >
-                <Inspector />
-              </div>
-            </Pane>
-            <PaneResizer
-              class="w-1.5 bg-base-300/40 hover:bg-primary/70 active:bg-primary transition-colors duration-150 cursor-col-resize z-10 flex items-center justify-center group"
-            >
-              <div class="w-0.5 h-5 rounded-full bg-base-content/20 group-hover:bg-primary-content transition-colors duration-150"></div>
-            </PaneResizer>
-          {/if}
-          <Pane order={1}>
-            <div
-              class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
-            >
-              <SvelteFlowProvider>
-                <DiagramCanvas {onconnect} {onnodedragstop} />
-                <Overlays />
-                <CanvasSearchPalette bind:show={showSearchPalette} />
-              </SvelteFlowProvider>
-            </div>
-          </Pane>
-        </PaneGroup>
-      </Pane>
+      {#if schemaState.activeInspectorNodeId}
+        <PaneResizer
+          class="w-1.5 bg-base-300/40 hover:bg-primary/70 active:bg-primary transition-colors duration-150 cursor-col-resize z-10 flex items-center justify-center group"
+        >
+          <div class="w-0.5 h-5 rounded-full bg-base-content/20 group-hover:bg-primary-content transition-colors duration-150"></div>
+        </PaneResizer>
+        <Pane minSize={20} defaultSize={28} order={1}>
+          <div
+            class="h-full w-full flex flex-col min-h-0 overflow-hidden relative"
+          >
+            <Inspector />
+          </div>
+        </Pane>
+      {/if}
     </PaneGroup>
   {/if}
 </div>

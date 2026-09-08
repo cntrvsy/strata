@@ -20,12 +20,20 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
 
   const isCompact = schemaState.compactMode;
   const children = nodes.map(node => {
+    if (node.type === 'identity') {
+      return {
+        id: node.id,
+        width: 270,
+        height: 180
+      };
+    }
+
     const columns = (node.data?.columns as any[]) || [];
-    const isExternal = node.data?.isExternal || false;
+    const hasModuleBadge = Boolean(node.data?.moduleInfo && !(node.data?.moduleInfo as any)?.isRootFile);
     
     // 1. Calculate estimated header width:
-    // Base padding/icon/badge width is ~110px. If external, add another 40px for "External" badge.
-    const headerBaseWidth = 110 + (isExternal ? 40 : 0);
+    // Base padding/icon/badge width is ~110px. If modular entity, add ~60px for module badge.
+    const headerBaseWidth = 110 + (hasModuleBadge ? 60 : 0);
     const headerTextWidth = node.id.length * 8.5; // Increased to 8.5px per character
     let maxEstimatedWidth = headerBaseWidth + headerTextWidth;
 

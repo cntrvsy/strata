@@ -1,8 +1,7 @@
-use anyhow::Result;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Runtime};
-use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, thiserror::Error, serde::Serialize)]
 pub enum CoordinatorError {
@@ -14,78 +13,58 @@ pub enum CoordinatorError {
 
     #[error("Wrangler config mutation failed: {0}")]
     WranglerConfig(String),
-
-    #[error("Coordinator channel closed")]
-    ChannelClosed,
 }
 
-pub enum CoordinatorOp {
-    Read {
-        path: PathBuf,
-        resp: oneshot::Sender<Result<String, CoordinatorError>>,
-    },
-    Write {
-        path: PathBuf,
-        content: String,
-        resp: oneshot::Sender<Result<(), CoordinatorError>>,
-    },
-    MutateWrangler {
-        config_path: PathBuf,
-        action: String,       // "add" or "remove"
-        binding_type: String, // "kv", "do", "r2"
-        binding_name: String,
-        extra: serde_json::Value,
-        resp: oneshot::Sender<Result<(), CoordinatorError>>,
-    },
-    FileWatchEvent {
-        path: PathBuf,
-    },
+struct DebounceState {
+    last_write_time: Instant,
+    last_written_path: Option<PathBuf>,
+    ignore_next_watch: bool,
 }
 
 pub struct SchemaCoordinator {
-    sender: mpsc::Sender<CoordinatorOp>,
+    on_file_changed: Box<dyn Fn() + Send + Sync>,
+    debounce: Mutex<DebounceState>,
 }
 
 impl SchemaCoordinator {
     pub fn new<R: Runtime>(app_handle: AppHandle<R>) -> Self {
-        let (tx, rx) = mpsc::channel(100);
-        let coordinator = SchemaCoordinator {
-            sender: tx,
-        };
-
-        // Start background actor task
-        tauri::async_runtime::spawn(async move {
-            run_coordinator_actor(rx, app_handle).await;
-        });
-
-        coordinator
+        let handle = app_handle.clone();
+        SchemaCoordinator {
+            on_file_changed: Box::new(move || {
+                let _ = handle.emit("file-changed", ());
+            }),
+            debounce: Mutex::new(DebounceState {
+                last_write_time: Instant::now() - Duration::from_secs(10),
+                last_written_path: None,
+                ignore_next_watch: false,
+            }),
+        }
     }
 
-    pub async fn read_file(&self, path: PathBuf) -> Result<String, CoordinatorError> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(CoordinatorOp::Read { path, resp: tx })
-            .await
-            .map_err(|_| CoordinatorError::ChannelClosed)?;
-
-        rx.await.map_err(|_| CoordinatorError::ChannelClosed)?
+    pub fn read_file(&self, path: PathBuf) -> Result<String, CoordinatorError> {
+        std::fs::read_to_string(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                CoordinatorError::FileNotFound(path.to_string_lossy().into_owned())
+            } else {
+                CoordinatorError::Io(e.to_string())
+            }
+        })
     }
 
-    pub async fn write_file(&self, path: PathBuf, content: String) -> Result<(), CoordinatorError> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(CoordinatorOp::Write {
-                path,
-                content,
-                resp: tx,
-            })
-            .await
-            .map_err(|_| CoordinatorError::ChannelClosed)?;
+    pub fn write_file(&self, path: PathBuf, content: String) -> Result<(), CoordinatorError> {
+        // Record debounce state before writing to disk
+        let canonical_path = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        {
+            let mut state = self.debounce.lock().unwrap();
+            state.ignore_next_watch = true;
+            state.last_write_time = Instant::now();
+            state.last_written_path = Some(canonical_path);
+        }
 
-        rx.await.map_err(|_| CoordinatorError::ChannelClosed)?
+        std::fs::write(&path, content).map_err(|e| CoordinatorError::Io(e.to_string()))
     }
 
-    pub async fn mutate_wrangler(
+    pub fn mutate_wrangler(
         &self,
         config_path: PathBuf,
         action: String,
@@ -93,88 +72,31 @@ impl SchemaCoordinator {
         binding_name: String,
         extra: serde_json::Value,
     ) -> Result<(), CoordinatorError> {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(CoordinatorOp::MutateWrangler {
-                config_path,
-                action,
-                binding_type,
-                binding_name,
-                extra,
-                resp: tx,
-            })
-            .await
-            .map_err(|_| CoordinatorError::ChannelClosed)?;
-
-        rx.await.map_err(|_| CoordinatorError::ChannelClosed)?
+        mutate_wrangler_config_file(&config_path, &action, &binding_type, &binding_name, &extra)
     }
 
     pub fn handle_watch_event(&self, path: PathBuf) {
-        let sender = self.sender.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = sender.send(CoordinatorOp::FileWatchEvent { path }).await;
-        });
-    }
-}
+        let canonical_path = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        let now = Instant::now();
 
-// Struct to hold state inside the actor task
-struct ActorState {
-    last_write_time: Instant,
-    last_written_path: Option<PathBuf>,
-    ignore_next_watch: bool,
-}
+        let should_emit = {
+            let mut state = self.debounce.lock().unwrap();
+            let is_recent_write_to_same_file = state
+                .last_written_path
+                .as_ref()
+                .map_or(false, |last| *last == canonical_path || *last == path)
+                && now.duration_since(state.last_write_time) < Duration::from_millis(500);
 
-async fn run_coordinator_actor<R: Runtime>(mut rx: mpsc::Receiver<CoordinatorOp>, app: AppHandle<R>) {
-    let mut state = ActorState {
-        last_write_time: Instant::now() - Duration::from_secs(10),
-        last_written_path: None,
-        ignore_next_watch: false,
-    };
-
-    while let Some(op) = rx.recv().await {
-        match op {
-            CoordinatorOp::Read { path, resp } => {
-                let res = std::fs::read_to_string(&path)
-                    .map_err(|e| {
-                        if e.kind() == std::io::ErrorKind::NotFound {
-                            CoordinatorError::FileNotFound(path.to_string_lossy().into_owned())
-                        } else {
-                            CoordinatorError::Io(e.to_string())
-                        }
-                    });
-                let _ = resp.send(res);
+            if state.ignore_next_watch || is_recent_write_to_same_file {
+                state.ignore_next_watch = false;
+                false
+            } else {
+                true
             }
-            CoordinatorOp::Write { path, content, resp } => {
-                state.ignore_next_watch = true;
-                state.last_write_time = Instant::now();
-                state.last_written_path = Some(path.clone());
+        }; // Mutex lock is explicitly dropped here before emitting IPC event
 
-                let res = std::fs::write(&path, content)
-                    .map_err(|e| CoordinatorError::Io(e.to_string()));
-                let _ = resp.send(res);
-            }
-            CoordinatorOp::MutateWrangler {
-                config_path,
-                action,
-                binding_type,
-                binding_name,
-                extra,
-                resp,
-            } => {
-                let res = mutate_wrangler_config_file(&config_path, &action, &binding_type, &binding_name, &extra);
-                let _ = resp.send(res);
-            }
-            CoordinatorOp::FileWatchEvent { path } => {
-                let now = Instant::now();
-                let is_recent_write_to_same_file = state.last_written_path.as_ref() == Some(&path)
-                    && now.duration_since(state.last_write_time) < Duration::from_millis(500);
-
-                if state.ignore_next_watch || is_recent_write_to_same_file {
-                    state.ignore_next_watch = false;
-                } else {
-                    let _ = app.emit("file-changed", ());
-                }
-            }
+        if should_emit {
+            (self.on_file_changed)();
         }
     }
 }
