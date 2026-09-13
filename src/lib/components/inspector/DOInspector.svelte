@@ -55,7 +55,13 @@
   }
 
   async function deleteColumn(colName: string) {
-    await schemaState.deleteColumn(tableName, colName);
+    schemaState.promptConfirm({
+      title: "Delete Method",
+      message: `Are you sure you want to delete method "${colName}" from "${tableName}"? This change will be saved to disk.`,
+      confirmLabel: "Delete Method",
+      isDanger: true,
+      onConfirm: () => schemaState.deleteColumn(tableName, colName),
+    });
   }
 
   async function saveClassMetadata() {

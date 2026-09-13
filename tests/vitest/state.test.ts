@@ -134,7 +134,7 @@ describe('SchemaState FSM & Reactivity', () => {
     expect(schemaState.compactMode).toBe(true);
   });
 
-  it('should manage external node positions in localStorage independently of schema.ts', async () => {
+  it('should write external node positions directly to the modular source file without localStorage pollution', async () => {
     const rawDrizzle = `
       import { user } from "./external-auth";
       import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
@@ -150,11 +150,17 @@ describe('SchemaState FSM & Reactivity', () => {
       export const user = sqliteTable("user", { id: text("id").primaryKey() });
     `;
 
-    // Mock file reads
+    const writtenFiles: Record<string, string> = {};
+
+    // Mock file reads and writes
     vi.mocked(invoke).mockImplementation(async (cmd: string, args: any) => {
       if (cmd === 'read_schema_file') {
         if (args.path === '/mock/schema.ts') return rawDrizzle;
         if (args.path.endsWith('external-auth.ts')) return externalContent;
+      }
+      if (cmd === 'write_schema_file') {
+        writtenFiles[args.path] = args.content;
+        return;
       }
       return '';
     });
@@ -162,7 +168,7 @@ describe('SchemaState FSM & Reactivity', () => {
     schemaState.filePath = '/mock/schema.ts';
     await schemaState.syncWithFile();
 
-    // Now update position of the external node
+    // Now update position of the modular node
     schemaState.nodes = schemaState.nodes.map(n => {
       if (n.id === 'user') {
         return { ...n, position: { x: 500, y: 600 } };
@@ -173,9 +179,19 @@ describe('SchemaState FSM & Reactivity', () => {
     // Save to file
     await schemaState.saveToFile();
 
-    // Verify localStorage has the position saved
+    // Verify localStorage was NOT polluted with external coordinate keys
     const key = `strata_ext_pos_/mock/schema.ts_user`;
-    expect(mockStorage[key]).toBe(JSON.stringify({ x: 500, y: 600 }));
+    expect(mockStorage[key]).toBeUndefined();
+
+    // Verify written to /mock/schema.ts directly via @strata-layout manifest (Git-clean!)
+    expect(writtenFiles['/mock/schema.ts']).toBeDefined();
+    expect(writtenFiles['/mock/schema.ts']).toContain('@strata-layout');
+    expect(writtenFiles['/mock/schema.ts']).toContain('"x": 500');
+    expect(writtenFiles['/mock/schema.ts']).toContain('"y": 600');
+
+    // Verify external-auth.ts was NOT written to (leaves domain files clean in Git)
+    const authPath = Object.keys(writtenFiles).find(p => p.includes('external-auth.ts'));
+    expect(authPath).toBeUndefined();
   });
 
   it('should append a schema path to recent files list on successful sync', async () => {

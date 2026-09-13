@@ -31,7 +31,13 @@
   }
 
   async function deleteColumn(colName: string) {
-    await schemaState.deleteColumn(tableName, colName);
+    schemaState.promptConfirm({
+      title: "Delete Key",
+      message: `Are you sure you want to delete key pattern "${colName}" from "${tableName}"? This change will be saved to disk.`,
+      confirmLabel: "Delete Key",
+      isDanger: true,
+      onConfirm: () => schemaState.deleteColumn(tableName, colName),
+    });
   }
 
   function toggleSettings(col: any) {

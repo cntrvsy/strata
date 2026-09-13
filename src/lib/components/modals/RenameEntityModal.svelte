@@ -9,6 +9,7 @@
   import { FilePen, X } from "lucide-svelte";
   import { fade } from "svelte/transition";
   import { schemaState } from "#lib/state";
+  import { isJsReservedKeyword } from "#lib/schemas";
 
   let newName = $state(schemaState.renameEntityTargetId || "");
   let errorMsg = $state("");
@@ -35,6 +36,10 @@
     }
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
       errorMsg = "Name must be a valid alphanumeric identifier.";
+      return false;
+    }
+    if (isJsReservedKeyword(trimmed)) {
+      errorMsg = `"${trimmed}" is a reserved JavaScript keyword.`;
       return false;
     }
     if (

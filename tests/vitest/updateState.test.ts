@@ -5,6 +5,9 @@ import { PlatformService } from '#lib/services/platform';
 vi.mock('#lib/services/platform', () => ({
 	PlatformService: {
 		isTauri: vi.fn(() => true),
+		isStore: vi.fn().mockResolvedValue(false),
+		getDistributionChannel: vi.fn().mockResolvedValue('standalone'),
+		openExternal: vi.fn().mockResolvedValue(undefined),
 		listenEvent: vi.fn(async (event: string, cb: any) => () => {}),
 		checkForUpdate: vi.fn(),
 		downloadAndInstallUpdate: vi.fn(),
@@ -170,5 +173,25 @@ describe('UpdateState Unit Tests', () => {
 		expect(newStore.status).toBe('available');
 		expect(newStore.updateInfo?.version).toBe('v3.2.0');
 		expect(newStore.hasUnseenUpdate).toBe(true);
+	});
+
+	it('should set status to store-managed and avoid download in store package', async () => {
+		vi.mocked(PlatformService.checkForUpdate).mockResolvedValueOnce({ available: false, isStore: true });
+
+		await store.check();
+
+		expect(store.status).toBe('store-managed');
+		expect(store.isStore).toBe(true);
+		expect(store.updateInfo).toBeNull();
+		expect(store.hasUnseenUpdate).toBe(false);
+
+		// downloadAndInstall should do nothing
+		await store.downloadAndInstall();
+		expect(PlatformService.downloadAndInstallUpdate).not.toHaveBeenCalled();
+	});
+
+	it('should invoke openExternal when openStore is called', async () => {
+		await store.openStore('ms-windows-store://updates');
+		expect(PlatformService.openExternal).toHaveBeenCalledWith('ms-windows-store://updates');
 	});
 });

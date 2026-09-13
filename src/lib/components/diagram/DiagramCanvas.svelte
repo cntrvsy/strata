@@ -16,8 +16,10 @@
   } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
   import TableNode from "#lib/components/diagram/TableNode.svelte";
+  import IdentityNode from "#lib/components/diagram/IdentityNode.svelte";
   import RelationEdge from "#lib/components/diagram/RelationEdge.svelte";
   import ContextMenu from "#lib/components/diagram/ContextMenu.svelte";
+  import { PlatformService } from "#lib/services/platform";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;
@@ -26,6 +28,7 @@
 
   const nodeTypes = {
     table: TableNode,
+    identity: IdentityNode,
   };
 
   const edgeTypes = {
@@ -39,6 +42,8 @@
     y: number;
     type: "canvas" | "node";
     targetId?: string;
+    nodeType?: string;
+    nodeData?: any;
     visible: boolean;
   }>({
     x: 0,
@@ -53,6 +58,8 @@
       y: event.clientY,
       type: "node",
       targetId: node.id,
+      nodeType: node.type,
+      nodeData: node.data,
       visible: true,
     };
   }
@@ -71,6 +78,24 @@
       schemaState.showNewTableModal = true;
     } else if (action === "fit_view") {
       fitView();
+    } else if (action === "inspect_node" && targetId) {
+      schemaState.activeInspectorNodeId = targetId;
+      schemaState.nodes = schemaState.nodes.map(n => ({
+        ...n,
+        selected: n.id === targetId
+      }));
+    } else if (action === "scaffold_mirror" && targetId) {
+      const node = schemaState.nodes.find(n => n.id === targetId);
+      const provider = (node?.data as any)?.provider;
+      if (provider) {
+        schemaState.scaffoldWebhookMirror(provider);
+      }
+    } else if (action === "open_docs") {
+      const provider = contextMenu.nodeData?.provider;
+      const url = provider === 'clerk'
+        ? "https://clerk.com/docs/integrations/webhooks/sync-data"
+        : "https://workos.com/docs/events";
+      PlatformService.openExternal(url);
     } else if (action === "add_field" && targetId) {
       schemaState.activeInspectorNodeId = targetId;
       schemaState.nodes = schemaState.nodes.map(n => ({
@@ -163,6 +188,8 @@
       y={contextMenu.y}
       type={contextMenu.type}
       targetId={contextMenu.targetId}
+      nodeType={contextMenu.nodeType}
+      nodeData={contextMenu.nodeData}
       onClose={() => (contextMenu.visible = false)}
       onAction={handleContextMenuAction}
     />

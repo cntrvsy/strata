@@ -6,14 +6,17 @@
   "permissions": [
     "core:default",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "ms-windows-store:*" },
+        { "url": "https://*" },
+        { "url": "vscode:*" },
+        { "url": "cursor:*" }
+      ]
+    },
     "dialog:allow-open",
     "dialog:allow-save",
-    "fs:allow-read-text-file",
-    "fs:allow-write-text-file",
-    "fs:allow-write",
-    "fs:allow-exists",
-    "fs:allow-write-file",
-    "fs:allow-stat",
     "core:window:allow-minimize",
     "core:window:allow-maximize",
     "core:window:allow-toggle-maximize",

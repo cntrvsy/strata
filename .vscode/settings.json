@@ -4,5 +4,9 @@
   "css.lint.unknownAtRules": "ignore",
   "files.associations": {
     "*.css": "tailwindcss"
-  }
+  },
+  "rust-analyzer.linkedProjects": [
+    "./src-tauri/Cargo.toml"
+  ],
+  "rust-analyzer.cargo.buildScripts.enable": true
 }

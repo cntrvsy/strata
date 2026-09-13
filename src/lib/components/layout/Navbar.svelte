@@ -18,8 +18,8 @@
     Menu,
     GitCompare,
     CircleArrowUp,
-    Code,
-    DraftingCompass,
+    Sparkles,
+    Code2,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { updateState } from "#lib/state/updateState.svelte";
@@ -128,35 +128,8 @@
   class="navbar w-full h-11 border-b border-base-300/80 bg-base-100/90 backdrop-blur-md z-30 px-4 select-none shrink-0"
   data-testid="navbar"
 >
-  <!-- Left Side: View Mode Segment Switch (Sleek pill switch) -->
-  <div class="navbar-start flex items-center gap-2">
-    {#if schemaState.filePath || schemaState.isSandboxMode}
-      <div
-        class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/40 p-0.5"
-      >
-        <button
-          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isCodeCollapsed
-            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
-            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
-          onclick={() => schemaState.toggleCodePane()}
-          title="Toggle Code Editor View"
-        >
-          <Code class="w-3.5 h-3.5" />
-          <span>Code</span>
-        </button>
-        <button
-          class="btn btn-xs join-item font-semibold px-3 h-6 min-h-0 border-0 transition-all text-[10px] {schemaState.isDiagramCollapsed
-            ? 'btn-ghost text-base-content/40 hover:text-base-content/80'
-            : 'bg-base-100 text-primary shadow-sm hover:bg-base-100'}"
-          onclick={() => schemaState.toggleDiagramPane()}
-          title="Toggle Diagram Canvas View"
-        >
-          <DraftingCompass class="w-3.5 h-3.5" />
-          <span>Diagram</span>
-        </button>
-      </div>
-    {/if}
-  </div>
+  <!-- Left Side: Spacer -->
+  <div class="navbar-start flex items-center gap-2"></div>
 
   <!-- Center Side: Optional Spacer -->
   <div class="navbar-center hidden sm:flex items-center justify-center"></div>
@@ -220,6 +193,22 @@
             <Camera class="w-3.5 h-3.5" />
           </button>
         </div>
+
+        <!-- View Code Action (Available in both Sandbox and Workspace mode) -->
+        <div
+          class="tooltip tooltip-bottom text-[10px] font-sans"
+          data-tip="Inspect Generated Code (schema.ts, wrangler.jsonc)"
+        >
+          <button
+            class="btn btn-ghost btn-sm btn-square w-8 h-8 rounded-field text-base-content/75 hover:text-base-content hover:bg-base-200/80"
+            onclick={() => (schemaState.showCodeViewerModal = true)}
+            aria-label="View Code"
+            title="Inspect TypeScript Schema & Config"
+            data-testid="view-code-button"
+          >
+            <Code2 class="w-3.5 h-3.5 text-primary/80" />
+          </button>
+        </div>
       {/if}
 
       {#if schemaState.hasUnsavedChanges && schemaState.filePath}
@@ -277,9 +266,33 @@
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <ul
         tabindex="0"
-        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-48 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
+        class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-52 p-1.5 shadow-2xl mt-1.5 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
       >
         {#if schemaState.filePath || schemaState.isSandboxMode}
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.showCodeViewerModal = true;
+              }}
+            >
+              <Code2 class="w-3.5 h-3.5 text-base-content/70" />
+              <span>Inspect Generated Code</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.showScaffoldAuthModal = true;
+              }}
+            >
+              <Sparkles class="w-3.5 h-3.5 text-secondary" />
+              <span>Scaffold Auth & Identity Tables...</span>
+            </button>
+          </li>
           <li>
             <button
               class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"

@@ -22,7 +22,7 @@
     Crosshair,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
-  import { uiState } from "#lib/state/uiStore.svelte";
+  import { PlatformService } from "#lib/services/platform";
 
   const stats = $derived.by(() => {
     const nodes = schemaState.nodes;
@@ -100,7 +100,38 @@
             >
           </div>
         </div>
-        {#if schemaState.isSandboxMode}
+        {#if !schemaState.isValid && schemaState.error}
+          <div
+            class="p-3 bg-error/10 border border-error/25 rounded-field flex flex-col gap-1.5 font-sans"
+          >
+            <div class="flex items-center gap-1.5 text-error font-bold text-xs">
+              <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
+              <span
+                >{schemaState.errorType === "disk"
+                  ? "Disk Access Failure"
+                  : schemaState.errorType === "mutation"
+                    ? "Modification Error"
+                    : "AST Parse Diagnostic"}</span
+              >
+            </div>
+            <p
+              class="text-[11px] text-base-content/85 leading-relaxed font-mono wrap-break-word"
+            >
+              {schemaState.error}
+            </p>
+            {#if schemaState.errorLoc}
+              <div class="text-[10px] text-base-content/60 font-mono">
+                Location: Line {schemaState.errorLoc.line}, Column {schemaState
+                  .errorLoc.column}
+              </div>
+            {/if}
+            {#if schemaState.filePath}
+              <div class="text-[10px] text-base-content/60 font-mono truncate">
+                File: {schemaState.filePath.split(/[/\\]/).pop()}
+              </div>
+            {/if}
+          </div>
+        {:else if schemaState.isSandboxMode}
           <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
             You are in zero-risk <strong>Playground Sandbox Mode</strong>. Edits
             operate strictly in memory and will not modify files on disk.
@@ -260,8 +291,22 @@
                     {#if issue.line}
                       <button
                         class="px-1.5 py-0.5 rounded-field bg-base-300/60 hover:bg-primary/20 hover:text-primary font-mono text-[9px] transition-colors"
-                        onclick={() => uiState.jumpToCodeLine(issue.line)}
-                        title="Click to jump to line {issue.line} in Code Editor"
+                        onclick={() => {
+                          const targetFile = issue.symbolName
+                            ? (
+                                schemaState.nodes.find(
+                                  (n) => n.id === issue.symbolName,
+                                )?.data as any
+                              )?.moduleInfo?.sourceFilePath ||
+                              schemaState.filePath
+                            : schemaState.filePath;
+                          if (targetFile)
+                            PlatformService.openInEditor(
+                              targetFile,
+                              issue.line,
+                            );
+                        }}
+                        title="Open at line {issue.line} in external editor"
                       >
                         Line {issue.line} ↗
                       </button>
@@ -305,7 +350,7 @@
                   class="btn btn-warning btn-xs rounded-field font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
                   onclick={() => schemaState.syncMissingWranglerBindings()}
                 >
-                  ⚡ Fix & Sync to Wrangler Config
+                  Fix & Sync to Wrangler Config
                 </button>
               {/if}
             </div>
@@ -453,7 +498,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.7</span
+      title="Strata App Version">v3.1.8</span
     >
   </div>
 </div>

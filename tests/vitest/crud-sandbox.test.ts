@@ -154,18 +154,28 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     expect(strata.customDomain).toBe('cdn.example.com');
   });
 
-  it('11. should load all 4 EduStrata progressive learning templates cleanly', async () => {
-    await schemaState.loadSandboxDemo('basic');
-    expect(schemaState.nodes.some(n => n.id === 'classrooms')).toBe(true);
+  it('11. should load all 5 production Cloudflare architecture templates cleanly', async () => {
+    await schemaState.loadSandboxDemo('ai-agent-rag');
+    expect(schemaState.nodes.some(n => n.id === 'AgentSessionDO')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'chatMessages')).toBe(true);
 
-    await schemaState.loadSandboxDemo('academics');
-    expect(schemaState.nodes.some(n => n.id === 'teachers')).toBe(true);
+    await schemaState.loadSandboxDemo('b2b-saas');
+    expect(schemaState.nodes.some(n => n.id === 'organizations')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'user')).toBe(true);
+    expect(schemaState.nodes.some(n => (n.data as any).isBetterAuth)).toBe(true);
 
-    await schemaState.loadSandboxDemo('infrastructure');
-    expect(schemaState.nodes.some(n => n.id === 'BELL_SCHEDULE_KV')).toBe(true);
+    await schemaState.loadSandboxDemo('realtime-canvas');
+    expect(schemaState.nodes.some(n => n.id === 'DocumentRoomDO')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'canvasDocuments')).toBe(true);
 
-    await schemaState.loadSandboxDemo('fullstack');
-    expect(schemaState.nodes.some(n => n.id === 'ClassroomSmartBoardDO')).toBe(true);
+    await schemaState.loadSandboxDemo('ecommerce-edge');
+    expect(schemaState.nodes.some(n => n.id === 'CartCheckoutLockDO')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'products')).toBe(true);
+
+    await schemaState.loadSandboxDemo('starter-minimal');
+    expect(schemaState.nodes.some(n => n.id === 'users')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'posts')).toBe(true);
+    expect(schemaState.nodes.some(n => n.id === 'comments')).toBe(true);
   });
 
   it('12. should handle non-existent table deletion in sandbox mode gracefully', async () => {
@@ -181,6 +191,23 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
 
     const node = schemaState.nodes.find(n => n.id === 'users_dup_test');
     const cols = (node?.data as any).columns;
-    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(2);
+    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(1);
+  });
+
+  it('14. should add, rename, and remove Durable Object methods in sandbox mode without disk I/O errors', async () => {
+    await schemaState.loadSandboxDemo('ai-agent-rag');
+    const doNode = schemaState.nodes.find(n => n.id === 'AgentSessionDO');
+    expect(doNode).toBeDefined();
+
+    // Add a new method in sandbox mode
+    await expect(schemaState.addColumn('AgentSessionDO', 'clearSessionHistory', 'Promise<void>')).resolves.not.toThrow();
+    
+    // Check that the method was added to the node columns
+    const updatedDoNode = schemaState.nodes.find(n => n.id === 'AgentSessionDO');
+    const methods = (updatedDoNode?.data as any).columns.map((c: any) => c.name);
+    expect(methods.some((m: string) => m.startsWith('clearSessionHistory'))).toBe(true);
+
+    // Delete a method in sandbox mode
+    await expect(schemaState.deleteColumn('AgentSessionDO', 'clearSessionHistory')).resolves.not.toThrow();
   });
 });

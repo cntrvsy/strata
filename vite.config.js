@@ -47,5 +47,7 @@ export default defineConfig({
     include: ['tests/vitest/**/*.{test,spec}.{js,ts}'],
     globals: true,
     environment: 'jsdom',
+    pool: 'threads',
+    maxWorkers: 4,
   }
 });

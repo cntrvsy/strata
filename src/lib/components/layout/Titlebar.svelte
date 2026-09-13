@@ -66,7 +66,10 @@
   <div class="flex items-center gap-2" data-tauri-drag-region="false">
     <div class="flex items-center gap-1.5 pointer-events-none">
       <FileCode class="w-3.5 h-3.5 text-primary opacity-80" />
-      <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-50 leading-none">Strata</span>
+      <span
+        class="text-[9px] font-black uppercase tracking-[0.2em] opacity-50 leading-none"
+        >Strata</span
+      >
       <span class="text-[9px] opacity-30">/</span>
     </div>
 
@@ -172,10 +175,14 @@
             class="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-base-content/85 max-w-44 sm:max-w-64 truncate"
           >
             <FolderOpen class="w-3 h-3 text-primary shrink-0" />
-            <span class="truncate">{schemaState.filePath.split(/[/\\]/).pop()}</span
+            <span class="truncate"
+              >{schemaState.filePath.split(/[/\\]/).pop()}</span
             >
             {#if schemaState.hasUnsavedChanges}
-              <span class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" title="Unsaved Changes"></span>
+              <span
+                class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"
+                title="Unsaved Changes"
+              ></span>
             {/if}
             <ChevronDown class="w-2.5 h-2.5 opacity-60 shrink-0 ml-0.5" />
           </div>
@@ -252,4 +259,3 @@
     </button>
   </div>
 </div>
-

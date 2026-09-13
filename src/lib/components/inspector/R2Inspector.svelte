@@ -29,7 +29,13 @@
   }
 
   async function deleteColumn(colName: string) {
-    await schemaState.deleteColumn(tableName, colName);
+    schemaState.promptConfirm({
+      title: "Delete Folder Prefix",
+      message: `Are you sure you want to delete folder prefix "${colName}" from "${tableName}"? This change will be saved to disk.`,
+      confirmLabel: "Delete Folder",
+      isDanger: true,
+      onConfirm: () => schemaState.deleteColumn(tableName, colName),
+    });
   }
 
   async function updateSettings(overrides: { public?: boolean; customDomain?: string; cors?: boolean }) {

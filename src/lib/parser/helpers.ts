@@ -6,7 +6,7 @@
  * Output: Resolved Drizzle function calls, column chains, and relation declarations.
  */
 import { VariableDeclaration, SyntaxKind, SourceFile, Node as ASTNode } from 'ts-morph';
-import type { ChainElement } from '#lib/parser/types';
+import type { ChainElement, PackageWrapperInfo } from '#lib/parser/types';
 
 /**
  * Resolves the underlying Drizzle table CallExpression node from an initializer.
@@ -132,6 +132,47 @@ export function ensureImports(sf: SourceFile, module: string, names: string[]) {
 }
 
 /**
+ * Removes named or default imports if they are not referenced elsewhere in the file.
+ */
+export function cleanUnusedImports(sf: SourceFile, names: string[]) {
+	for (const name of names) {
+		if (!name) continue;
+		const importDeclarations = [...sf.getImportDeclarations()];
+		for (const imp of importDeclarations) {
+			if (imp.wasForgotten()) continue;
+			// Check named imports
+			const namedImport = imp.getNamedImports().find(n => n.getName() === name);
+			if (namedImport) {
+				const identifiers = sf.getDescendantsOfKind(SyntaxKind.Identifier).filter(id => 
+					id.getText() === name && !id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration)
+				);
+				if (identifiers.length === 0) {
+					namedImport.remove();
+					if (imp.getNamedImports().length === 0 && !imp.getDefaultImport() && !imp.getNamespaceImport()) {
+						imp.remove();
+					}
+				}
+			}
+
+			if (imp.wasForgotten()) continue;
+
+			// Check default import
+			const defaultImport = imp.getDefaultImport();
+			if (defaultImport && defaultImport.getText() === name) {
+				const identifiers = sf.getDescendantsOfKind(SyntaxKind.Identifier).filter(id => 
+					id.getText() === name && !id.getFirstAncestorByKind(SyntaxKind.ImportDeclaration)
+				);
+				if (identifiers.length === 0) {
+					if (imp.getNamedImports().length === 0 && !imp.getNamespaceImport()) {
+						imp.remove();
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
  * Helper to resolve relative path from base file path.
  * Normalizes all backslashes to forward slashes for cross-platform portability.
  */
@@ -217,8 +258,9 @@ export interface ExtractedStrataMetadata {
  * Handles nested objects, arrays, string quotes, escaped characters, and multi-line JSDoc comment asterisks.
  */
 export function extractStrataMetadata(text: string): ExtractedStrataMetadata | null {
-	const strataIdx = text.indexOf('@strata');
-	if (strataIdx === -1) return null;
+	const match = /@strata(?!\w|-)/.exec(text);
+	if (!match) return null;
+	const strataIdx = match.index;
 
 	const startBraceIdx = text.indexOf('{', strataIdx);
 	if (startBraceIdx === -1) {
@@ -290,6 +332,18 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 
 	try {
 		const data = JSON.parse(cleanJson);
+		const VALID_TARGETS = new Set(['d1', 'kv', 'do', 'r2', 'project', 'schema']);
+		if (data && typeof data === 'object' && data.target && !VALID_TARGETS.has(String(data.target))) {
+			return {
+				rawMatch,
+				jsonStr: cleanJson,
+				data,
+				issue: {
+					message: `Unrecognized storage target "${data.target}". Strata supports: 'd1', 'kv', 'do', 'r2', 'project', or 'schema'.`,
+					code: 'INVALID_TARGET'
+				}
+			};
+		}
 		return {
 			rawMatch,
 			jsonStr: cleanJson,
@@ -335,6 +389,178 @@ function trySoftRepairJson(jsonStr: string): any | null {
 	} catch {
 		return null;
 	}
+}
+
+export interface StrataLayoutManifestResult {
+	manifest: Record<string, { x: number; y: number }> | null;
+	error?: string;
+	rawMatch?: string;
+}
+
+/**
+ * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file,
+ * returning both the parsed manifest and any parsing diagnostics.
+ */
+export function extractStrataLayoutManifestDetails(code: string): StrataLayoutManifestResult {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return { manifest: null };
+	const rawJson = match[1];
+	const cleanJson = rawJson.replace(/^\s*\*\s?/gm, '');
+	try {
+		return { manifest: JSON.parse(cleanJson), rawMatch: match[0] };
+	} catch (err: any) {
+		const softRepaired = trySoftRepairJson(cleanJson);
+		if (softRepaired) return { manifest: softRepaired, rawMatch: match[0] };
+		console.warn('[Strata] Failed to parse @strata-layout manifest:', err);
+		return {
+			manifest: null,
+			error: `Malformed @strata-layout JSON manifest: ${err?.message || String(err)}`,
+			rawMatch: match[0]
+		};
+	}
+}
+
+/**
+ * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file.
+ */
+export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number }> | null {
+	return extractStrataLayoutManifestDetails(code).manifest;
+}
+
+/**
+ * Calculates the relative TypeScript module import specifier from one file to another.
+ * e.g., from "/db/posts.ts" to "/db/users.ts" -> "./users"
+ * e.g., from "/db/sub/posts.ts" to "/db/users.ts" -> "../users"
+ */
+export function getRelativeImportSpecifier(fromFilePath: string, toFilePath: string): string | undefined {
+	if (!fromFilePath || !toFilePath || fromFilePath === toFilePath) return undefined;
+
+	const normFrom = fromFilePath.replace(/\\/g, '/');
+	const normTo = toFilePath.replace(/\\/g, '/');
+
+	const fromLastSlash = normFrom.lastIndexOf('/');
+	const toLastSlash = normTo.lastIndexOf('/');
+
+	const fromDir = fromLastSlash >= 0 ? normFrom.substring(0, fromLastSlash) : '';
+	const toDir = toLastSlash >= 0 ? normTo.substring(0, toLastSlash) : '';
+
+	// Strip .ts, .js, .tsx, .jsx extensions
+	const toFileWithoutExt = normTo.replace(/\.[^/.]+$/, '');
+	const toBaseName = toLastSlash >= 0 ? toFileWithoutExt.substring(toLastSlash + 1) : toFileWithoutExt;
+
+	if (fromDir === toDir) {
+		return `./${toBaseName}`;
+	}
+
+	const fromParts = fromDir ? fromDir.split('/').filter(Boolean) : [];
+	const toParts = toDir ? toDir.split('/').filter(Boolean) : [];
+
+	let commonLen = 0;
+	while (commonLen < fromParts.length && commonLen < toParts.length && fromParts[commonLen] === toParts[commonLen]) {
+		commonLen++;
+	}
+
+	const upCount = fromParts.length - commonLen;
+	const relParts: string[] = [];
+	for (let i = 0; i < upCount; i++) {
+		relParts.push('..');
+	}
+	for (let i = commonLen; i < toParts.length; i++) {
+		relParts.push(toParts[i]);
+	}
+	relParts.push(toBaseName);
+
+	const res = relParts.join('/');
+	return res.startsWith('.') ? res : `./${res}`;
+}
+
+/**
+ * Analyzes a relative path that failed to resolve directly and searches upward
+ * for candidate workspace root folders (apps/, packages/, etc.) to calculate
+ * the true relative path specifier.
+ */
+export function findCorrectedRelativePath(
+	baseFilePath: string,
+	rawRelPath: string,
+	fileExistsSync?: (p: string) => boolean
+): string | null {
+	if (!baseFilePath || !rawRelPath) return null;
+	const normBase = baseFilePath.replace(/\\/g, '/');
+	const normRel = rawRelPath.replace(/\\/g, '/');
+
+	// Strip leading ../ and ./
+	const cleanSubPath = normRel.replace(/^(\.\.?\/)+/, '');
+	if (!cleanSubPath) return null;
+
+	const baseDirParts = normBase.split('/').slice(0, -1);
+	
+	// Walk upward to see if cleanSubPath exists anywhere from the directory tree
+	const testDirParts = [...baseDirParts];
+	while (testDirParts.length > 0) {
+		const candidateAbs = `${testDirParts.join('/')}/${cleanSubPath}`;
+		if (fileExistsSync ? fileExistsSync(candidateAbs) : false) {
+			const corrected = getRelativeImportSpecifier(baseFilePath, candidateAbs);
+			if (corrected && corrected !== normRel) {
+				return corrected.endsWith('.ts') ? corrected : corrected + '.ts';
+			}
+			return null;
+		}
+		testDirParts.pop();
+	}
+	return null;
+}
+
+/**
+ * Detects if a file does not define tables directly, but acts as a package entrypoint
+ * re-exporting schemas from a subfolder (e.g. `export * from './schema'`).
+ */
+export function detectPackageWrapper(code: string, filePath?: string): PackageWrapperInfo | null {
+	// If file directly defines tables, it is an entity schema file
+	if (code.includes('sqliteTable(') || code.includes('pgTable(') || code.includes('mysqlTable(')) {
+		return null;
+	}
+
+	const reExports: string[] = [];
+	const exportMatches = code.matchAll(/export\s+(?:\*|\{[^}]+\})\s+(?:as\s+\w+\s+)?from\s+['"]([^'"]+)['"]/g);
+	for (const m of exportMatches) {
+		reExports.push(m[1]);
+	}
+
+	if (reExports.length === 0) return null;
+
+	// Check if any export references schema/models/entities
+	let candidate = reExports.find(p => p.includes('schema') || p.includes('models') || p.includes('entities'));
+	if (!candidate && reExports.length > 0) {
+		candidate = reExports[0];
+	}
+
+	let candidateSchemaPath: string | undefined = undefined;
+	let candidateSchemaLabel: string | undefined = undefined;
+
+	if (candidate && filePath) {
+		candidateSchemaPath = resolveRelativePath(filePath, candidate);
+		candidateSchemaLabel = candidate.replace(/^\.\/?/, '');
+	}
+
+	let drizzleConfigPath: string | undefined = undefined;
+	if (filePath) {
+		const parts = filePath.replace(/\\/g, '/').split('/');
+		parts.pop(); // remove file name
+		const currentDir = parts.join('/');
+		const parentDir = parts.slice(0, -1).join('/');
+		if (currentDir.endsWith('/src')) {
+			drizzleConfigPath = `${parentDir}/drizzle.config.ts`;
+		} else {
+			drizzleConfigPath = `${currentDir}/drizzle.config.ts`;
+		}
+	}
+
+	return {
+		reExports,
+		candidateSchemaPath,
+		candidateSchemaLabel,
+		drizzleConfigPath
+	};
 }
 
 

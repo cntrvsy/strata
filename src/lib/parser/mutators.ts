@@ -7,17 +7,19 @@
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node } from '@xyflow/svelte';
-import { createIsolatedProject, withSourceFile } from './project';
+import { createIsolatedProject } from './project';
 import { 
 	findSqliteTableCall, 
 	isDrizzleTableDeclaration, 
 	parseColumnChain, 
 	buildColumnChain, 
 	ensureImports,
+	cleanUnusedImports,
 	resolveRelativePath,
 	extractStrataMetadata,
 	pluralizeIdentifier
 } from './helpers';
+export { extractStrataLayoutManifest } from './helpers';
 import { PlatformService } from '#lib/services/platform';
 
 /**
@@ -105,7 +107,16 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 			sf.insertText(sf.getFullWidth(), content);
 		}
 	}
-	return sf.getFullText();
+	let result = sf.getFullText();
+	const virtualNodes = nodes.filter(n => n.type === 'identity');
+	if (virtualNodes.length > 0) {
+		const positionsMap: Record<string, { x: number; y: number }> = {};
+		for (const vn of virtualNodes) {
+			positionsMap[vn.id] = { x: Math.round(vn.position.x), y: Math.round(vn.position.y) };
+		}
+		result = updateLayoutManifestInSchema(result, positionsMap);
+	}
+	return result;
 }
 
 export function sanitizeIdentifier(name: string): string {
@@ -116,6 +127,42 @@ export function sanitizeIdentifier(name: string): string {
 	return clean || 'entity';
 }
 
+export interface TablePresets {
+	primaryKey?: 'int_autoincrement' | 'autoIncrement' | 'uuid';
+	timestamps?: boolean;
+	softDelete?: boolean;
+}
+
+/**
+ * Generates the interior column definition lines and required imports for a D1 table based on presets.
+ */
+export function generateD1TableColumns(tableName: string, presets?: TablePresets): { code: string; imports: string[] } {
+	const imports = ["sqliteTable", "text", "integer"];
+	const lines: string[] = [];
+
+	if (presets?.primaryKey === 'uuid') {
+		lines.push(`  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),`);
+	} else if (presets?.primaryKey === 'autoIncrement' || presets?.primaryKey === 'int_autoincrement') {
+		lines.push(`  id: integer("id").primaryKey({ autoIncrement: true }),`);
+	} else {
+		lines.push(`  id: integer("id").primaryKey(),`);
+	}
+
+	if (presets?.timestamps) {
+		lines.push(`  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),`);
+		lines.push(`  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),`);
+	}
+
+	if (presets?.softDelete) {
+		lines.push(`  deletedAt: integer("deleted_at", { mode: "timestamp" }),`);
+	}
+
+	return {
+		code: lines.join("\n"),
+		imports
+	};
+}
+
 /**
  * Adds a new table or plain object entity to the schema.
  * Automatically sanitizes name and guards against duplicate variable declaration collisions.
@@ -124,7 +171,7 @@ export function addTableToSchema(
 	code: string, 
 	tableName: string, 
 	target: 'd1' | 'do' | 'kv' | 'r2' = 'd1',
-	extra?: { class?: string; path?: string }
+	extra?: { class?: string; path?: string; id?: string; bucket_name?: string; presets?: TablePresets }
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	
@@ -137,10 +184,9 @@ export function addTableToSchema(
 	}
 
 	if (target === 'd1') {
-		ensureImports(sf, "drizzle-orm/sqlite-core", ["sqliteTable", "integer", "text"]);
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {
-  id: integer("id").primaryKey(),
-});\n`;
+		const { code: columnsCode, imports } = generateD1TableColumns(finalName, extra?.presets);
+		ensureImports(sf, "drizzle-orm/sqlite-core", imports);
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'do') {
 		const className = extra?.class || "MyClass";
@@ -148,10 +194,12 @@ export function addTableToSchema(
 		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else if (target === 'r2') {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}} \n */\nexport const ${finalName} = {};\n`;
+		const bucketName = extra?.bucket_name ? `, "bucket": "${extra.bucket_name}"` : '';
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}${bucketName}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	} else {
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}} \n */\nexport const ${finalName} = {};\n`;
+		const kvId = extra?.id ? `, "id": "${extra.id}"` : '';
+		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}${kvId}} \n */\nexport const ${finalName} = {};\n`;
 		sf.insertText(sf.getFullWidth(), content);
 	}
 	return sf.getFullText();
@@ -168,7 +216,8 @@ export async function addColumnToSchema(
 	type: string = 'text',
 	referencesTable?: string,
 	referencesColumn?: string,
-	schemaFilePath?: string
+	schemaFilePath?: string,
+	targetImportPath?: string
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
@@ -200,58 +249,66 @@ export async function addColumnToSchema(
 						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'do') {
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_add_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									let methodName = columnName.trim();
-									let parameters: { name: string; type?: string }[] = [];
-									const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
-									if (parseMatch) {
-										methodName = parseMatch[1].trim();
-										const paramsStr = parseMatch[2].trim();
-										if (paramsStr) {
-											parameters = paramsStr.split(',').map(p => {
-												const [pName, pType] = p.split(':').map(x => x.trim());
-												return {
-													name: pName,
-													type: pType || 'any'
-												};
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
+							}
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_add_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										let methodName = columnName.trim();
+										let parameters: { name: string; type?: string }[] = [];
+										const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
+										if (parseMatch) {
+											methodName = parseMatch[1].trim();
+											const paramsStr = parseMatch[2].trim();
+											if (paramsStr) {
+												parameters = paramsStr.split(',').map(p => {
+													const [pName, pType] = p.split(':').map(x => x.trim());
+													return {
+														name: pName,
+														type: pType || 'any'
+													};
+												});
+											}
+										}
+										if (!classDecl.getMethod(methodName)) {
+											classDecl.addMethod({
+												name: methodName,
+												parameters,
+												returnType: type || 'Promise<any>',
+												statements: `throw new Error("Method not implemented.");`,
+												scope: 'public' as any
 											});
 										}
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
 									}
-									if (!classDecl.getMethod(methodName)) {
-										classDecl.addMethod({
-											name: methodName,
-											parameters,
-											returnType: type || 'Promise<any>',
-											statements: `throw new Error("Method not implemented.");`,
-											scope: 'public' as any
-										});
-									}
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
+								} catch (err: any) {
+									console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 							}
+						}
+
+						if (!strata.methods) strata.methods = [];
+						let methodName = columnName.trim();
+						const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
+						if (parseMatch) {
+							methodName = parseMatch[1].trim();
+						}
+						if (!strata.methods.includes(methodName)) {
+							strata.methods.push(methodName);
+							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 							return sf.getFullText();
-						} else {
-							if (!strata.methods) strata.methods = [];
-							let methodName = columnName.trim();
-							const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
-							if (parseMatch) {
-								methodName = parseMatch[1].trim();
-							}
-							if (!strata.methods.includes(methodName)) {
-								strata.methods.push(methodName);
-								doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
-								return sf.getFullText();
-							}
 						}
 						return sf.getFullText();
 					}
@@ -281,7 +338,14 @@ export async function addColumnToSchema(
 			ensureImports(sf, "drizzle-orm/sqlite-core", [importType]);
 
 			if (referencesTable && referencesColumn) {
+				if (targetImportPath && !sf.getVariableDeclaration(referencesTable)) {
+					ensureImports(sf, targetImportPath, [referencesTable]);
+				}
 				columnDef += `.references(() => ${referencesTable}.${referencesColumn})`;
+			}
+
+			if (args[1].getProperty(columnName)) {
+				return code;
 			}
 
 			args[1].addPropertyAssignment({ 
@@ -306,7 +370,8 @@ export function addForeignKeyToColumnInSchema(
 	sourceTable: string,
 	sourceCol: string,
 	targetTable: string,
-	targetCol: string = 'id'
+	targetCol: string = 'id',
+	targetImportPath?: string
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(sourceTable);
@@ -323,6 +388,10 @@ export function addForeignKeyToColumnInSchema(
 
 	const objLit = args[1].asKindOrThrow(SyntaxKind.ObjectLiteralExpression);
 	const prop = objLit.getProperty(sourceCol);
+
+	if (targetImportPath && !sf.getVariableDeclaration(targetTable)) {
+		ensureImports(sf, targetImportPath, [targetTable]);
+	}
 
 	const refString = `.references(() => ${targetTable}.${targetCol})`;
 
@@ -352,17 +421,26 @@ export function addForeignKeyToColumnInSchema(
  * Detects if it should use Drizzle relations() or Synthetic JSDoc relations.
  */
 
-export function addEdgeToSchema(code: string, source: string, target: string): string {
+export function addEdgeToSchema(
+	code: string, 
+	source: string, 
+	target: string,
+	targetImportPath?: string
+): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	const targetDecl = sf.getVariableDeclaration(target);
-	if (!sourceDecl || !targetDecl) return code;
+	if (!sourceDecl) return code;
+
+	if (targetImportPath && !targetDecl) {
+		ensureImports(sf, targetImportPath, [target]);
+	}
 
 	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
-	const isTargetTable = targetDecl.getInitializer()?.getText().includes('sqliteTable');
+	const isTargetTable = targetDecl ? targetDecl.getInitializer()?.getText().includes('sqliteTable') : true;
 
 	// --- Synthetic Relations (KV/DO) ---
-	if (!isSourceTable || !isTargetTable) {
+	if (targetDecl && (!isSourceTable || !isTargetTable)) {
 		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
@@ -493,7 +571,8 @@ export function removeTableFromSchema(code: string, tableName: string): string {
 		sf.getVariableStatement(s => s.getDeclarations().some(d => d.getName() === relName))?.remove();
 	}
 	
-	return sf.getFullText();
+	const fullCode = sf.getFullText();
+	return removeTableFromLayoutManifest(fullCode, tableName);
 }
 
 /**
@@ -502,35 +581,37 @@ export function removeTableFromSchema(code: string, tableName: string): string {
 export function removeEdgeFromSchema(code: string, source: string, target: string, name?: string): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
-	if (!sourceDecl) return code;
+	const relName = `${source}Relations`;
+	const relDecl = sf.getVariableDeclaration(relName);
 
-	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
+	if (!sourceDecl && !relDecl) return code;
 
 	// --- Synthetic Relations ---
-	if (!isSourceTable) {
-		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
-		if (jsDoc) {
-			const fullText = jsDoc.getFullText();
-			const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
-			if (match) {
-				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
-					if (strata.relations && Array.isArray(strata.relations)) {
-						strata.relations = strata.relations.filter((r: any) => r.to !== target);
-						if (strata.relations.length === 0) {
-							delete strata.relations;
+	if (sourceDecl) {
+		const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
+		if (!isSourceTable) {
+			const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
+			if (jsDoc) {
+				const fullText = jsDoc.getFullText();
+				const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (match) {
+					try {
+						const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						if (strata.relations && Array.isArray(strata.relations)) {
+							strata.relations = strata.relations.filter((r: any) => r.to !== target);
+							if (strata.relations.length === 0) {
+								delete strata.relations;
+							}
+							jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 						}
-						jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
-					}
-				} catch (e) { console.error(e); }
+					} catch (e) { console.error(e); }
+				}
 			}
+			return sf.getFullText();
 		}
-		return sf.getFullText();
 	}
 
 	// --- Logical Drizzle Relations ---
-	const relName = `${source}Relations`;
-	const relDecl = sf.getVariableDeclaration(relName);
 	if (relDecl) {
 		const init = relDecl.getInitializer();
 		if (init?.isKind(SyntaxKind.CallExpression)) {
@@ -557,23 +638,26 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 	}
 
 	// --- Physical Foreign Keys ---
-	const initializer = sourceDecl.getInitializer();
-	const tableCall = initializer ? findSqliteTableCall(initializer) : null;
-	if (tableCall) {
-		const args = tableCall.getArguments();
-		if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
-			for (const prop of args[1].getProperties()) {
-				if (prop.isKind(SyntaxKind.PropertyAssignment)) {
-					const initNode = prop.getInitializer();
-					if (initNode) {
-						const { baseCallText, modifiers: chainMods } = parseColumnChain(initNode);
-						const refIdx = chainMods.findIndex(m => m.name === 'references');
-						if (refIdx !== -1 && chainMods[refIdx].args.length > 0) {
-							const refArg = chainMods[refIdx].args[0];
-							if (refArg.includes(`${target}.`)) {
-								chainMods.splice(refIdx, 1);
-								const newColDef = buildColumnChain(baseCallText, chainMods);
-								prop.setInitializer(newColDef);
+	if (sourceDecl) {
+		const initializer = sourceDecl.getInitializer();
+		const tableCall = initializer ? findSqliteTableCall(initializer) : null;
+		if (tableCall) {
+			const args = tableCall.getArguments();
+			if (args.length > 1 && args[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+				for (const prop of args[1].getProperties()) {
+					if (prop.isKind(SyntaxKind.PropertyAssignment)) {
+						if (name && prop.getName() !== name) continue;
+						const initNode = prop.getInitializer();
+						if (initNode) {
+							const { baseCallText, modifiers: chainMods } = parseColumnChain(initNode);
+							const refIdx = chainMods.findIndex(m => m.name === 'references');
+							if (refIdx !== -1 && chainMods[refIdx].args.length > 0) {
+								const refArg = chainMods[refIdx].args[0];
+								if (refArg.includes(`${target}.`)) {
+									chainMods.splice(refIdx, 1);
+									const newColDef = buildColumnChain(baseCallText, chainMods);
+									prop.setInitializer(newColDef);
+								}
 							}
 						}
 					}
@@ -581,6 +665,9 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 			}
 		}
 	}
+
+	// Clean up unused imports for target, source, and relations
+	cleanUnusedImports(sf, [target, source, 'relations']);
 
 	return sf.getFullText();
 }
@@ -628,23 +715,32 @@ export async function removeColumnFromSchema(
 						if (parseMatch) {
 							methodName = parseMatch[1].trim();
 						}
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_remove_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									classDecl.getMethod(methodName)?.remove();
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
-								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
 							}
-							return sf.getFullText();
-						} else if (strata.methods) {
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_remove_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										classDecl.getMethod(methodName)?.remove();
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
+									}
+								} catch (err: any) {
+									console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								}
+							}
+						}
+						if (strata.methods) {
 							strata.methods = strata.methods.filter((m: string) => m !== methodName);
 							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 							return sf.getFullText();
@@ -712,7 +808,8 @@ export function renameTableInSchema(code: string, oldName: string, newName: stri
 		}
 	}
 	
-	return sf.getFullText();
+	const fullCode = sf.getFullText();
+	return renameTableInLayoutManifest(fullCode, oldName, cleanNewName);
 }
 
 
@@ -769,23 +866,32 @@ export async function renameColumnInSchema(
 						const newMatch = newColName.match(/^([a-zA-Z0-9_]+)/);
 						if (newMatch) newMethodName = newMatch[1].trim();
 
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_rename_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									classDecl.getMethod(oldMethodName)?.rename(newMethodName);
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
-								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
 							}
-							return sf.getFullText();
-						} else if (strata.methods && Array.isArray(strata.methods)) {
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_rename_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										classDecl.getMethod(oldMethodName)?.rename(newMethodName);
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
+									}
+								} catch (err: any) {
+									console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								}
+							}
+						}
+						if (strata.methods && Array.isArray(strata.methods)) {
 							const idx = strata.methods.indexOf(oldMethodName);
 							if (idx !== -1) {
 								strata.methods[idx] = newMethodName;
@@ -1068,3 +1174,303 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 	}
 	return sf.getFullText();
 }
+
+/**
+ * Scaffolds the standard Better Auth Drizzle D1 table cluster (user, session, account, verification).
+ */
+export function scaffoldBetterAuthClusterInSchema(code: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	const tablesToScaffold = [
+		{
+			name: 'user',
+			code: `export const user = sqliteTable("user", {
+	id: text("id").primaryKey(),
+	name: text("name").notNull(),
+	email: text("email").notNull().unique(),
+	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+	image: text("image"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});\n`
+		},
+		{
+			name: 'session',
+			code: `export const session = sqliteTable("session", {
+	id: text("id").primaryKey(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	token: text("token").notNull().unique(),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id").notNull().references(() => user.id)
+});\n`
+		},
+		{
+			name: 'account',
+			code: `export const account = sqliteTable("account", {
+	id: text("id").primaryKey(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id").notNull().references(() => user.id),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
+	refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+	scope: text("scope"),
+	password: text("password"),
+	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});\n`
+		},
+		{
+			name: 'verification',
+			code: `export const verification = sqliteTable("verification", {
+	id: text("id").primaryKey(),
+	identifier: text("identifier").notNull(),
+	value: text("value").notNull(),
+	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`
+		}
+	];
+
+	for (const tbl of tablesToScaffold) {
+		if (!sf.getVariableDeclaration(tbl.name)) {
+			sf.insertText(sf.getFullWidth(), `\n${tbl.code}`);
+		}
+	}
+
+	return sf.getFullText();
+}
+
+/**
+ * Scaffolds a local D1 mirror table for Clerk webhooks.
+ */
+export function scaffoldClerkMirrorTableInSchema(code: string, tableName = 'users'): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	let targetName = tableName;
+	let counter = 1;
+	while (sf.getVariableDeclaration(targetName)) {
+		targetName = `${tableName}${counter++}`;
+	}
+
+	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
+	id: text("id").primaryKey(),
+	clerkUserId: text("clerk_user_id").notNull().unique(),
+	email: text("email").notNull(),
+	firstName: text("first_name"),
+	lastName: text("last_name"),
+	imageUrl: text("image_url"),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`;
+
+	sf.insertText(sf.getFullWidth(), snippet);
+	return sf.getFullText();
+}
+
+/**
+ * Scaffolds a local D1 mirror table for WorkOS Directory Sync / SSO.
+ */
+export function scaffoldWorkOSMirrorTableInSchema(code: string, tableName = 'workosUsers'): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
+
+	let targetName = tableName;
+	let counter = 1;
+	while (sf.getVariableDeclaration(targetName)) {
+		targetName = `${tableName}${counter++}`;
+	}
+
+	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
+	id: text("id").primaryKey(),
+	workosUserId: text("workos_user_id").notNull().unique(),
+	workosOrgId: text("workos_org_id"),
+	email: text("email").notNull(),
+	firstName: text("first_name"),
+	lastName: text("last_name"),
+	createdAt: integer("created_at", { mode: "timestamp" }),
+	updatedAt: integer("updated_at", { mode: "timestamp" })
+});\n`;
+
+	sf.insertText(sf.getFullWidth(), snippet);
+	return sf.getFullText();
+}
+
+/**
+ * Updates or creates the consolidated @strata-layout JSDoc manifest in the root schema file.
+ * This keeps domain files (users.ts, posts.ts) 100% clean in Git diffs when dragging nodes.
+ */
+export function updateLayoutManifestInSchema(
+	code: string,
+	positions: Record<string, { x: number; y: number }>,
+	pruneMissing: boolean = false
+): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	
+	if (match) {
+		let currentManifest: Record<string, { x: number; y: number }> = {};
+		try {
+			const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+			currentManifest = JSON.parse(cleanJson);
+		} catch {}
+
+		const merged = pruneMissing ? { ...positions } : { ...currentManifest, ...positions };
+		const formattedJson = JSON.stringify(merged, null, 2)
+			.split('\n')
+			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+			.join('\n');
+
+		return code.replace(match[0], `@strata-layout ${formattedJson}`);
+	} else {
+		// Prepend manifest at the top of the root file
+		const formattedJson = JSON.stringify(positions, null, 2)
+			.split('\n')
+			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+			.join('\n');
+
+		const manifestComment = `/**\n * @strata-layout ${formattedJson}\n */\n\n`;
+		return manifestComment + code;
+	}
+}
+
+/**
+ * Removes a table from the consolidated @strata-layout manifest if present.
+ */
+export function removeTableFromLayoutManifest(code: string, tableName: string): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return code;
+	try {
+		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const manifest = JSON.parse(cleanJson);
+		if (tableName in manifest) {
+			delete manifest[tableName];
+			const formattedJson = JSON.stringify(manifest, null, 2)
+				.split('\n')
+				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+				.join('\n');
+			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+		}
+	} catch {}
+	return code;
+}
+
+/**
+ * Renames a table key in the consolidated @strata-layout manifest if present.
+ */
+export function renameTableInLayoutManifest(code: string, oldName: string, newName: string): string {
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	if (!match) return code;
+	try {
+		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const manifest = JSON.parse(cleanJson);
+		if (oldName in manifest) {
+			manifest[newName] = manifest[oldName];
+			delete manifest[oldName];
+			const formattedJson = JSON.stringify(manifest, null, 2)
+				.split('\n')
+				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
+				.join('\n');
+			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+		}
+	} catch {}
+	return code;
+}
+
+/**
+ * Creates clean standalone D1 table code for a new domain module file.
+ */
+export function createD1ModuleCode(tableName: string, presets?: TablePresets): string {
+	const sanitized = sanitizeIdentifier(tableName);
+	const { code: columnsCode, imports } = generateD1TableColumns(sanitized, presets);
+	return `import { ${imports.join(", ")} } from "drizzle-orm/sqlite-core";
+
+export const ${sanitized} = sqliteTable("${sanitized}", {
+${columnsCode}
+});
+`;
+}
+
+/**
+ * Ensures a barrel file (e.g. index.ts) re-exports a given module specifier.
+ * Example: export * from "./comments";
+ */
+export function addReExportToBarrel(barrelCode: string, moduleSpecifier: string): string {
+	const cleanSpecifier = moduleSpecifier.replace(/^\.\//, '').replace(/\.ts$/, '');
+	const regex = new RegExp(`export\\s*\\*\\s*from\\s*["'](\\.\\/)?${cleanSpecifier}(\\.js|\\.ts)?["']`, 'i');
+	if (regex.test(barrelCode)) {
+		return barrelCode;
+	}
+
+	const normalizedExport = moduleSpecifier.startsWith('.') ? moduleSpecifier.replace(/\.ts$/, '') : `./${moduleSpecifier.replace(/\.ts$/, '')}`;
+	const trimmed = barrelCode.trimEnd();
+	return trimmed ? `${trimmed}\nexport * from "${normalizedExport}";\n` : `export * from "${normalizedExport}";\n`;
+}
+
+/**
+ * Resolves the primary schema file or barrel index from drizzle.config.ts contents.
+ * Supports string literals, backtick template strings, string arrays, trailing slashes, and glob patterns.
+ */
+export function parseDrizzleConfigSchemaPath(configCode: string, configFilePath: string): string | null {
+	let candidatePath: string | null = null;
+
+	// 1. Check for array of schemas: schema: [ ... ]
+	const arrayMatch = configCode.match(/schema:\s*\[([\s\S]*?)\]/);
+	if (arrayMatch) {
+		const rawItems = [...arrayMatch[1].matchAll(/["'`]((?:\\.|[^"'`])+)["'`]/g)].map(m => m[1].trim());
+		if (rawItems.length > 0) {
+			candidatePath = rawItems.find(p => p.includes('index.ts') || p.includes('schema.ts') || p.includes('*')) || rawItems[0];
+		}
+	}
+
+	if (!candidatePath) {
+		// 2. Check for single string (single quotes, double quotes, or backticks)
+		const singleMatch = configCode.match(/schema:\s*["'`]((?:\\.|[^"'`])+)["'`]/);
+		if (singleMatch) {
+			candidatePath = singleMatch[1].trim();
+		}
+	}
+
+	if (!candidatePath) return null;
+
+	let rawPath = candidatePath;
+	const baseDir = configFilePath.replace(/\\/g, '/').replace(/\/[^/]+$/, '');
+
+	// Strip glob patterns like /*, /**, /*.ts
+	if (rawPath.endsWith('/**')) {
+		rawPath = rawPath.slice(0, -3);
+	} else if (rawPath.endsWith('/*.ts')) {
+		rawPath = rawPath.slice(0, -5);
+	} else if (rawPath.endsWith('/*')) {
+		rawPath = rawPath.slice(0, -2);
+	}
+
+	// Strip trailing slashes
+	rawPath = rawPath.replace(/\/+$/, '');
+
+	if (!rawPath.endsWith('.ts')) {
+		rawPath = `${rawPath}/index.ts`;
+	}
+
+	if (rawPath.startsWith('.')) {
+		const parts = `${baseDir}/${rawPath}`.split('/');
+		const resolved: string[] = [];
+		for (const part of parts) {
+			if (part === '.' || part === '') continue;
+			if (part === '..') resolved.pop();
+			else resolved.push(part);
+		}
+		return (configFilePath.startsWith('/') ? '/' : '') + resolved.join('/');
+	}
+
+	return rawPath;
+}
+
+
