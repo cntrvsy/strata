@@ -73,10 +73,19 @@ async fn watch_file(
     };
 
     watcher
-        .watch(watch_dir, RecursiveMode::NonRecursive)
+        .watch(watch_dir, RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
     *watcher_lock = Some(watcher);
+    Ok(())
+}
+
+#[tauri::command]
+async fn unwatch_file(
+    watcher_state: State<'_, WatcherState>,
+) -> Result<(), String> {
+    let mut watcher_lock = watcher_state.watcher.lock().unwrap();
+    *watcher_lock = None;
     Ok(())
 }
 
@@ -218,6 +227,7 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             watch_file,
+            unwatch_file,
             read_schema_file,
             write_schema_file,
             mutate_wrangler_config,

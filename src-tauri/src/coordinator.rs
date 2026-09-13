@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Runtime};
 
 #[derive(Debug, thiserror::Error, serde::Serialize)]
+#[serde(tag = "type", content = "message")]
 pub enum CoordinatorError {
     #[error("I/O error: {0}")]
     Io(String),
@@ -52,6 +53,12 @@ impl SchemaCoordinator {
     }
 
     pub fn write_file(&self, path: PathBuf, content: String) -> Result<(), CoordinatorError> {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+        }
+
         // Record debounce state before writing to disk
         let canonical_path = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
         {

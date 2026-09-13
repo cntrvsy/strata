@@ -56,9 +56,15 @@ pub fn get_distribution_channel() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
-    fn test_distribution_channel_default() {
+    fn test_distribution_channel_sequential() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+
+        // 1. Test default standalone mode
         std::env::remove_var("STRATA_FORCE_MSIX");
         #[cfg(not(target_os = "windows"))]
         {
@@ -66,14 +72,14 @@ mod tests {
             assert!(is_standalone());
             assert_eq!(get_distribution_channel(), "standalone");
         }
-    }
 
-    #[test]
-    fn test_distribution_channel_force_override() {
+        // 2. Test forced override mode
         std::env::set_var("STRATA_FORCE_MSIX", "1");
         assert!(is_store_package());
         assert!(!is_standalone());
         assert_eq!(get_distribution_channel(), "store");
+
+        // Clean up environment variable
         std::env::remove_var("STRATA_FORCE_MSIX");
     }
 }
