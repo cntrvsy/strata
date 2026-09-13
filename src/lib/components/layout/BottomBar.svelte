@@ -100,7 +100,38 @@
             >
           </div>
         </div>
-        {#if schemaState.isSandboxMode}
+        {#if !schemaState.isValid && schemaState.error}
+          <div
+            class="p-3 bg-error/10 border border-error/25 rounded-field flex flex-col gap-1.5 font-sans"
+          >
+            <div class="flex items-center gap-1.5 text-error font-bold text-xs">
+              <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
+              <span
+                >{schemaState.errorType === "disk"
+                  ? "Disk Access Failure"
+                  : schemaState.errorType === "mutation"
+                    ? "Modification Error"
+                    : "AST Parse Diagnostic"}</span
+              >
+            </div>
+            <p
+              class="text-[11px] text-base-content/85 leading-relaxed font-mono wrap-break-word"
+            >
+              {schemaState.error}
+            </p>
+            {#if schemaState.errorLoc}
+              <div class="text-[10px] text-base-content/60 font-mono">
+                Location: Line {schemaState.errorLoc.line}, Column {schemaState
+                  .errorLoc.column}
+              </div>
+            {/if}
+            {#if schemaState.filePath}
+              <div class="text-[10px] text-base-content/60 font-mono truncate">
+                File: {schemaState.filePath.split(/[/\\]/).pop()}
+              </div>
+            {/if}
+          </div>
+        {:else if schemaState.isSandboxMode}
           <p class="text-[11px] leading-relaxed text-base-content/75 font-sans">
             You are in zero-risk <strong>Playground Sandbox Mode</strong>. Edits
             operate strictly in memory and will not modify files on disk.
@@ -467,7 +498,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.7</span
+      title="Strata App Version">v3.1.8</span
     >
   </div>
 </div>

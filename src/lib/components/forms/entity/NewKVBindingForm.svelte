@@ -6,7 +6,7 @@
   Output: Dispatches KV namespace entity creation to schemaState.
 -->
 <script lang="ts">
-  import { Zap, ArrowRight, TriangleAlert, Info } from "lucide-svelte";
+  import { ArrowRight, TriangleAlert, Info } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
   let { onClose }: { onClose: () => void } = $props();
@@ -15,13 +15,19 @@
   let kvNamespaceId = $state("");
 
   const sanitizedBinding = $derived(
-    bindingName.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_")
+    bindingName
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_]/g, "_"),
   );
 
   const isDuplicate = $derived(
-    Boolean(sanitizedBinding && schemaState.nodes.some(
-      (n) => n.id.toLowerCase() === sanitizedBinding.toLowerCase()
-    ))
+    Boolean(
+      sanitizedBinding &&
+        schemaState.nodes.some(
+          (n) => n.id.toLowerCase() === sanitizedBinding.toLowerCase(),
+        ),
+    ),
   );
 
   const isValid = $derived(sanitizedBinding.length > 0 && !isDuplicate);
@@ -31,7 +37,7 @@
     if (!isValid) return;
 
     await schemaState.addTable(sanitizedBinding, "kv", {
-      id: kvNamespaceId.trim() || undefined
+      id: kvNamespaceId.trim() || undefined,
     });
 
     onClose();
@@ -41,27 +47,37 @@
 <form onsubmit={handleSubmit} class="flex flex-col gap-4">
   <!-- Binding Variable Name -->
   <fieldset class="fieldset gap-1.5 p-0">
-    <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">
+    <legend
+      class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60"
+    >
       KV Binding Variable Name
     </legend>
     <input
       type="text"
       bind:value={bindingName}
       placeholder="e.g. CACHE_KV or RATE_LIMIT_KV"
-      class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-sm {isDuplicate ? 'input-error' : ''}"
+      class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-sm {isDuplicate
+        ? 'input-error'
+        : ''}"
     />
 
     {#if isDuplicate}
-      <div class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold">
+      <div
+        class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold"
+      >
         <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
-        <span>A binding or entity named "{sanitizedBinding}" already exists.</span>
+        <span
+          >A binding or entity named "{sanitizedBinding}" already exists.</span
+        >
       </div>
     {/if}
   </fieldset>
 
   <!-- Namespace ID (Optional) -->
   <fieldset class="fieldset gap-1.5 p-0">
-    <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">
+    <legend
+      class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60"
+    >
       KV Namespace ID (Optional)
     </legend>
     <input
@@ -71,14 +87,18 @@
       class="input input-sm input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-xs"
     />
     <p class="text-[10px] opacity-60 mt-0.5">
-      Can be omitted during local development or bound to your Cloudflare dashboard namespace ID later.
+      Can be omitted during local development or bound to your Cloudflare
+      dashboard namespace ID later.
     </p>
   </fieldset>
 
-  <div class="p-3 bg-base-200/50 border border-base-300/80 rounded-box text-[11px] opacity-75 leading-relaxed flex items-start gap-2">
+  <div
+    class="p-3 bg-base-200/50 border border-base-300/80 rounded-box text-[11px] opacity-75 leading-relaxed flex items-start gap-2"
+  >
     <Info class="w-4 h-4 text-accent shrink-0 mt-0.5" />
     <span>
-      Adds a Key-Value storage binding to your Cloudflare Worker environment and renders a KV node on the ERD canvas.
+      Adds a Key-Value storage binding to your Cloudflare Worker environment and
+      renders a KV node on the ERD canvas.
     </span>
   </div>
 

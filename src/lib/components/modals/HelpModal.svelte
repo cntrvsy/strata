@@ -814,21 +814,26 @@ We are using Strata, an interactive visual architecture canvas for Drizzle ORM +
 You MUST follow these design & layout rules when writing or modifying Drizzle schema code for me:
 
 1. ARCHITECTURE ARCHETYPES:
-   - Modular Barrel (schema/index.ts) [Recommended for Teams]: Separate domain files (users.ts, posts.ts) and aggregate them in index.ts:
-     export * from "./users";
-     export * from "./posts";
-     In barrel mode, layout coordinates live EXCLUSIVELY in a root @strata-layout comment to eliminate Git merge conflicts:
-     /**
-      * @strata-layout {
-      *   "users": { "x": 100, "y": 150 },
-      *   "posts": { "x": 520, "y": 150 },
-      *   "__clerk_identity__": { "x": -250, "y": 150 }
-      * }
-      */
-     CRITICAL: NEVER put @strata position comments inside individual domain files (users.ts, posts.ts). Keep domain files pure Drizzle code!
-   - Single-File Monolith (schema.ts): Place entity JSDoc metadata directly above declarations:
-     /** @strata { "target": "d1", "x": 100, "y": 200 } */
-     export const users = sqliteTable("users", { ... });
+   - Modular Barrel (schema/index.ts) [Recommended for Teams]:
+     - Partition domain tables into separate files (users.ts, posts.ts). Domain files MUST remain 100% pure Drizzle code with zero @strata comments.
+     - The root barrel file (schema/index.ts) aggregates domain files:
+       export * from "./users";
+       export * from "./posts";
+     - Visual coordinates for ALL nodes (tables, KV, DO, R2, external IdPs) live EXCLUSIVELY in the root @strata-layout manifest in index.ts to eliminate Git merge conflicts:
+       /**
+        * @strata-layout {
+        *   "users": { "x": 100, "y": 150 },
+        *   "posts": { "x": 520, "y": 150 },
+        *   "SESSIONS_KV": { "x": 100, "y": 420 },
+        *   "__clerk_identity__": { "x": -250, "y": 150 }
+        * }
+        */
+     - Non-SQL storage entities (KV, DO, R2) must be declared directly in index.ts (Strata only imports Drizzle tables from external re-exports).
+
+   - Single-File Monolith (schema.ts):
+     - Place entity JSDoc metadata directly above declarations:
+       /** @strata { "target": "d1", "x": 100, "y": 200 } */
+       export const users = sqliteTable("users", { ... });
 
 2. DATATYPES & DIALECTS (Cloudflare D1 / SQLite):
    - Always import table builders cleanly: import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
@@ -851,30 +856,39 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
    - Logical Relations: Use Drizzle's relations() query builder API, either in domain files or a dedicated relations.ts:
      export const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }));
 
-5. CLOUDFLARE STORAGE TARGETS (KV, DO, R2 JSDoc Overrides):
-   - D1 Table: "target": "d1" (Default)
-   - Durable Objects (DO): "target": "do"
+5. CLOUDFLARE STORAGE TARGETS (KV, DO, R2):
+   - Non-SQL entities MUST be declared as TypeScript constants (export const <NAME> = {};) directly beneath their @strata JSDoc.
+   - In Modular Barrel mode, do NOT include inline "x" and "y" inside @strata (all coordinates belong in the root @strata-layout manifest).
+   - Durable Objects (DO):
+     "path" MUST be relative to the schema file (e.g. "../../../../apps/api/src/do/UserDO.ts" in monorepos, or use a tsconfig alias like "@api/do/UserDO.ts"):
      /**
-      * @strata { "target": "do", "x": 100, "y": 200, "path": "./src/do/UserDO.ts", "class": "UserDO", "methods": ["getUserInfo", "updateStatus"] }
+      * @strata { "target": "do", "path": "./src/do/UserDO.ts", "class": "UserDO", "methods": ["getUserInfo", "updateStatus"] }
       */
-   - KV Namespaces: "target": "kv"
+     export const UserDO = {};
+   - KV Namespaces:
      /**
-      * @strata { "target": "kv", "x": 150, "y": 300, "schema": { "sessionToken": "string", "failedAttempts": { "type": "number", "ttl": 3600 } } }
+      * @strata { "target": "kv", "schema": { "sessionToken": "string", "failedAttempts": { "type": "number", "ttl": 3600 } } }
       */
-   - R2 Buckets: "target": "r2"
+     export const SESSIONS_KV = {};
+   - R2 Buckets:
      /**
-      * @strata { "target": "r2", "x": 200, "y": 400, "public": true, "cors": true, "folders": { "avatars": "image/*", "documents": "application/pdf" } }
+      * @strata { "target": "r2", "folders": { "avatars": "image/*", "documents": "application/pdf" } }
       */
+     export const ASSETS_BUCKET = {};
 
 6. SYNTHETIC CROSS-STORAGE LINKS:
-   - For links between D1 tables and non-SQL targets (KV, DO, R2), do not declare physical SQL foreign keys. Instead, define synthetic links inside the JSDoc metadata:
+   - To link non-SQL targets with D1 tables without polluting domain files, declare synthetic links on the storage target inside index.ts:
      /**
-      * @strata { "target": "d1", "x": 100, "y": 100, "relations": [{ "to": "SESSIONS_KV" }] }
+      * @strata { "target": "kv", "relations": [{ "to": "users" }] }
       */
+     export const SESSIONS_KV = {};
 
 7. EXTERNAL IDE PAIRING & ZERO-JITTER WORKFLOW:
    - Strata pairs side-by-side with your primary editor (VS Code, Cursor). Changes saved to disk update the canvas in real-time.
    - Generate standard, clean Drizzle TypeScript files without proprietary runtime sidecars or config files.
+
+TASK / DIRECTIVE:
+[State your exact schema request here: e.g. "Create a modular schema for a collaborative workspace with teams, members, and audit logs" or "Add an R2 bucket and link it to users"]
 
 Generate only valid, production-ready TypeScript code inside standard markdown codeblocks without conversational fluff.`;
 

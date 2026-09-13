@@ -18,6 +18,7 @@
   import Inspector from "#lib/components/inspector/Inspector.svelte";
   import WelcomeLauncher from "#lib/components/layout/WelcomeLauncher.svelte";
   import LoadingOverlay from "#lib/components/layout/LoadingOverlay.svelte";
+  import PackageWrapperEmptyState from "#lib/components/layout/PackageWrapperEmptyState.svelte";
   import GlobalModals from "#lib/components/modals/GlobalModals.svelte";
   import ConnectionPickerModal from "#lib/components/modals/ConnectionPickerModal.svelte";
   import CanvasSearchPalette from "#lib/components/diagram/CanvasSearchPalette.svelte";
@@ -237,6 +238,7 @@
           <SvelteFlowProvider>
             <DiagramCanvas {onconnect} {onnodedragstop} />
             <LoadingOverlay />
+            <PackageWrapperEmptyState />
             <CanvasSearchPalette bind:show={showSearchPalette} />
           </SvelteFlowProvider>
         </div>

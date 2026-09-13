@@ -13,7 +13,7 @@
   import { schemaState } from "#lib/state";
   import { slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { X, Check, HardDrive } from "lucide-svelte";
+  import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
     tableName: string;
@@ -28,7 +28,7 @@
         await schemaState.addColumn(
           tableName,
           form.data.name,
-          form.data.type || "*/*"
+          form.data.type || "*/*",
         );
         onComplete();
       }
@@ -43,10 +43,14 @@
   transition:slide={{ duration: 140, easing: cubicOut }}
   data-testid="add-folder-form"
 >
-  <div class="flex items-center justify-between border-b border-base-300/60 pb-2.5">
+  <div
+    class="flex items-center justify-between border-b border-base-300/60 pb-2.5"
+  >
     <div class="flex items-center gap-1.5">
       <div class="w-2 h-2 rounded-full bg-info"></div>
-      <h4 class="text-[10px] font-bold uppercase tracking-wider text-base-content/80">
+      <h4
+        class="text-[10px] font-bold uppercase tracking-wider text-base-content/80"
+      >
         Add R2 Folder Prefix
       </h4>
     </div>
@@ -66,7 +70,9 @@
       <Form.Control>
         {#snippet children({ props })}
           <fieldset class="fieldset gap-1 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider">
+            <legend
+              class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider"
+            >
               Folder Prefix / Directory
             </legend>
             <input
@@ -86,7 +92,9 @@
       <Form.Control>
         {#snippet children({ props })}
           <fieldset class="fieldset gap-1 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider">
+            <legend
+              class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider"
+            >
               Allowed MIME Constraint (Optional)
             </legend>
             <input

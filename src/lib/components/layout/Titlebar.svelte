@@ -15,7 +15,6 @@
     RotateCcw,
     ChevronDown,
     FileCode,
-    ExternalLink,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
@@ -67,7 +66,10 @@
   <div class="flex items-center gap-2" data-tauri-drag-region="false">
     <div class="flex items-center gap-1.5 pointer-events-none">
       <FileCode class="w-3.5 h-3.5 text-primary opacity-80" />
-      <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-50 leading-none">Strata</span>
+      <span
+        class="text-[9px] font-black uppercase tracking-[0.2em] opacity-50 leading-none"
+        >Strata</span
+      >
       <span class="text-[9px] opacity-30">/</span>
     </div>
 
@@ -173,10 +175,14 @@
             class="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-base-content/85 max-w-44 sm:max-w-64 truncate"
           >
             <FolderOpen class="w-3 h-3 text-primary shrink-0" />
-            <span class="truncate">{schemaState.filePath.split(/[/\\]/).pop()}</span
+            <span class="truncate"
+              >{schemaState.filePath.split(/[/\\]/).pop()}</span
             >
             {#if schemaState.hasUnsavedChanges}
-              <span class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" title="Unsaved Changes"></span>
+              <span
+                class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"
+                title="Unsaved Changes"
+              ></span>
             {/if}
             <ChevronDown class="w-2.5 h-2.5 opacity-60 shrink-0 ml-0.5" />
           </div>
@@ -192,23 +198,6 @@
             class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
           >
             File Session Actions
-          </li>
-          <li>
-            <button
-              class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
-              onclick={() => {
-                closeDropdown();
-                if (schemaState.filePath) {
-                  PlatformService.openInEditor(schemaState.filePath);
-                }
-              }}
-              title="Open in external editor (Cursor / VS Code)"
-              data-testid="titlebar-open-in-editor"
-            >
-              <FileCode class="w-3.5 h-3.5 text-primary" />
-              <span>Open in Editor</span>
-              <ExternalLink class="w-3 h-3 text-base-content/40 ml-auto" />
-            </button>
           </li>
           <li>
             <button
@@ -233,17 +222,6 @@
           </li>
         </ul>
       </div>
-
-      <button
-        class="btn btn-ghost btn-xs btn-square w-6 h-6 rounded-field opacity-60 hover:opacity-100 hover:bg-base-200/80 transition-all text-base-content"
-        onclick={() =>
-          schemaState.filePath &&
-          PlatformService.openInEditor(schemaState.filePath)}
-        title="Open in external editor (Cursor / VS Code)"
-        data-testid="titlebar-quick-open-in-editor"
-      >
-        <ExternalLink class="w-3 h-3 text-base-content/70 hover:text-primary" />
-      </button>
     {:else}
       <!-- State A: Empty State -->
       <button
@@ -281,4 +259,3 @@
     </button>
   </div>
 </div>
-

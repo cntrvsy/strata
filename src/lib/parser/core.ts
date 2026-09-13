@@ -9,7 +9,7 @@ import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
 import type { ParseResult, AuditIssue } from '#lib/parser/types';
 import { createIsolatedProject } from '#lib/parser/project';
-import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, resolveRelativePath, extractStrataMetadata, extractStrataLayoutManifest } from '#lib/parser/helpers';
+import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, resolveRelativePath, extractStrataMetadata, extractStrataLayoutManifest, extractStrataLayoutManifestDetails, detectPackageWrapper } from '#lib/parser/helpers';
 
 
 /**
@@ -126,7 +126,21 @@ export function parseSchema(
 		const tableDeclarations = new Map<string, VariableDeclaration>();
 		let wranglerPath: string | undefined = undefined;
 		// Extract @strata-layout manifest if present in the root file
-		const layoutManifest = extractStrataLayoutManifest(code);
+		const manifestDetails = extractStrataLayoutManifestDetails(code);
+		const layoutManifest = manifestDetails.manifest;
+		if (manifestDetails.error) {
+			auditIssues.push({
+				id: `audit_layout_manifest_${Date.now()}`,
+				severity: 'warning',
+				code: 'MALFORMED_LAYOUT_MANIFEST',
+				message: manifestDetails.error,
+				rawMatch: manifestDetails.rawMatch,
+				suggestedFix: {
+					label: 'Auto-repair Layout Manifest',
+					action: 'auto_repair_jsdoc'
+				}
+			});
+		}
 		
 		for (const statement of variableStatements) {
 			const declarations = statement.getDeclarations();
@@ -187,6 +201,37 @@ export function parseSchema(
 					let columns: any[] = [];
 					if (target === 'd1') {
 						columns = extractColumns(decl);
+						for (const col of columns) {
+							if (col.definition && /\btimestamp\s*\(/.test(col.definition) && !col.definition.includes('mode:')) {
+								auditIssues.push({
+									id: `audit_d1_timestamp_${tableName}_${col.name}`,
+									severity: 'warning',
+									code: 'D1_TYPE_COMPATIBILITY',
+									message: `Column "${col.name}" on "${tableName}" uses timestamp() without SQLite mode. Cloudflare D1 lacks native Date: recommend using integer("${col.name}", { mode: "timestamp" }).`,
+									symbolName: tableName,
+									line: statement.getStartLineNumber(),
+									rawMatch: col.definition,
+									suggestedFix: {
+										label: 'Convert to integer({ mode: "timestamp" })',
+										action: 'fix_d1_type'
+									}
+								});
+							} else if (col.definition && /\bboolean\s*\(/.test(col.definition) && !col.definition.includes('mode:')) {
+								auditIssues.push({
+									id: `audit_d1_boolean_${tableName}_${col.name}`,
+									severity: 'warning',
+									code: 'D1_TYPE_COMPATIBILITY',
+									message: `Column "${col.name}" on "${tableName}" uses boolean() without SQLite mode. Cloudflare D1 lacks native Boolean: recommend using integer("${col.name}", { mode: "boolean" }).`,
+									symbolName: tableName,
+									line: statement.getStartLineNumber(),
+									rawMatch: col.definition,
+									suggestedFix: {
+										label: 'Convert to integer({ mode: "boolean" })',
+										action: 'fix_d1_type'
+									}
+								});
+							}
+						}
 					} else if (target === 'kv') {
 						if (strataData.schema) {
 							columns = Object.entries(strataData.schema).map(([name, val]) => {
@@ -251,9 +296,39 @@ export function parseSchema(
 									console.warn(`Failed to parse DO class methods at ${strataData.path}:`, err);
 									warnings.push(`Failed to parse DO class methods at ${strataData.path}: ${err?.message || String(err)}`);
 								}
-							} else if (externalFilesMap) {
+							} else if (filePath && externalFilesMap) {
 								missingFileWarning = `Durable Object class file not found at path "${strataData.path}"`;
 								warnings.push(missingFileWarning);
+							}
+
+							const correctedPath = externalFilesMap?.get('__correction__' + strataData.path);
+							if (correctedPath) {
+								auditIssues.push({
+									id: `audit_path_${tableName}_${statement.getStartLineNumber()}`,
+									severity: 'warning',
+									code: 'MISCALCULATED_PATH_DEPTH',
+									message: `Path depth miscalculated: "${strataData.path}" was resolved from monorepo root. Recommended path: "${correctedPath}".`,
+									symbolName: tableName,
+									line: statement.getStartLineNumber(),
+									column: 1,
+									rawMatch: strataData.path,
+									suggestedFix: {
+										label: `Fix Path to ${correctedPath}`,
+										action: 'fix_path',
+										payload: { correctedPath }
+									}
+								});
+							} else if (missingFileWarning && strataData.path && filePath) {
+								auditIssues.push({
+									id: `audit_missing_do_${tableName}_${statement.getStartLineNumber()}`,
+									severity: 'warning',
+									code: 'MISSING_EXTERNAL_FILE',
+									message: missingFileWarning,
+									symbolName: tableName,
+									line: statement.getStartLineNumber(),
+									column: 1,
+									rawMatch: strataData.path
+								});
 							}
 						}
 						
@@ -644,12 +719,50 @@ export function parseSchema(
 			}
 		}
 
-		// Cleanup: Ensure all edges point to existing nodes
+		// Cleanup: Ensure all edges point to existing nodes and emit actionable diagnostics for broken references
 		const allNodeIds = new Set(nodes.map(n => n.id));
-		const validEdges = edges.filter(e => allNodeIds.has(e.source) && allNodeIds.has(e.target));
+		const validEdges: Edge[] = [];
+		for (const edge of edges) {
+			if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
+				validEdges.push(edge);
+			} else if (!(edge.data as any)?.isSynthetic && (edge.data as any)?.edgeType !== 'synthetic' && edge.label !== 'synthetic') {
+				const fromNode = edge.source;
+				const colName = (edge.data as any)?.sourceCol || (edge as any).sourceHandle;
+				const isFk = (edge.data as any)?.edgeType === 'fk' || !(edge.data as any)?.isVirtual;
+				const msg = colName
+					? `Foreign key on "${fromNode}.${colName}" references missing table "${edge.target}". Ensure "${edge.target}" is defined, exported, or imported into this module.`
+					: `Relationship from "${fromNode}" references missing table "${edge.target}".`;
+				warnings.push(msg);
+				auditIssues.push({
+					id: `audit_fk_missing_${fromNode}_${edge.target}_${colName || 'rel'}`,
+					severity: isFk ? 'error' : 'warning',
+					code: 'MISSING_FOREIGN_KEY_TARGET',
+					message: msg,
+					symbolName: fromNode,
+					rawMatch: edge.target
+				});
+			}
+		}
 		
 		if (nodes.length === 0 && code.trim().length > 0) {
-			return { success: false, error: 'No tables or schema objects found', nodes: [], edges: [], externalImports, externalPaths, warnings, auditIssues, wranglerPath };
+			const packageWrapperInfo = detectPackageWrapper(code, filePath);
+			const errorMsg = packageWrapperInfo
+				? `Package wrapper detected: No direct tables found in this file. Found re-exports from: [${packageWrapperInfo.reExports.join(', ')}].`
+				: filePath
+					? `No Drizzle tables or Cloudflare entities found in "${effectiveFileName}". Expected sqliteTable() declarations or barrel re-exports (e.g. export * from './users').`
+					: 'No tables or schema objects found';
+			return { 
+				success: false, 
+				error: errorMsg, 
+				nodes: [], 
+				edges: [], 
+				externalImports, 
+				externalPaths, 
+				warnings, 
+				auditIssues, 
+				wranglerPath,
+				packageWrapperInfo: packageWrapperInfo || undefined
+			};
 		}
 
 		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath };
@@ -923,7 +1036,13 @@ export function addEdgeIfUnique(
 			? `stroke: ${edgeColor}; stroke-width: 1.75; stroke-dasharray: 4 4; opacity: 0.85;`
 			: `stroke: ${edgeColor}; stroke-width: 2.25; opacity: 1.0;`,
 		type: 'relation',
-		data: { isVirtual, cardinality },
+		data: { 
+			isVirtual, 
+			cardinality, 
+			edgeType: relType, 
+			isSynthetic: relType === 'synthetic',
+			sourceCol: name || (sourceHandle !== 'source' ? sourceHandle : undefined)
+		},
 		markerEnd: {
 			type: MarkerType.ArrowClosed,
 			width: 15,

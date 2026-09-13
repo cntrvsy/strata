@@ -24,7 +24,7 @@
 
   function openScaffoldModal() {
     close();
-    schemaState.showScaffoldModal = true;
+    schemaState.showScaffoldAuthModal = true;
   }
 
   const targets = [
@@ -133,7 +133,7 @@
         {/if}
       </div>
 
-      <!-- Footer Architecture Scaffold Link -->
+      <!-- Footer Auth & Identity Scaffold Link -->
       <div class="px-5 py-3 border-t border-base-300/60 bg-base-200/30 flex items-center justify-between shrink-0">
         <span class="text-[11px] opacity-60">Looking for pre-built auth schemas?</span>
         <button

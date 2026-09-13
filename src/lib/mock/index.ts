@@ -1,14 +1,14 @@
 /**
  * index.ts
  *
- * Summary: Centralized mock schemas module loading progressive EduStrata starter templates.
+ * Summary: Centralized mock schemas module loading production Cloudflare architecture templates.
  */
 
-import basicCode from "./basic.ts?raw";
-import academicsCode from "./academics.ts?raw";
-import infrastructureCode from "./infrastructure.ts?raw";
-import fullstackCode from "./fullstack.ts?raw";
-import masterCode from "./schema.ts?raw";
+import aiAgentCode from "./ai-agent-rag.ts?raw";
+import b2bSaasCode from "./b2b-saas.ts?raw";
+import realtimeCanvasCode from "./realtime-canvas.ts?raw";
+import ecommerceCode from "./ecommerce-edge.ts?raw";
+import starterMinimalCode from "./starter-minimal.ts?raw";
 
 export interface SchemaTemplate {
   key: string;
@@ -18,40 +18,66 @@ export interface SchemaTemplate {
   code: string;
 }
 
+export const PRIMARY_TEMPLATES: SchemaTemplate[] = [
+  {
+    key: "ai-agent-rag",
+    name: "AI Agent & RAG Pipeline",
+    badge: "Flagship • D1 + KV + DO + R2",
+    description: "Full hybrid Cloudflare stack featuring D1 conversational history, KV prompt registry, stateful AgentSession Durable Object for streaming WebSockets, and R2 document knowledge base.",
+    code: aiAgentCode,
+  },
+  {
+    key: "b2b-saas",
+    name: "Multi-Tenant B2B SaaS",
+    badge: "Better Auth • Clerk/WorkOS • @strata-layout",
+    description: "Enterprise SaaS architecture with Git-clean @strata-layout header, Better Auth 4-table cluster, Clerk & WorkOS identity boundaries, Stripe billing, and tenant rate limiter DO.",
+    code: b2bSaasCode,
+  },
+  {
+    key: "realtime-canvas",
+    name: "Real-Time Collaborative Canvas",
+    badge: "Multiplayer • D1 + DO WebSockets + R2",
+    description: "Figma/Miro-style multiplayer collaborative canvas with D1 document trees, Durable Object Yjs/CRDT sync room, presence cursors, and R2 binary snapshot archives.",
+    code: realtimeCanvasCode,
+  },
+  {
+    key: "ecommerce-edge",
+    name: "Global Edge E-Commerce",
+    badge: "Transactional • D1 Cents + Cart DO + R2",
+    description: "High-concurrency global storefront with integer-cent monetary precision in D1, atomic flash-sale inventory reservation in Durable Objects, and R2 product media.",
+    code: ecommerceCode,
+  },
+  {
+    key: "starter-minimal",
+    name: "Idiomatic D1 Minimal Starter",
+    badge: "Pure SQL • D1 Core & Relations",
+    description: "Pristine 3-table relational starter (users, posts, comments) demonstrating SQLite foreign keys, bidirectional Drizzle relations, and clean D1 timestamps without infrastructure noise.",
+    code: starterMinimalCode,
+  },
+];
+
 export const SAMPLE_TEMPLATES: Record<string, SchemaTemplate> = {
-  master: {
-    key: "master",
-    name: "EduStrata Benchmark: Master School Campus",
-    badge: "Full Hybrid Cloud (D1 + KV + DO + R2)",
-    description: "Ultimate school campus architecture featuring 13 entities, physical Foreign Keys, Drizzle logical relations, KV auth sessions, Durable Object WebSockets, R2 asset buckets, and synthetic cross-storage links.",
-    code: masterCode,
-  },
-  basic: {
-    key: "basic",
-    name: "EduStrata L1: Classrooms & Students",
-    badge: "Level 1 • D1 Core & FKs",
-    description: "Core classroom and student roster schema demonstrating D1 table declarations and physical foreign key references.",
-    code: basicCode,
-  },
-  academics: {
-    key: "academics",
-    name: "EduStrata L2: Faculty & Courses",
-    badge: "Level 2 • D1 + Drizzle Relations",
-    description: "Multi-table academic management schema featuring Departments, Teachers, Courses, Enrollments, and Drizzle query builder relations().",
-    code: academicsCode,
-  },
-  infrastructure: {
-    key: "infrastructure",
-    name: "EduStrata L3: Operations, KV & R2",
-    badge: "Level 3 • D1 + KV + R2",
-    description: "Campus operations modeling D1 Staff, real-time KV Bell Schedule, R2 Document Assets, and synthetic JSDoc cross-storage links.",
-    code: infrastructureCode,
-  },
-  fullstack: {
-    key: "fullstack",
-    name: "EduStrata L4: Enterprise Campus",
-    badge: "Level 4 • D1 + KV + DO + R2",
-    description: "Full-stack enterprise campus ecosystem with D1 Tuition Invoicing, KV Cafeteria POS, Durable Object SmartBoard WebSocket server, and R2 Lecture Archives.",
-    code: fullstackCode,
-  },
+  "ai-agent-rag": PRIMARY_TEMPLATES[0],
+  "b2b-saas": PRIMARY_TEMPLATES[1],
+  "realtime-canvas": PRIMARY_TEMPLATES[2],
+  "ecommerce-edge": PRIMARY_TEMPLATES[3],
+  "starter-minimal": PRIMARY_TEMPLATES[4],
 };
+
+// Non-enumerable aliases for backwards compatibility with legacy sandbox references & tests
+const legacyAliases: Record<string, SchemaTemplate> = {
+  master: PRIMARY_TEMPLATES[0],
+  fullstack: PRIMARY_TEMPLATES[0],
+  academics: PRIMARY_TEMPLATES[1],
+  infrastructure: PRIMARY_TEMPLATES[2],
+  basic: PRIMARY_TEMPLATES[4],
+};
+
+for (const [aliasKey, template] of Object.entries(legacyAliases)) {
+  Object.defineProperty(SAMPLE_TEMPLATES, aliasKey, {
+    value: template,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}

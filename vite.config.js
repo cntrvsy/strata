@@ -48,5 +48,6 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     pool: 'threads',
+    maxWorkers: 4,
   }
 });

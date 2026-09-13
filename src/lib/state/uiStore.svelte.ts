@@ -23,10 +23,17 @@ export class UIState {
 
 	/** Modal visibility flags */
 	showNewTableModal = $state(false);
-	showScaffoldModal = $state(false);
+	showScaffoldAuthModal = $state(false);
+	get showScaffoldModal() {
+		return this.showScaffoldAuthModal;
+	}
+	set showScaffoldModal(val: boolean) {
+		this.showScaffoldAuthModal = val;
+	}
 	showProjectSettingsModal = $state(false);
 	showHelpModal = $state(false);
 	showExportToast = $state(false);
+	showCodeViewerModal = $state(false);
 
 	/** Rename Entity Modal State */
 	showRenameModal = $state(false);

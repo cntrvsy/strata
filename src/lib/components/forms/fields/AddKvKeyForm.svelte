@@ -13,7 +13,7 @@
   import { schemaState } from "#lib/state";
   import { slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { X, Check, Zap } from "lucide-svelte";
+  import { X, Check } from "lucide-svelte";
 
   const { tableName, onComplete } = $props<{
     tableName: string;
@@ -28,7 +28,7 @@
         await schemaState.addColumn(
           tableName,
           form.data.name,
-          form.data.type || "string"
+          form.data.type || "string",
         );
         onComplete();
       }
@@ -43,10 +43,14 @@
   transition:slide={{ duration: 140, easing: cubicOut }}
   data-testid="add-kv-key-form"
 >
-  <div class="flex items-center justify-between border-b border-base-300/60 pb-2.5">
+  <div
+    class="flex items-center justify-between border-b border-base-300/60 pb-2.5"
+  >
     <div class="flex items-center gap-1.5">
       <div class="w-2 h-2 rounded-full bg-accent"></div>
-      <h4 class="text-[10px] font-bold uppercase tracking-wider text-base-content/80">
+      <h4
+        class="text-[10px] font-bold uppercase tracking-wider text-base-content/80"
+      >
         Add KV Key Pattern
       </h4>
     </div>
@@ -66,7 +70,9 @@
       <Form.Control>
         {#snippet children({ props })}
           <fieldset class="fieldset gap-1 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider">
+            <legend
+              class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider"
+            >
               Key Name / Pattern
             </legend>
             <input
@@ -86,7 +92,9 @@
       <Form.Control>
         {#snippet children({ props })}
           <fieldset class="fieldset gap-1 p-0">
-            <legend class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider">
+            <legend
+              class="fieldset-legend text-[10px] font-bold text-base-content/80 uppercase tracking-wider"
+            >
               Value Type
             </legend>
             <select

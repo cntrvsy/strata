@@ -14,7 +14,9 @@ export {
 	resolveRelativePath,
 	resolvePathAlias,
 	getRelativeImportSpecifier,
-	cleanUnusedImports
+	cleanUnusedImports,
+	detectPackageWrapper,
+	findCorrectedRelativePath
 } from './helpers';
 
 export { 

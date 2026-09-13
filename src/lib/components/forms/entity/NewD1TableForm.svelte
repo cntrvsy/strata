@@ -6,7 +6,13 @@
   Output: Calls schemaState.addTable with configured presets and modular destination.
 -->
 <script lang="ts">
-  import { Database, FileCode, Sparkles, TriangleAlert, Check, Code, ArrowRight } from "lucide-svelte";
+  import {
+    FileCode,
+    Sparkles,
+    TriangleAlert,
+    Code,
+    ArrowRight,
+  } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { slugifyIdentifier, isJsReservedKeyword } from "#lib/schemas";
   import { generateD1TableColumns } from "#lib/parser/mutators";
@@ -36,19 +42,21 @@
   const isReserved = $derived(isJsReservedKeyword(tableName));
 
   const isDuplicateName = $derived(
-    Boolean(tableName && schemaState.nodes.some(
-      (n) => n.id.toLowerCase() === tableName.toLowerCase()
-    ))
+    Boolean(
+      tableName &&
+        schemaState.nodes.some(
+          (n) => n.id.toLowerCase() === tableName.toLowerCase(),
+        ),
+    ),
   );
 
   const isValid = $derived(
-    tableName.length > 0 && !isDuplicateName && !isReserved
+    tableName.length > 0 && !isDuplicateName && !isReserved,
   );
 
   // Target modular file name
   const targetFileName = $derived(
-    customFileName.trim() ||
-      (tableName ? `${tableName}.ts` : "new_module.ts")
+    customFileName.trim() || (tableName ? `${tableName}.ts` : "new_module.ts"),
   );
 
   // Auto-select first existing module if available
@@ -64,7 +72,7 @@
     const { code } = generateD1TableColumns(name, {
       primaryKey: primaryKeyStyle,
       timestamps: enableTimestamps,
-      softDelete: enableSoftDelete
+      softDelete: enableSoftDelete,
     });
     return `export const ${name} = sqliteTable("${name}", {\n${code}\n});`;
   });
@@ -76,7 +84,7 @@
     const presets = {
       primaryKey: primaryKeyStyle,
       timestamps: enableTimestamps,
-      softDelete: enableSoftDelete
+      softDelete: enableSoftDelete,
     };
 
     const moduleDest = schemaState.isModular
@@ -91,12 +99,7 @@
         }
       : undefined;
 
-    await schemaState.addTable(
-      tableName,
-      "d1",
-      { presets },
-      moduleDest
-    );
+    await schemaState.addTable(tableName, "d1", { presets }, moduleDest);
 
     onClose();
   }
@@ -106,10 +109,14 @@
   <!-- Table Name Field with Live Slugify -->
   <fieldset class="fieldset gap-1.5 p-0">
     <div class="flex items-center justify-between">
-      <legend class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60">
+      <legend
+        class="fieldset-legend text-[10px] font-bold uppercase tracking-wider opacity-60"
+      >
         Table Name
       </legend>
-      <label class="flex items-center gap-1.5 cursor-pointer text-[10px] opacity-70 hover:opacity-100 transition-opacity">
+      <label
+        class="flex items-center gap-1.5 cursor-pointer text-[10px] opacity-70 hover:opacity-100 transition-opacity"
+      >
         <input
           type="checkbox"
           bind:checked={autoSlug}
@@ -124,24 +131,33 @@
         type="text"
         bind:value={rawName}
         placeholder="e.g. user_profiles or User Profiles"
-        class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-primary transition-all font-mono text-sm {isDuplicateName || isReserved ? 'input-error' : ''}"
+        class="input input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-primary transition-all font-mono text-sm {isDuplicateName ||
+        isReserved
+          ? 'input-error'
+          : ''}"
       />
     </div>
 
     {#if rawName.trim() && autoSlug && rawName.trim() !== tableName}
-      <div class="flex items-center gap-1 text-[11px] text-primary/90 font-mono mt-0.5">
+      <div
+        class="flex items-center gap-1 text-[11px] text-primary/90 font-mono mt-0.5"
+      >
         <Sparkles class="w-3 h-3 shrink-0" />
         <span>Identifier: <strong>{tableName}</strong></span>
       </div>
     {/if}
 
     {#if isDuplicateName}
-      <div class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold">
+      <div
+        class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold"
+      >
         <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
         <span>A table or entity named "{tableName}" already exists.</span>
       </div>
     {:else if isReserved}
-      <div class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold">
+      <div
+        class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold"
+      >
         <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
         <span>"{tableName}" is a reserved JavaScript keyword.</span>
       </div>
@@ -149,8 +165,12 @@
   </fieldset>
 
   <!-- Architectural Presets -->
-  <div class="p-3.5 bg-base-200/50 border border-base-300/80 rounded-box flex flex-col gap-3">
-    <span class="text-[10px] font-bold opacity-65 uppercase tracking-wider flex items-center gap-1.5">
+  <div
+    class="p-3.5 bg-base-200/50 border border-base-300/80 rounded-box flex flex-col gap-3"
+  >
+    <span
+      class="text-[10px] font-bold opacity-65 uppercase tracking-wider flex items-center gap-1.5"
+    >
       <Sparkles class="w-3.5 h-3.5 text-primary" />
       Schema Presets & Defaults
     </span>
@@ -161,7 +181,10 @@
       <div class="grid grid-cols-2 gap-2">
         <button
           type="button"
-          class="btn btn-xs h-8 justify-start px-2.5 rounded-lg border transition-all {primaryKeyStyle === 'autoIncrement' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost border-base-300/80 opacity-70'}"
+          class="btn btn-xs h-8 justify-start px-2.5 rounded-lg border transition-all {primaryKeyStyle ===
+          'autoIncrement'
+            ? 'btn-primary font-bold shadow-xs'
+            : 'btn-ghost border-base-300/80 opacity-70'}"
           onclick={() => (primaryKeyStyle = "autoIncrement")}
         >
           <div class="flex flex-col items-start leading-tight">
@@ -172,12 +195,17 @@
 
         <button
           type="button"
-          class="btn btn-xs h-8 justify-start px-2.5 rounded-lg border transition-all {primaryKeyStyle === 'uuid' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost border-base-300/80 opacity-70'}"
+          class="btn btn-xs h-8 justify-start px-2.5 rounded-lg border transition-all {primaryKeyStyle ===
+          'uuid'
+            ? 'btn-primary font-bold shadow-xs'
+            : 'btn-ghost border-base-300/80 opacity-70'}"
           onclick={() => (primaryKeyStyle = "uuid")}
         >
           <div class="flex flex-col items-start leading-tight">
             <span class="text-[11px]">UUID Text ID</span>
-            <span class="text-[8.5px] opacity-70 font-mono">crypto.randomUUID()</span>
+            <span class="text-[8.5px] opacity-70 font-mono"
+              >crypto.randomUUID()</span
+            >
           </div>
         </button>
       </div>
@@ -185,7 +213,9 @@
 
     <!-- Toggles: Timestamps & Soft Delete -->
     <div class="grid grid-cols-2 gap-2 pt-1 border-t border-base-300/40">
-      <label class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-base-300/30 transition-colors">
+      <label
+        class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-base-300/30 transition-colors"
+      >
         <input
           type="checkbox"
           bind:checked={enableTimestamps}
@@ -197,7 +227,9 @@
         </div>
       </label>
 
-      <label class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-base-300/30 transition-colors">
+      <label
+        class="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-base-300/30 transition-colors"
+      >
         <input
           type="checkbox"
           bind:checked={enableSoftDelete}
@@ -213,26 +245,38 @@
 
   <!-- Modular Target Destination Selection (If modular project) -->
   {#if schemaState.isModular}
-    <div class="p-3.5 bg-base-200/50 border border-base-300/80 rounded-box flex flex-col gap-2.5">
+    <div
+      class="p-3.5 bg-base-200/50 border border-base-300/80 rounded-box flex flex-col gap-2.5"
+    >
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-bold opacity-65 uppercase tracking-wider flex items-center gap-1.5">
+        <span
+          class="text-[10px] font-bold opacity-65 uppercase tracking-wider flex items-center gap-1.5"
+        >
           <FileCode class="w-3.5 h-3.5 text-primary" />
           Module Destination
         </span>
-        <span class="badge badge-xs badge-primary badge-outline font-mono">Modular Setup</span>
+        <span class="badge badge-xs badge-primary badge-outline font-mono"
+          >Modular Setup</span
+        >
       </div>
 
       <div class="grid grid-cols-3 gap-1.5 p-1 bg-base-300/40 rounded-lg">
         <button
           type="button"
-          class="btn btn-xs {destMode === 'new' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost opacity-70'}"
+          class="btn btn-xs {destMode === 'new'
+            ? 'btn-primary font-bold shadow-xs'
+            : 'btn-ghost opacity-70'}"
           onclick={() => (destMode = "new")}
         >
           New File
         </button>
         <button
           type="button"
-          class="btn btn-xs {destMode === 'existing' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost opacity-70'} {!schemaState.availableModules.length ? 'opacity-30 cursor-not-allowed' : ''}"
+          class="btn btn-xs {destMode === 'existing'
+            ? 'btn-primary font-bold shadow-xs'
+            : 'btn-ghost opacity-70'} {!schemaState.availableModules.length
+            ? 'opacity-30 cursor-not-allowed'
+            : ''}"
           disabled={!schemaState.availableModules.length}
           onclick={() => (destMode = "existing")}
         >
@@ -240,7 +284,9 @@
         </button>
         <button
           type="button"
-          class="btn btn-xs {destMode === 'root' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost opacity-70'}"
+          class="btn btn-xs {destMode === 'root'
+            ? 'btn-primary font-bold shadow-xs'
+            : 'btn-ghost opacity-70'}"
           onclick={() => (destMode = "root")}
         >
           Root Barrel
@@ -249,7 +295,9 @@
 
       {#if destMode === "new"}
         <fieldset class="fieldset gap-1 p-0">
-          <legend class="fieldset-legend text-[9.5px] font-bold opacity-60 uppercase">
+          <legend
+            class="fieldset-legend text-[9.5px] font-bold opacity-60 uppercase"
+          >
             Module File Name
           </legend>
           <input
@@ -259,12 +307,16 @@
             class="input input-xs input-bordered w-full rounded-field bg-base-100/60 border-base-300/60 font-mono text-xs focus:input-primary"
           />
           <p class="text-[9.5px] opacity-60 mt-0.5 leading-tight">
-            Creates <span class="font-mono text-primary font-bold">{targetFileName}</span> and re-exports in root barrel.
+            Creates <span class="font-mono text-primary font-bold"
+              >{targetFileName}</span
+            > and re-exports in root barrel.
           </p>
         </fieldset>
       {:else if destMode === "existing" && schemaState.availableModules.length > 0}
         <fieldset class="fieldset gap-1 p-0">
-          <legend class="fieldset-legend text-[9.5px] font-bold opacity-60 uppercase">
+          <legend
+            class="fieldset-legend text-[9.5px] font-bold opacity-60 uppercase"
+          >
             Select Domain Module
           </legend>
           <select
@@ -285,15 +337,22 @@
   {/if}
 
   <!-- Live Syntax Preview -->
-  <div class="p-3 bg-neutral/90 text-neutral-content rounded-box flex flex-col gap-1.5 shadow-inner">
-    <div class="flex items-center justify-between text-[10px] opacity-60 font-mono">
+  <div
+    class="p-3 bg-neutral/90 text-neutral-content rounded-box flex flex-col gap-1.5 shadow-inner"
+  >
+    <div
+      class="flex items-center justify-between text-[10px] opacity-60 font-mono"
+    >
       <span class="flex items-center gap-1">
         <Code class="w-3 h-3 text-primary" />
         Drizzle Schema Preview
       </span>
       <span>SQLite / D1</span>
     </div>
-    <pre class="font-mono text-[11px] leading-relaxed text-base-100 overflow-x-auto whitespace-pre p-1"><code>{generatedPreview}</code></pre>
+    <pre
+      class="font-mono text-[11px] leading-relaxed text-base-100 overflow-x-auto whitespace-pre p-1"><code
+        >{generatedPreview}</code
+      ></pre>
   </div>
 
   <!-- Action Buttons -->

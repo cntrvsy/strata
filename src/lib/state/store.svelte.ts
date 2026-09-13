@@ -11,8 +11,8 @@ import { createStateMachine } from "#lib/state/fsm";
 import { OperationQueue } from "#lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath } from "#lib/parser";
-import type { AuditIssue } from "#lib/parser/types";
+import { resolveRelativePath, getRelativeImportSpecifier } from "#lib/parser";
+import type { AuditIssue, PackageWrapperInfo } from "#lib/parser/types";
 import { uiState } from "#lib/state/uiStore.svelte";
 
 
@@ -186,10 +186,29 @@ async function loadExternalSchemas(
 			externalFilesMap.set(p, extRaw);
 			externalFilesMap.set(resolvedPath, extRaw);
 		} catch (err: any) {
-			console.warn(`[Strata] Failed to read external path at ${resolvedPath}:`, err);
-			toast.error(`Failed to read path: ${p}`, {
-				description: err?.message || "File not found or unreadable."
-			});
+			// Non-blocking fallback: Check if path depth was miscalculated in a monorepo
+			let resolvedFallback = false;
+			try {
+				const cleanSubPath = p.replace(/^(\.\.?\/)+/, '');
+				if (cleanSubPath) {
+					const workspaceRoot = await findWorkspaceRoot(basePath);
+					const candidate = `${workspaceRoot}/${cleanSubPath}`;
+					const extRaw = await PlatformService.readText(candidate);
+					if (extRaw) {
+						externalFilesMap.set(p, extRaw);
+						externalFilesMap.set(candidate, extRaw);
+						const correctedRel = getRelativeImportSpecifier(basePath, candidate);
+						if (correctedRel) {
+							externalFilesMap.set('__correction__' + p, correctedRel);
+						}
+						resolvedFallback = true;
+					}
+				}
+			} catch {}
+
+			if (!resolvedFallback) {
+				console.warn(`[Strata] External asset not found at ${resolvedPath}`);
+			}
 		}
 	}
 	return externalFilesMap;
@@ -250,6 +269,10 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 
 function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
+	const trimmed = jsonContent.trim();
+	if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+		return bindings;
+	}
 	try {
 		const data = parseCleanJson(jsonContent);
 
@@ -285,6 +308,38 @@ function parseWranglerContent(fileName: string, content: string): { type: 'kv' |
 		return parseJsonBindings(content);
 	}
 	return parseWranglerBindings(content);
+}
+
+async function findWorkspaceRoot(filePath: string): Promise<string> {
+	const normalized = filePath.replace(/\\/g, '/');
+	const lastSlash = normalized.lastIndexOf('/');
+	let currentDir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
+
+	let fallbackProjectRoot = currentDir;
+	for (let depth = 0; depth < 12; depth++) {
+		for (const marker of ['.git', 'pnpm-workspace.yaml']) {
+			try {
+				const exists = await PlatformService.readText(currentDir + '/' + marker);
+				if (exists) return currentDir;
+			} catch {}
+		}
+
+		try {
+			const pkgContent = await PlatformService.readText(currentDir + '/package.json');
+			if (pkgContent) {
+				const parsed = parseCleanJson(pkgContent);
+				if (parsed && (parsed.workspaces || parsed.private)) {
+					fallbackProjectRoot = currentDir;
+					if (parsed.workspaces) return currentDir;
+				}
+			}
+		} catch {}
+
+		const pSlash = currentDir.lastIndexOf('/');
+		if (pSlash <= 0) break;
+		currentDir = currentDir.substring(0, pSlash);
+	}
+	return fallbackProjectRoot;
 }
 
 async function findProjectRoot(filePath: string): Promise<string> {
@@ -386,8 +441,8 @@ export class SchemaState {
 	error = $state<string | null>(null);
 	/** Exact location of the last parse error for inline linting */
 	errorLoc = $state<{ line: number, column: number } | null>(null);
-	/** Differentiates between parsing errors and disk write errors */
-	errorType = $state<'parse' | 'disk' | null>(null);
+	/** Differentiates between parsing errors, disk write errors, and AST mutation errors */
+	errorType = $state<'parse' | 'disk' | 'mutation' | null>(null);
 	/** The ID of the node currently displayed in the inspector panel */
 	get activeInspectorNodeId() { return uiState.activeInspectorNodeId; }
 	set activeInspectorNodeId(val: string | null) { uiState.activeInspectorNodeId = val; }
@@ -464,6 +519,32 @@ export class SchemaState {
 	get sandboxTemplateKey() { return uiState.sandboxTemplateKey; }
 	set sandboxTemplateKey(val: string) { uiState.sandboxTemplateKey = val; }
 
+	/**
+	 * Computes a context-aware project name derived from the active template or file path.
+	 */
+	get suggestedProjectName(): string {
+		if (this.isSandboxMode) {
+			const key = this.sandboxTemplateKey || 'starter';
+			return `${key}-starter`.replace(/-starter-starter$/, '-starter');
+		}
+		if (this.filePath) {
+			const parts = this.filePath.split(/[/\\]/);
+			const parent = parts[parts.length - 2];
+			const grandParent = parts[parts.length - 3];
+			if (parent && parent !== 'src' && parent !== 'schema') {
+				return parent;
+			}
+			if (grandParent && grandParent !== 'packages') {
+				return grandParent;
+			}
+			const fileName = parts[parts.length - 1]?.replace(/\.[^/.]+$/, '');
+			if (fileName && fileName !== 'schema' && fileName !== 'index') {
+				return fileName;
+			}
+		}
+		return 'strata-app';
+	}
+
 	/** Rename Entity Modal State */
 	get showRenameModal() { return uiState.showRenameModal; }
 	set showRenameModal(val: boolean) { uiState.showRenameModal = val; }
@@ -494,9 +575,11 @@ export class SchemaState {
 	get showNewTableModal() { return uiState.showNewTableModal; }
 	set showNewTableModal(val: boolean) { uiState.showNewTableModal = val; }
 
-	/** Whether the 'Scaffold Architecture' modal is currently visible */
-	get showScaffoldModal() { return uiState.showScaffoldModal; }
-	set showScaffoldModal(val: boolean) { uiState.showScaffoldModal = val; }
+	/** Whether the 'Scaffold Auth & Identity' modal is currently visible */
+	get showScaffoldAuthModal() { return uiState.showScaffoldAuthModal; }
+	set showScaffoldAuthModal(val: boolean) { uiState.showScaffoldAuthModal = val; }
+	get showScaffoldModal() { return uiState.showScaffoldAuthModal; }
+	set showScaffoldModal(val: boolean) { uiState.showScaffoldAuthModal = val; }
 
 	/** Custom relative path to wrangler.toml configured in the schema */
 	wranglerPath = $state<string | undefined>(undefined);
@@ -511,8 +594,15 @@ export class SchemaState {
 	get showHelpModal() { return uiState.showHelpModal; }
 	set showHelpModal(val: boolean) { uiState.showHelpModal = val; }
 
+	/** Whether the CodeMirror schema inspector modal is visible */
+	get showCodeViewerModal() { return uiState.showCodeViewerModal; }
+	set showCodeViewerModal(val: boolean) { uiState.showCodeViewerModal = val; }
+
 	/** List of JSDoc and AST audit issues */
 	auditIssues = $state<AuditIssue[]>([]);
+
+	/** Detected package wrapper details if opened file is not the schema barrel */
+	packageWrapperInfo = $state<PackageWrapperInfo | null>(null);
 
 	/** The list of bindings parsed from wrangler.toml */
 	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
@@ -640,6 +730,22 @@ export class SchemaState {
 		});
 	}
 
+	/**
+	 * Applies a recommended audit quick-fix on disk (e.g. repairing a miscalculated path depth).
+	 */
+	async applyAuditFix(issue: AuditIssue) {
+		if (issue.suggestedFix?.action === 'fix_path' && issue.symbolName && issue.suggestedFix.payload?.correctedPath) {
+			await this.updateTableMetadata(issue.symbolName, {
+				path: issue.suggestedFix.payload.correctedPath
+			});
+			toast.success("Path Depth Corrected", {
+				description: `Updated @strata path for "${issue.symbolName}" to ${issue.suggestedFix.payload.correctedPath}.`
+			});
+		} else if (issue.suggestedFix?.action === 'auto_repair_jsdoc' && issue.symbolName) {
+			await this.repairNodeJsdoc(issue.symbolName);
+		}
+	}
+
 
 
 
@@ -676,7 +782,7 @@ export class SchemaState {
 			this.wranglerPath = result.wranglerPath;
 
 			// Display any warnings
-			if (result.warnings && result.warnings.length > 0) {
+			if (result.warnings && result.warnings.length > 0 && !this.isSandboxMode) {
 				for (const warning of result.warnings) {
 					toast.warning("Schema Parser Warning", {
 						description: warning,
@@ -725,12 +831,14 @@ export class SchemaState {
 			this.error = null;
 			this.errorLoc = null;
 			this.errorType = null;
+			this.packageWrapperInfo = null;
 			return true;
 		} else {
 			this.isValid = false;
 			this.error = result.error || "Parse Error";
 			this.errorLoc = result.errorLoc || null;
 			this.errorType = 'parse';
+			this.packageWrapperInfo = result.packageWrapperInfo || null;
 			return false;
 		}
 	}
@@ -829,9 +937,9 @@ export class SchemaState {
 	/**
 	 * Loads a starter schema template into zero-risk in-memory sandbox mode.
 	 */
-	async loadSandboxDemo(templateKey: string = 'fullstack') {
+	async loadSandboxDemo(templateKey: string = 'ai-agent-rag') {
 		const { SAMPLE_TEMPLATES } = await import("#lib/mock");
-		const template = SAMPLE_TEMPLATES[templateKey] || SAMPLE_TEMPLATES.fullstack;
+		const template = SAMPLE_TEMPLATES[templateKey] || SAMPLE_TEMPLATES['ai-agent-rag'];
 
 		this.isSandboxMode = true;
 		this.sandboxTemplateKey = templateKey;
@@ -862,13 +970,32 @@ export class SchemaState {
 				const { parseDrizzleConfigSchemaPath } = await import("../parser");
 				const resolvedSchema = parseDrizzleConfigSchemaPath(configContent, path);
 				if (resolvedSchema) {
-					targetPath = resolvedSchema;
-					toast.info("Drizzle Config Ingested", {
-						description: `Resolved schema: ${targetPath}`
+					try {
+						await PlatformService.readText(resolvedSchema);
+						targetPath = resolvedSchema;
+						toast.info("Drizzle Config Ingested", {
+							description: `Resolved schema: ${targetPath}`
+						});
+					} catch (readErr: any) {
+						toast.error("Schema File Not Found", {
+							description: `drizzle.config.ts points to "${resolvedSchema}", but the file could not be read. Select your schema entrypoint directly.`,
+							duration: 8000
+						});
+						return;
+					}
+				} else {
+					toast.error("Cannot Resolve Schema", {
+						description: `Could not determine schema file path from drizzle.config.ts. Please open your schema file directly.`,
+						duration: 8000
 					});
+					return;
 				}
-			} catch (err) {
+			} catch (err: any) {
 				console.warn("[Strata] Failed to parse drizzle.config.ts schema path:", err);
+				toast.error("Failed to Read drizzle.config.ts", {
+					description: err.message || String(err)
+				});
+				return;
 			}
 		}
 
@@ -896,6 +1023,7 @@ export class SchemaState {
 	 * Returns the source file defining a specific table/entity, or falls back to root schema.
 	 */
 	private getTargetFilePath(tableName: string): string | undefined {
+		if (this.isSandboxMode) return undefined;
 		const node = this.nodes.find(n => n.id === tableName);
 		return (node?.data as any)?.moduleInfo?.sourceFilePath || this.filePath || undefined;
 	}
@@ -912,54 +1040,78 @@ export class SchemaState {
 		await this.queue.enqueue(async () => {
 			if (!this.filePath && !this.isSandboxMode) return;
 			this.machine.send("SAVE");
-			try {
-				const isTargetExternal = Boolean(
-					targetFilePath && this.filePath && targetFilePath !== this.filePath
-				);
-				const fileToMutate = isTargetExternal ? targetFilePath! : this.filePath;
-				let currentCode = this.rawCode;
+			
+			const isTargetExternal = Boolean(
+				targetFilePath && this.filePath && targetFilePath !== this.filePath
+			);
+			const fileToMutate = isTargetExternal ? targetFilePath! : this.filePath;
+			let currentCode = this.rawCode;
 
-				if (isTargetExternal) {
+			if (isTargetExternal) {
+				try {
 					let extCode = this.externalFilesMap.get(targetFilePath!);
 					if (!extCode) {
 						extCode = await PlatformService.readText(targetFilePath!);
 					}
 					currentCode = extCode;
+				} catch (readErr: any) {
+					this.error = readErr.message || String(readErr);
+					this.errorType = 'disk';
+					this.machine.send("FAIL");
+					toast.error(`Failed to read target module`, {
+						description: readErr.message || String(readErr)
+					});
+					return;
 				}
+			}
 
-				const newCode = await mutateFn(currentCode);
+			let newCode: string;
+			try {
+				newCode = await mutateFn(currentCode);
+			} catch (mutErr: any) {
+				console.error(`[Strata] ${operationName} AST mutation failed:`, mutErr);
+				this.error = mutErr.message || String(mutErr);
+				this.errorType = 'mutation';
+				this.machine.send("FAIL");
+				toast.error(`${operationName} failed`, {
+					description: mutErr.message || String(mutErr)
+				});
+				return;
+			}
 
-				if (!this.isSandboxMode && fileToMutate) {
+			if (!this.isSandboxMode && fileToMutate) {
+				try {
 					this.ignoreNextWatch = true;
 					this.lastWriteTime = Date.now();
 					await PlatformService.writeText(fileToMutate, newCode);
+				} catch (writeErr: any) {
+					console.error(`[Strata] ${operationName} disk write failed:`, writeErr);
+					this.error = writeErr.message || String(writeErr);
+					this.errorType = 'disk';
+					this.machine.send("FAIL");
+					toast.error(`Disk write failed for "${operationName}"`, {
+						description: writeErr.message || String(writeErr)
+					});
+					return;
 				}
+			}
 
-				if (isTargetExternal) {
-					this.externalFilesMap.set(targetFilePath!, newCode);
-					const success = await this.parseAndApply(this.rawCode);
-					if (success) {
-						this.machine.send("SUCCESS");
-					} else {
-						this.machine.send("FAIL");
-					}
+			if (isTargetExternal) {
+				this.externalFilesMap.set(targetFilePath!, newCode);
+				const success = await this.parseAndApply(this.rawCode);
+				if (success) {
+					this.machine.send("SUCCESS");
 				} else {
-					this.rawCode = newCode;
-					const success = await this.parseAndApply(newCode);
-					if (success) {
-						this.machine.send("SUCCESS");
-					} else {
-						this.machine.send("FAIL");
-					}
+					this.machine.send("FAIL");
 				}
-			} catch (e: any) {
-				console.error(`[Strata] ${operationName} failed:`, e);
-				this.error = e.message;
-				this.errorType = this.isSandboxMode ? 'parse' : 'disk';
-				this.machine.send("FAIL");
-				toast.error(`${operationName} failed`, {
-					description: e.message || String(e)
-				});
+			} else {
+				this.rawCode = newCode;
+				const success = await this.parseAndApply(newCode);
+				if (success) {
+					this.machine.send("SUCCESS");
+				} else {
+					this.machine.send("FAIL");
+				}
 			}
 		});
 	}
@@ -1260,6 +1412,14 @@ export class SchemaState {
 		referencesTable?: string,
 		referencesColumn?: string
 	) {
+		const targetNode = this.nodes.find(n => n.id === tableName);
+		const existingCols = (targetNode?.data as any)?.columns || [];
+		if (existingCols.some((c: any) => c.name.toLowerCase() === columnName.trim().toLowerCase())) {
+			toast.warning("Column Already Exists", {
+				description: `Table "${tableName}" already has a column named "${columnName}".`
+			});
+			return;
+		}
 		const targetFile = this.getTargetFilePath(tableName);
 		let targetImportPath: string | undefined;
 		if (referencesTable) {
@@ -1374,15 +1534,34 @@ export class SchemaState {
 		this.externalFilesMap.clear();
 		this.isValid = true;
 		this.error = null;
+		this.errorLoc = null;
+		this.errorType = null;
 		this.activeInspectorNodeId = null;
 		this.isSandboxMode = false;
+		this.packageWrapperInfo = null;
+		this.auditIssues = [];
 		this.machine.send("RESET");
 	}
 
 	/**
 	 * Closes the currently open schema or sandbox mode, returning to the Welcome screen overlay.
+	 * Prompts for confirmation if unsaved layout coordinates are pending.
 	 */
 	closeFile() {
+		if (this.hasUnsavedChanges) {
+			this.promptConfirm({
+				title: "Unsaved Layout Changes",
+				message: "You have unsaved node layout movements. Are you sure you want to close this schema without saving your layout coordinates?",
+				confirmLabel: "Close & Discard",
+				isDanger: true,
+				onConfirm: () => {
+					PlatformService.unwatchFile().catch(() => {});
+					this.reset();
+				}
+			});
+			return;
+		}
+		PlatformService.unwatchFile().catch(() => {});
 		this.reset();
 	}
 

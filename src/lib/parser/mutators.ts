@@ -7,7 +7,7 @@
  */
 import { SyntaxKind } from 'ts-morph';
 import type { Node } from '@xyflow/svelte';
-import { createIsolatedProject, withSourceFile } from './project';
+import { createIsolatedProject } from './project';
 import { 
 	findSqliteTableCall, 
 	isDrizzleTableDeclaration, 
@@ -17,7 +17,6 @@ import {
 	cleanUnusedImports,
 	resolveRelativePath,
 	extractStrataMetadata,
-	extractStrataLayoutManifest,
 	pluralizeIdentifier
 } from './helpers';
 export { extractStrataLayoutManifest } from './helpers';
@@ -250,58 +249,66 @@ export async function addColumnToSchema(
 						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'do') {
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_add_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									let methodName = columnName.trim();
-									let parameters: { name: string; type?: string }[] = [];
-									const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
-									if (parseMatch) {
-										methodName = parseMatch[1].trim();
-										const paramsStr = parseMatch[2].trim();
-										if (paramsStr) {
-											parameters = paramsStr.split(',').map(p => {
-												const [pName, pType] = p.split(':').map(x => x.trim());
-												return {
-													name: pName,
-													type: pType || 'any'
-												};
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
+							}
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_add_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										let methodName = columnName.trim();
+										let parameters: { name: string; type?: string }[] = [];
+										const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)\((.*)\)$/);
+										if (parseMatch) {
+											methodName = parseMatch[1].trim();
+											const paramsStr = parseMatch[2].trim();
+											if (paramsStr) {
+												parameters = paramsStr.split(',').map(p => {
+													const [pName, pType] = p.split(':').map(x => x.trim());
+													return {
+														name: pName,
+														type: pType || 'any'
+													};
+												});
+											}
+										}
+										if (!classDecl.getMethod(methodName)) {
+											classDecl.addMethod({
+												name: methodName,
+												parameters,
+												returnType: type || 'Promise<any>',
+												statements: `throw new Error("Method not implemented.");`,
+												scope: 'public' as any
 											});
 										}
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
 									}
-									if (!classDecl.getMethod(methodName)) {
-										classDecl.addMethod({
-											name: methodName,
-											parameters,
-											returnType: type || 'Promise<any>',
-											statements: `throw new Error("Method not implemented.");`,
-											scope: 'public' as any
-										});
-									}
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
+								} catch (err: any) {
+									console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to add DO method to ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 							}
+						}
+
+						if (!strata.methods) strata.methods = [];
+						let methodName = columnName.trim();
+						const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
+						if (parseMatch) {
+							methodName = parseMatch[1].trim();
+						}
+						if (!strata.methods.includes(methodName)) {
+							strata.methods.push(methodName);
+							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 							return sf.getFullText();
-						} else {
-							if (!strata.methods) strata.methods = [];
-							let methodName = columnName.trim();
-							const parseMatch = columnName.match(/^([a-zA-Z0-9_]+)/);
-							if (parseMatch) {
-								methodName = parseMatch[1].trim();
-							}
-							if (!strata.methods.includes(methodName)) {
-								strata.methods.push(methodName);
-								doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
-								return sf.getFullText();
-							}
 						}
 						return sf.getFullText();
 					}
@@ -708,23 +715,32 @@ export async function removeColumnFromSchema(
 						if (parseMatch) {
 							methodName = parseMatch[1].trim();
 						}
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_remove_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									classDecl.getMethod(methodName)?.remove();
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
-								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
 							}
-							return sf.getFullText();
-						} else if (strata.methods) {
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_remove_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										classDecl.getMethod(methodName)?.remove();
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
+									}
+								} catch (err: any) {
+									console.error(`[Strata] Failed to remove DO method from ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								}
+							}
+						}
+						if (strata.methods) {
 							strata.methods = strata.methods.filter((m: string) => m !== methodName);
 							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 							return sf.getFullText();
@@ -850,23 +866,32 @@ export async function renameColumnInSchema(
 						const newMatch = newColName.match(/^([a-zA-Z0-9_]+)/);
 						if (newMatch) newMethodName = newMatch[1].trim();
 
-						if (schemaFilePath && strata.path && strata.class) {
+						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
 							const resolvedPath = resolveRelativePath(schemaFilePath, strata.path);
+							let fileContent: string | null = null;
 							try {
-								const fileContent = await PlatformService.readText(resolvedPath);
-								const extSf = project.createSourceFile(`temp_do_rename_${Date.now()}.ts`, fileContent, { overwrite: true });
-								const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
-								if (classDecl) {
-									classDecl.getMethod(oldMethodName)?.rename(newMethodName);
-									const newExtContent = extSf.getFullText();
-									await PlatformService.writeText(resolvedPath, newExtContent);
-								}
-							} catch (err: any) {
-								console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
-								throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								fileContent = await PlatformService.readText(resolvedPath);
+							} catch (e) {
+								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
 							}
-							return sf.getFullText();
-						} else if (strata.methods && Array.isArray(strata.methods)) {
+
+							if (fileContent !== null) {
+								try {
+									const extSf = project.createSourceFile(`temp_do_rename_${Date.now()}.ts`, fileContent, { overwrite: true });
+									const classDecl = extSf.getClass(strata.class) || extSf.getClasses()[0];
+									if (classDecl) {
+										classDecl.getMethod(oldMethodName)?.rename(newMethodName);
+										const newExtContent = extSf.getFullText();
+										await PlatformService.writeText(resolvedPath, newExtContent);
+										return sf.getFullText();
+									}
+								} catch (err: any) {
+									console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
+									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
+								}
+							}
+						}
+						if (strata.methods && Array.isArray(strata.methods)) {
 							const idx = strata.methods.indexOf(oldMethodName);
 							if (idx !== -1) {
 								strata.methods[idx] = newMethodName;

@@ -367,10 +367,10 @@
           {#if issue.suggestedFix}
             <button
               class="btn btn-xs btn-warning rounded-field text-[10px] h-6 min-h-6 self-start font-bold gap-1 mt-0.5"
-              onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
+              onclick={() => schemaState.applyAuditFix(issue)}
             >
               <Wrench class="w-3 h-3" />
-              <span>Auto-Repair JSDoc</span>
+              <span>{issue.suggestedFix.label || "Auto-Repair JSDoc"}</span>
             </button>
           {/if}
         </div>
@@ -393,19 +393,23 @@
             >
           </div>
           {#each nodeIssues as issue}
-            <p
-              class="text-[11px] text-base-content/80 leading-relaxed font-sans"
-            >
-              {issue.message}
-            </p>
+            <div class="flex flex-col gap-1 border-b border-error/10 pb-2 last:border-b-0 last:pb-0">
+              <p
+                class="text-[11px] text-base-content/80 leading-relaxed font-sans"
+              >
+                {issue.message}
+              </p>
+              {#if issue.suggestedFix}
+                <button
+                  class="btn btn-error btn-xs rounded-field font-bold gap-1.5 self-start text-[10px] shadow-sm mt-0.5"
+                  onclick={() => schemaState.applyAuditFix(issue)}
+                >
+                  <Wrench class="w-3 h-3" />
+                  <span>{issue.suggestedFix.label || "Auto-Repair Metadata"}</span>
+                </button>
+              {/if}
+            </div>
           {/each}
-          <button
-            class="btn btn-error btn-xs rounded-field font-bold gap-1.5 self-start text-[10px] shadow-sm mt-1"
-            onclick={() => schemaState.repairNodeJsdoc(selectedNode.id)}
-          >
-            <Wrench class="w-3 h-3" />
-            <span>Auto-Repair JSDoc Metadata</span>
-          </button>
         </div>
       {/if}
 
