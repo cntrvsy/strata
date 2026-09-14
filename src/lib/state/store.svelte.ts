@@ -11,7 +11,7 @@ import { createStateMachine } from "#lib/state/fsm";
 import { OperationQueue } from "#lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath, getRelativeImportSpecifier } from "#lib/parser";
+import { resolveRelativePath, getRelativeImportSpecifier, createIsolatedProject } from "#lib/parser";
 import type { AuditIssue, PackageWrapperInfo } from "#lib/parser/types";
 import { uiState } from "#lib/state/uiStore.svelte";
 
@@ -214,8 +214,14 @@ async function loadExternalSchemas(
 	return externalFilesMap;
 }
 
-function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseWranglerBindings(tomlContent: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
+	let main: string | undefined = undefined;
+	const mainMatch = tomlContent.match(/^\s*main\s*=\s*["']([^"']+)["']/m);
+	if (mainMatch) {
+		main = mainMatch[1];
+	}
+
 	const blocks = tomlContent.split(/\[\[/);
 	
 	for (const block of blocks) {
@@ -237,6 +243,7 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 		} else if (headerLine.startsWith('durable_objects.bindings')) {
 			let name = '';
 			let className = '';
+			let scriptName = '';
 			for (const line of lines) {
 				const nameMatch = line.match(/^\s*name\s*=\s*["']([^"']+)["']/);
 				if (nameMatch) {
@@ -246,9 +253,20 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 				if (classMatch) {
 					className = classMatch[1];
 				}
+				const scriptMatch = line.match(/^\s*script_name\s*=\s*["']([^"']+)["']/);
+				if (scriptMatch) {
+					scriptName = scriptMatch[1];
+				}
 			}
 			if (name) {
-				bindings.push({ type: 'do', name, extra: { class: className } });
+				bindings.push({
+					type: 'do',
+					name,
+					extra: {
+						class: className,
+						...(scriptName ? { script_name: scriptName } : {})
+					}
+				});
 			}
 		} else if (headerLine.startsWith('r2_buckets')) {
 			let name = '';
@@ -264,17 +282,18 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 			}
 		}
 	}
-	return bindings;
+	return { bindings, main };
 }
 
-function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseJsonBindings(jsonContent: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
 	const trimmed = jsonContent.trim();
 	if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-		return bindings;
+		return { bindings };
 	}
 	try {
 		const data = parseCleanJson(jsonContent);
+		const main = typeof data.main === 'string' ? data.main : undefined;
 
 		if (Array.isArray(data.kv_namespaces)) {
 			for (const kv of data.kv_namespaces) {
@@ -286,7 +305,14 @@ function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; nam
 		if (data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
 			for (const dobj of data.durable_objects.bindings) {
 				if (dobj && dobj.name) {
-					bindings.push({ type: 'do', name: dobj.name, extra: { class: dobj.class_name } });
+					bindings.push({
+						type: 'do',
+						name: dobj.name,
+						extra: {
+							class: dobj.class_name,
+							...(dobj.script_name ? { script_name: dobj.script_name } : {})
+						}
+					});
 				}
 			}
 		}
@@ -297,17 +323,152 @@ function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; nam
 				}
 			}
 		}
+		return { bindings, main };
 	} catch (e) {
 		console.warn("[Strata] Failed to parse JSON/JSONC wrangler config:", e);
 	}
-	return bindings;
+	return { bindings };
 }
 
-function parseWranglerContent(fileName: string, content: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseWranglerContent(fileName: string, content: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	if (fileName.endsWith('.json') || fileName.endsWith('.jsonc')) {
 		return parseJsonBindings(content);
 	}
 	return parseWranglerBindings(content);
+}
+
+function extractClassMethodsFromCode(code: string, className?: string): { name: string; definition: string; isPk: boolean; notNull: boolean; isReferences: boolean }[] {
+	try {
+		const { sourceFile: sf } = createIsolatedProject('class_methods_check.ts', code);
+		const classDecl = (className ? sf.getClass(className) : undefined) || sf.getClasses()[0];
+		if (classDecl) {
+			return (classDecl.getMethods() as any[])
+				.filter((m: any) => m.getScope() === 'public' || !m.getScope())
+				.map((m: any) => {
+					const paramStr = (m.getParameters() as any[]).map((p: any) => p.getText()).join(', ');
+					const retType = m.getReturnTypeNode()?.getText() || 'any';
+					return {
+						name: `${m.getName()}(${paramStr})`,
+						definition: retType,
+						isPk: false,
+						notNull: false,
+						isReferences: false
+					};
+				});
+		}
+	} catch {}
+	return [];
+}
+
+/**
+ * Option 1: Authoritative Cloudflare DO Class Resolution.
+ * Inspects the Worker entrypoint (`main` in wrangler.jsonc / wrangler.toml) to discover
+ * where the DO class is declared or re-exported, and dynamically extracts its RPC methods.
+ */
+async function resolveDurableObjectClassFromEntrypoint(
+	wranglerDir: string,
+	mainEntry: string | undefined,
+	className: string
+): Promise<{ filePath: string; methods: { name: string; definition: string; isPk: boolean; notNull: boolean; isReferences: boolean }[] } | null> {
+	if (!className) return null;
+
+	const entryCandidates = mainEntry 
+		? [
+			wranglerDir + '/' + mainEntry,
+			wranglerDir + '/' + (mainEntry.endsWith('.ts') || mainEntry.endsWith('.js') ? mainEntry : mainEntry + '.ts'),
+			wranglerDir + '/' + (mainEntry.endsWith('.ts') || mainEntry.endsWith('.js') ? mainEntry : mainEntry + '/index.ts'),
+		]
+		: [
+			wranglerDir + '/src/index.ts',
+			wranglerDir + '/src/worker.ts',
+			wranglerDir + '/index.ts',
+		];
+
+	let mainPath: string | null = null;
+	let mainContent: string | null = null;
+	for (const candidate of entryCandidates) {
+		try {
+			const text = await PlatformService.readText(candidate);
+			if (text) {
+				mainPath = candidate;
+				mainContent = text;
+				break;
+			}
+		} catch {}
+	}
+
+	if (!mainPath || !mainContent) {
+		// Convention fallback: check standard DO directories
+		for (const candidate of [
+			`${wranglerDir}/src/durable-objects/${className}.ts`,
+			`${wranglerDir}/src/do/${className}.ts`,
+			`${wranglerDir}/src/server/durable-objects/${className}.ts`,
+			`${wranglerDir}/src/${className}.ts`,
+		]) {
+			try {
+				const text = await PlatformService.readText(candidate);
+				if (text) {
+					const methods = extractClassMethodsFromCode(text, className);
+					return { filePath: candidate, methods };
+				}
+			} catch {}
+		}
+		return null;
+	}
+
+	// 1. Check if class is declared directly in main
+	const declaredMethods = extractClassMethodsFromCode(mainContent, className);
+	if (declaredMethods.length > 0 || mainContent.includes(`class ${className}`)) {
+		return { filePath: mainPath, methods: declaredMethods };
+	}
+
+	// 2. Check if main re-exports the class:
+	// export { SessionDO } from './durable-objects/SessionDO'
+	// export * from './durable-objects/SessionDO'
+	try {
+		const { sourceFile: sf } = createIsolatedProject('entrypoint.ts', mainContent);
+		for (const exportDecl of sf.getExportDeclarations()) {
+			const specifier = exportDecl.getModuleSpecifierValue();
+			if (!specifier) continue;
+
+			let matches = false;
+			let targetClassName = className;
+
+			const namedExports = exportDecl.getNamedExports();
+			if (namedExports.length > 0) {
+				for (const ne of namedExports) {
+					const exportedName = ne.getAliasNode()?.getText() || ne.getName();
+					if (exportedName === className) {
+						matches = true;
+						targetClassName = ne.getName();
+						break;
+					}
+				}
+			} else {
+				// export * from './...'
+				matches = true;
+			}
+
+			if (matches) {
+				const baseDir = mainPath.substring(0, mainPath.lastIndexOf('/'));
+				const targetBasePath = resolveRelativePath(baseDir + '/dummy.ts', specifier);
+				for (const ext of ['', '.ts', '.js', '/index.ts', '/index.js']) {
+					try {
+						const candidateFile = targetBasePath + ext;
+						const text = await PlatformService.readText(candidateFile);
+						if (text) {
+							const methods = extractClassMethodsFromCode(text, targetClassName);
+							return { filePath: candidateFile, methods };
+						}
+					} catch {}
+				}
+			}
+		}
+	} catch (e) {
+		console.warn('[Strata] Failed to inspect entrypoint export declarations:', e);
+	}
+
+	return null;
 }
 
 async function findWorkspaceRoot(filePath: string): Promise<string> {
@@ -376,8 +537,19 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		try {
 			const content = await PlatformService.readText(fullPath);
 			if (content) {
+				const parsed = parseWranglerContent(customWranglerPath, content);
+				const wranglerDir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+				for (const b of parsed.bindings) {
+					if (b.type === 'do' && b.extra?.class) {
+						const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
+						if (resolvedDO) {
+							b.extra.path = resolvedDO.filePath;
+							b.extra.methods = resolvedDO.methods;
+						}
+					}
+				}
 				return {
-					bindings: parseWranglerContent(customWranglerPath, content),
+					bindings: parsed.bindings,
 					configFilePath: fullPath
 				};
 			}
@@ -386,15 +558,25 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 
 	// Dynamic upward traversal to look for wrangler files
 	let currentDir = dir;
-	let prefix = '';
 	for (let depth = 0; depth < 12; depth++) {
 		for (const name of ['wrangler.toml', 'wrangler.jsonc', 'wrangler.json']) {
 			const candidate = currentDir + '/' + name;
 			try {
 				const content = await PlatformService.readText(candidate);
 				if (content) {
+					const parsed = parseWranglerContent(name, content);
+					const wranglerDir = candidate.substring(0, candidate.lastIndexOf('/'));
+					for (const b of parsed.bindings) {
+						if (b.type === 'do' && b.extra?.class) {
+							const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
+							if (resolvedDO) {
+								b.extra.path = resolvedDO.filePath;
+								b.extra.methods = resolvedDO.methods;
+							}
+						}
+					}
 					return {
-						bindings: parseWranglerContent(name, content),
+						bindings: parsed.bindings,
 						configFilePath: candidate
 					};
 				}
@@ -403,7 +585,6 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		const lastSlash = currentDir.lastIndexOf('/');
 		if (lastSlash <= 0) break;
 		currentDir = currentDir.substring(0, lastSlash);
-		prefix += '../';
 	}
 	return { bindings: [], configFilePath: null };
 }
@@ -545,28 +726,15 @@ export class SchemaState {
 		return 'strata-app';
 	}
 
-	/** Rename Entity Modal State */
-	get showRenameModal() { return uiState.showRenameModal; }
-	set showRenameModal(val: boolean) { uiState.showRenameModal = val; }
-
-	get renameEntityTargetId() { return uiState.renameEntityTargetId; }
-	set renameEntityTargetId(val: string | null) { uiState.renameEntityTargetId = val; }
-
 	/** Confirmation Dialog Modal State */
 	get showConfirmModal() { return uiState.showConfirmModal; }
 	set showConfirmModal(val: boolean) { uiState.showConfirmModal = val; }
 
 	get confirmModalData() { return uiState.confirmModalData; }
-	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
-
-	/** Triggers the styled Rename Entity Modal */
-	promptRenameEntity(targetId: string) {
-		uiState.renameEntityTargetId = targetId;
-		uiState.showRenameModal = true;
-	}
+	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; warnings?: string[]; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
 
 	/** Triggers the styled Confirmation Modal */
-	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void }) {
+	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; warnings?: string[]; onConfirm: () => void }) {
 		uiState.confirmModalData = data;
 		uiState.showConfirmModal = true;
 	}
@@ -594,9 +762,15 @@ export class SchemaState {
 	get showHelpModal() { return uiState.showHelpModal; }
 	set showHelpModal(val: boolean) { uiState.showHelpModal = val; }
 
-	/** Whether the CodeMirror schema inspector modal is visible */
-	get showCodeViewerModal() { return uiState.showCodeViewerModal; }
-	set showCodeViewerModal(val: boolean) { uiState.showCodeViewerModal = val; }
+	/** Active tab within the developer Help Center */
+	get activeHelpTab() { return uiState.activeHelpTab; }
+	set activeHelpTab(val: string) { uiState.activeHelpTab = val; }
+
+	/** Opens the developer Help Center focused on a specific category or blueprint tab */
+	openHelpTopic(tabId: string) {
+		uiState.activeHelpTab = tabId;
+		uiState.showHelpModal = true;
+	}
 
 	/** List of JSDoc and AST audit issues */
 	auditIssues = $state<AuditIssue[]>([]);
@@ -605,13 +779,14 @@ export class SchemaState {
 	packageWrapperInfo = $state<PackageWrapperInfo | null>(null);
 
 	/** The list of bindings parsed from wrangler.toml */
-	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
+	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra?: any }[]>([]);
 
 	/** Warnings about configuration mismatches between schema and wrangler bindings */
 	get validationWarnings() {
 		const warnings: string[] = [];
 		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
 		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
+		const r2Nodes = this.nodes.filter(n => (n.data as any)?.target === 'r2');
 
 		if (this.wranglerConfigFilePath) {
 			const filename = this.wranglerConfigFilePath.substring(this.wranglerConfigFilePath.lastIndexOf('/') + 1);
@@ -623,6 +798,11 @@ export class SchemaState {
 			for (const doNode of doNodes) {
 				if (!this.wranglerBindings.some(b => b.name === doNode.id && b.type === 'do')) {
 					warnings.push(`Durable Object "${doNode.id}" is not configured in your ${filename}.`);
+				}
+			}
+			for (const r2 of r2Nodes) {
+				if (!this.wranglerBindings.some(b => b.name === r2.id && b.type === 'r2')) {
+					warnings.push(`R2 Bucket "${r2.id}" is not configured in your ${filename}.`);
 				}
 			}
 		}
@@ -794,30 +974,52 @@ export class SchemaState {
 			// Discover wrangler.toml bindings
 			const { bindings: wranglerBindings, configFilePath } = this.filePath 
 				? await discoverWranglerBindings(this.filePath, this.wranglerPath)
-				: { bindings: [], configFilePath: null };
+				: { bindings: this.wranglerBindings, configFilePath: null };
 			this.wranglerBindings = wranglerBindings;
 			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
 			
 			for (const binding of wranglerBindings) {
 				if (!finalNodes.some(n => n.id === binding.name)) {
+					let cols: any[] = [];
+					if (binding.type === 'kv') {
+						cols = binding.extra?.schema 
+							? Object.entries(binding.extra.schema).map(([k, v]) => ({ name: k, definition: v as string, isPk: false, notNull: false, isReferences: false }))
+							: [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }];
+					} else if (binding.type === 'do') {
+						cols = binding.extra?.methods 
+							? binding.extra.methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m)
+							: [];
+					} else if (binding.type === 'r2') {
+						cols = binding.extra?.folders
+							? Object.entries(binding.extra.folders).map(([k, v]) => ({ name: k, definition: v as string, isPk: false, notNull: false, isReferences: false }))
+							: [];
+					}
+
+					const manifestEntry = (result.layoutManifest as any)?.[binding.name];
+					const initialPos = manifestEntry && typeof manifestEntry.x === 'number' && typeof manifestEntry.y === 'number'
+						? { x: Math.round(manifestEntry.x), y: Math.round(manifestEntry.y) }
+						: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
+
 					finalNodes.push({
 						id: binding.name,
 						type: 'table',
 						data: {
 							label: binding.name,
-							columns: binding.type === 'kv' ? [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }] : [],
+							columns: cols,
 							target: binding.type,
 							strata: {
 								target: binding.type,
-								x: Math.round(Math.random() * 200),
-								y: Math.round(Math.random() * 200),
+								x: initialPos.x,
+								y: initialPos.y,
 								binding: binding.name,
-								class: binding.extra.class
+								class: binding.extra?.class_name || binding.extra?.class || manifestEntry?.class,
+								path: binding.extra?.path || manifestEntry?.path,
+								...binding.extra
 							},
 							isExternal: true
 						},
-						position: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) }
+						position: initialPos
 					});
 				}
 			}
@@ -944,6 +1146,7 @@ export class SchemaState {
 		this.isSandboxMode = true;
 		this.sandboxTemplateKey = templateKey;
 		this.filePath = null;
+		this.wranglerBindings = template.wranglerBindings ? [...template.wranglerBindings] : [];
 		this.machine.send("OPEN");
 
 		const success = await this.parseAndApply(template.code);
@@ -1022,10 +1225,45 @@ export class SchemaState {
 	/**
 	 * Returns the source file defining a specific table/entity, or falls back to root schema.
 	 */
-	private getTargetFilePath(tableName: string): string | undefined {
+	getTargetFilePath(tableName: string): string | undefined {
 		if (this.isSandboxMode) return undefined;
 		const node = this.nodes.find(n => n.id === tableName);
 		return (node?.data as any)?.moduleInfo?.sourceFilePath || this.filePath || undefined;
+	}
+
+	/**
+	 * Returns the Drizzle/TypeScript definition snippet for a given table or entity.
+	 */
+	getTableDefinitionSnippet(tableName: string): string {
+		const node = this.nodes.find(n => n.id === tableName);
+		if (!node) return "";
+		const target = (node.data as any)?.target || "d1";
+		const rawCode = this.rawCode;
+
+		if (target === "d1" && rawCode) {
+			const pattern = new RegExp(
+				`(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${tableName}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
+				"m"
+			);
+			const match = rawCode.match(pattern);
+			if (match) return match[0];
+		} else if (target === "kv") {
+			const fields = ((node.data as any)?.columns || [])
+				.map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
+				.join("\n");
+			return `export interface ${tableName}KV {\n${fields}\n}`;
+		} else if (target === "r2") {
+			const fields = ((node.data as any)?.columns || [])
+				.map((c: any) => `  "${c.name}": "${c.definition || "*/*"}";`)
+				.join("\n");
+			return `export interface ${tableName}Bucket {\n${fields}\n}`;
+		} else if (target === "do") {
+			const methods = ((node.data as any)?.columns || [])
+				.map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
+				.join("\n");
+			return `export class ${tableName} {\n${methods}\n}`;
+		}
+		return "";
 	}
 
 	/**
@@ -1136,6 +1374,18 @@ export class SchemaState {
 	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
 	 */
 	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }) {
+		const targetNode = this.nodes.find(n => n.id === tableName);
+		const target = (targetNode?.data as any)?.target || 'd1';
+
+		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
+			const binding = this.wranglerBindings.find(b => b.name === tableName);
+			if (binding) {
+				binding.extra = { ...binding.extra, ...metadata };
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		const { updateTableMetadataInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table metadata update", (code) => 
@@ -1148,6 +1398,24 @@ export class SchemaState {
 	 * Deletes a column from a table in the schema and syncs to disk.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
+		const targetNode = this.nodes.find(n => n.id === tableName);
+		const target = (targetNode?.data as any)?.target || 'd1';
+
+		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
+			const binding = this.wranglerBindings.find(b => b.name === tableName);
+			if (binding) {
+				if (binding.type === 'do' && binding.extra?.methods) {
+					binding.extra.methods = binding.extra.methods.filter((m: string) => m !== colName && !m.startsWith(colName + '('));
+				} else if (binding.type === 'kv' && binding.extra?.schema) {
+					delete binding.extra.schema[colName];
+				} else if (binding.type === 'r2' && binding.extra?.folders) {
+					delete binding.extra.folders[colName];
+				}
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		const { removeColumnFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column delete", (code) => 
@@ -1164,6 +1432,10 @@ export class SchemaState {
 		const target = (node?.data as any)?.target || 'd1';
 		const targetFile = this.getTargetFilePath(tableName);
 
+		if (this.isSandboxMode || !this.filePath) {
+			this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		}
+
 		const { removeTableFromSchema, removeTableFromLayoutManifest } = await import("../parser");
 		await this.executeSchemaMutation("Table delete", (code) => 
 			removeTableFromSchema(code, tableName),
@@ -1178,10 +1450,6 @@ export class SchemaState {
 		}
 		if (this.activeInspectorNodeId === tableName) {
 			this.activeInspectorNodeId = null;
-		}
-
-		if (target !== 'd1' && this.wranglerConfigFilePath) {
-			await this.syncToWranglerConfig('remove', { type: target, name: tableName });
 		}
 	}
 
@@ -1297,11 +1565,6 @@ export class SchemaState {
 		if (this.activeInspectorNodeId === oldName) {
 			this.activeInspectorNodeId = newName;
 		}
-
-		if (target !== 'd1' && this.wranglerConfigFilePath) {
-			await this.syncToWranglerConfig('remove', { type: target, name: oldName });
-			await this.syncToWranglerConfig('add', { type: target, name: newName, extra });
-		}
 	}
 
 	/**
@@ -1393,13 +1656,31 @@ export class SchemaState {
 			return;
 		}
 
+		if (target !== 'd1') {
+			if (this.isSandboxMode || !this.filePath) {
+				const existingIdx = this.wranglerBindings.findIndex(b => b.name === tableName);
+				const bindingEntry = {
+					type: target,
+					name: tableName,
+					extra: {
+						class: extra?.class,
+						path: extra?.path,
+						id: extra?.id,
+						bucket_name: extra?.bucket_name,
+						...(extra as any)
+					}
+				};
+				if (existingIdx >= 0) {
+					this.wranglerBindings[existingIdx] = bindingEntry;
+				} else {
+					this.wranglerBindings = [...this.wranglerBindings, bindingEntry];
+				}
+			}
+		}
+
 		await this.executeSchemaMutation("Table add", (code) => 
 			addTableToSchema(code, tableName, target, extra)
 		);
-
-		if (target !== 'd1') {
-			await this.syncToWranglerConfig('add', { type: target, name: tableName, extra });
-		}
 	}
 
 	/**
@@ -1420,6 +1701,27 @@ export class SchemaState {
 			});
 			return;
 		}
+
+		const target = (targetNode?.data as any)?.target || 'd1';
+		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
+			const binding = this.wranglerBindings.find(b => b.name === tableName);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				if (binding.type === 'do') {
+					binding.extra.methods = binding.extra.methods || [];
+					binding.extra.methods.push(columnName);
+				} else if (binding.type === 'kv') {
+					binding.extra.schema = binding.extra.schema || {};
+					binding.extra.schema[columnName] = type;
+				} else if (binding.type === 'r2') {
+					binding.extra.folders = binding.extra.folders || {};
+					binding.extra.folders[columnName] = type;
+				}
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		let targetImportPath: string | undefined;
 		if (referencesTable) {
@@ -1486,39 +1788,28 @@ export class SchemaState {
 	}
 
 	/**
-	 * Scaffolds the standard Better Auth D1 cluster (user, session, account, verification).
+	 * Finds all references to a given table across domain module files in a modular project.
 	 */
-	async scaffoldBetterAuthCluster() {
-		const { scaffoldBetterAuthClusterInSchema } = await import("../parser");
-		await this.executeSchemaMutation("Scaffold Better Auth", (code) =>
-			scaffoldBetterAuthClusterInSchema(code)
-		);
-		toast.success("Better Auth Cluster Scaffolding Complete", {
-			description: "Generated user, session, account, and verification tables in your D1 schema."
-		});
-	}
+	findCrossModuleReferences(tableName: string): { file: string; lineContent: string }[] {
+		const references: { file: string; lineContent: string }[] = [];
+		const currentFile = this.getTargetFilePath(tableName);
 
-	/**
-	 * Scaffolds a local D1 mirror table for webhook sync with Clerk or WorkOS.
-	 */
-	async scaffoldWebhookMirror(provider: "clerk" | "workos") {
-		if (provider === "clerk") {
-			const { scaffoldClerkMirrorTableInSchema } = await import("../parser");
-			await this.executeSchemaMutation("Scaffold Clerk Mirror", (code) =>
-				scaffoldClerkMirrorTableInSchema(code, "clerkUsers")
-			);
-			toast.success("Clerk Webhook Mirror Scaffolding Complete", {
-				description: 'Generated "clerkUsers" mirror table in your D1 schema.'
-			});
-		} else {
-			const { scaffoldWorkOSMirrorTableInSchema } = await import("../parser");
-			await this.executeSchemaMutation("Scaffold WorkOS Mirror", (code) =>
-				scaffoldWorkOSMirrorTableInSchema(code, "workosUsers")
-			);
-			toast.success("WorkOS Webhook Mirror Scaffolding Complete", {
-				description: 'Generated "workosUsers" mirror table in your D1 schema.'
-			});
+		for (const [filePath, content] of this.externalFilesMap.entries()) {
+			if (filePath === currentFile) continue;
+			const lines = content.split('\n');
+			for (let idx = 0; idx < lines.length; idx++) {
+				const line = lines[idx];
+				const refRegex = new RegExp(`\\.references\\s*\\(\\s*\\(\\)\\s*=>\\s*${tableName}\\b`);
+				if (refRegex.test(line)) {
+					const fileName = filePath.split(/[/\\]/).pop() || filePath;
+					references.push({
+						file: fileName,
+						lineContent: line.trim()
+					});
+				}
+			}
 		}
+		return references;
 	}
 
 
@@ -1591,29 +1882,10 @@ export class SchemaState {
 	async syncMissingWranglerBindings() {
 		if (this.isSandboxMode) {
 			toast.info("Sandbox Playground Active", {
-				description: "Wrangler binding files (wrangler.toml/jsonc) operate in-memory while in Sandbox Mode. All node operations work seamlessly!"
+				description: "Wrangler binding files (wrangler.jsonc) operate in-memory while in Sandbox Mode."
 			});
 			return;
 		}
-
-		if (!this.wranglerConfigFilePath && this.filePath) {
-			const rootDir = await findProjectRoot(this.filePath);
-			const newWranglerPath = rootDir + '/wrangler.toml';
-			try {
-				await PlatformService.writeText(newWranglerPath, `# Wrangler Configuration generated by Strata\nname = "my-cloudflare-worker"\ncompatibility_date = "2024-01-01"\n`);
-				this.wranglerConfigFilePath = newWranglerPath;
-				toast.info("Created wrangler.toml", {
-					description: "Auto-generated wrangler.toml in project root."
-				});
-			} catch (e: any) {
-				toast.error("Failed to create wrangler.toml", {
-					description: e?.message || String(e)
-				});
-				return;
-			}
-		}
-
-		if (!this.wranglerConfigFilePath) return;
 
 		const unconfiguredNodes = this.nodes.filter(n => {
 			const target = (n.data as any)?.target;
@@ -1622,65 +1894,40 @@ export class SchemaState {
 		});
 
 		if (unconfiguredNodes.length === 0) {
-			toast.success("Wrangler Config Aligned", {
-				description: "All entity targets are configured."
+			toast.success("Wrangler Bindings Aligned", {
+				description: "All entity targets are configured in your Wrangler bindings."
 			});
 			return;
 		}
 
-		for (const node of unconfiguredNodes) {
-			const target = (node.data as any).target;
-			const extra = (node.data as any).strata || {};
-			await this.syncToWranglerConfig('add', { type: target, name: node.id, extra });
-		}
+		const kvEntries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'kv')
+			.map(n => `    { "binding": "${n.id}", "id": "${(n.data as any)?.strata?.id || n.id}" }`);
+		const doEntries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'do')
+			.map(n => `    { "name": "${n.id}", "class_name": "${(n.data as any)?.strata?.class || n.id}" }`);
+		const r2Entries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'r2')
+			.map(n => `    { "binding": "${n.id}", "bucket_name": "${(n.data as any)?.strata?.bucket_name || n.id}" }`);
 
-		toast.success("Wrangler Configuration Updated", {
-			description: `Added ${unconfiguredNodes.length} missing binding configuration(s).`
-		});
-	}
+		let snippet = "// Add the following binding(s) to your wrangler.jsonc:\n";
+		if (kvEntries.length > 0) snippet += `"kv_namespaces": [\n${kvEntries.join(",\n")}\n],\n`;
+		if (doEntries.length > 0) snippet += `"durable_objects": {\n  "bindings": [\n${doEntries.join(",\n")}\n  ]\n},\n`;
+		if (r2Entries.length > 0) snippet += `"r2_buckets": [\n${r2Entries.join(",\n")}\n],\n`;
 
-	/**
-	 * Synchronizes target modifications (KV/DO/R2 additions or deletions) directly to wrangler.toml or wrangler.jsonc.
-	 */
-	async syncToWranglerConfig(
-		action: 'add' | 'remove',
-		binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }
-	) {
-		if (this.isSandboxMode) return;
-		
-		// Auto-generate wrangler.toml if missing when adding a binding to a local file
-		if (!this.wranglerConfigFilePath && action === 'add' && this.filePath) {
-			const rootDir = await findProjectRoot(this.filePath);
-			const newWranglerPath = rootDir + '/wrangler.toml';
+		if (typeof navigator !== 'undefined' && navigator.clipboard) {
 			try {
-				await PlatformService.writeText(newWranglerPath, `# Wrangler Configuration generated by Strata\nname = "my-cloudflare-worker"\ncompatibility_date = "2024-01-01"\n`);
-				this.wranglerConfigFilePath = newWranglerPath;
-				toast.info("Created wrangler.toml", {
-					description: `Auto-generated wrangler.toml in project root to store ${binding.type.toUpperCase()} binding.`
+				await navigator.clipboard.writeText(snippet.trim());
+				toast.success("Wrangler Recipe Copied", {
+					description: `Copied configuration for ${unconfiguredNodes.length} binding(s) to clipboard. Paste into your wrangler.jsonc.`
 				});
-			} catch (e: any) {
-				console.error("[Strata] Failed to create wrangler.toml:", e);
-			}
+				return;
+			} catch {}
 		}
 
-		if (!this.wranglerConfigFilePath) return;
-		try {
-			await PlatformService.mutateWranglerConfig(
-				this.wranglerConfigFilePath,
-				action,
-				binding.type,
-				binding.name,
-				binding.extra || {}
-			);
-			toast.success(`Wrangler configuration synced`, {
-				description: `${action === 'add' ? 'Added' : 'Removed'} ${binding.type} binding: ${binding.name}`
-			});
-		} catch (err: any) {
-			console.error("[Strata] Failed to sync wrangler config:", err);
-			toast.error(`Wrangler sync failed`, {
-				description: err?.message || String(err)
-			});
-		}
+		toast.info("Unconfigured Wrangler Bindings", {
+			description: `${unconfiguredNodes.length} binding(s) need declaration in wrangler.jsonc.`
+		});
 	}
 
 

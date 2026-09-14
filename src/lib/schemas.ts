@@ -88,23 +88,6 @@ export const d1TableSchema = v.object({
   selectedExistingModule: v.optional(v.string()),
 });
 
-export const d1ColumnSchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1, "Column name is required"),
-    v.regex(/^[a-z_][a-z0-9_]*$/, "Use snake_case (lowercase, numbers, underscores)"),
-    v.check((val) => !isJsReservedKeyword(val), "Cannot use a reserved JavaScript keyword")
-  ),
-  type: v.optional(
-    v.picklist(["text", "integer", "timestamp", "boolean_int", "blob", "real"]),
-    "text"
-  ),
-  isPk: v.optional(v.boolean(), false),
-  notNull: v.optional(v.boolean(), true),
-  referencesTable: v.optional(v.string()),
-  referencesColumn: v.optional(v.string()),
-});
-
 // -----------------------------------------------------------------------------
 // Durable Object Schemas
 // -----------------------------------------------------------------------------
@@ -128,17 +111,6 @@ export const doBindingSchema = v.object({
   ),
 });
 
-export const doMethodSchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1, "Method signature is required")
-  ),
-  returnType: v.optional(
-    v.picklist(["Promise<void>", "Promise<string>", "Promise<number>", "Promise<boolean>", "Promise<any>"]),
-    "Promise<any>"
-  ),
-});
-
 // -----------------------------------------------------------------------------
 // KV Schemas
 // -----------------------------------------------------------------------------
@@ -151,17 +123,7 @@ export const kvBindingSchema = v.object({
     v.check((val) => !isJsReservedKeyword(val), "Cannot use a reserved JavaScript keyword")
   ),
   id: v.optional(v.string()),
-});
-
-export const kvKeySchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1, "Key name or prefix is required")
-  ),
-  type: v.optional(
-    v.picklist(["string", "number", "boolean", "any"]),
-    "string"
-  ),
+  target: v.optional(v.literal("kv"), "kv"),
 });
 
 // -----------------------------------------------------------------------------
@@ -176,23 +138,7 @@ export const r2BindingSchema = v.object({
     v.check((val) => !isJsReservedKeyword(val), "Cannot use a reserved JavaScript keyword")
   ),
   bucketName: v.optional(v.string()),
-});
-
-export const r2FolderSchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1, "Folder path / prefix is required")
-  ),
-  type: v.optional(v.string(), ""),
-});
-
-// -----------------------------------------------------------------------------
-// Relationship Schema
-// -----------------------------------------------------------------------------
-
-export const relationSchema = v.object({
-  source: v.pipe(v.string(), v.minLength(1, "Source table is required")),
-  target: v.pipe(v.string(), v.minLength(1, "Target table is required")),
+  target: v.optional(v.literal("r2"), "r2"),
 });
 
 // -----------------------------------------------------------------------------
@@ -208,34 +154,10 @@ export const tableSchema = v.object({
   target: v.optional(v.picklist(["d1", "do", "kv", "r2"]), "d1"),
 });
 
-export const columnSchema = v.object({
-  name: v.pipe(
-    v.string(),
-    v.minLength(1, "Column name is required")
-  ),
-  type: v.optional(
-    v.picklist([
-      "text", "integer", "timestamp", "boolean_int", "blob", "real",
-      "string", "number", "boolean", "any",
-      "Promise<void>", "Promise<string>", "Promise<number>", "Promise<boolean>", "Promise<any>"
-    ]),
-    "text"
-  ),
-  isPk: v.optional(v.boolean(), false),
-  notNull: v.optional(v.boolean(), true),
-  referencesTable: v.optional(v.string()),
-  referencesColumn: v.optional(v.string()),
-});
-
 export type D1TableSchema = typeof d1TableSchema;
-export type D1ColumnSchema = typeof d1ColumnSchema;
 export type DOBindingSchema = typeof doBindingSchema;
-export type DOMethodSchema = typeof doMethodSchema;
 export type KVBindingSchema = typeof kvBindingSchema;
-export type KVKeySchema = typeof kvKeySchema;
 export type R2BindingSchema = typeof r2BindingSchema;
-export type R2FolderSchema = typeof r2FolderSchema;
-export type RelationSchema = typeof relationSchema;
 export type TableSchema = typeof tableSchema;
-export type ColumnSchema = typeof columnSchema;
+
 

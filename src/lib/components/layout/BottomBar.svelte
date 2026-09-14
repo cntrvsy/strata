@@ -350,7 +350,7 @@
                   class="btn btn-warning btn-xs rounded-field font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
                   onclick={() => schemaState.syncMissingWranglerBindings()}
                 >
-                  Fix & Sync to Wrangler Config
+                  Copy Wrangler Binding Recipe
                 </button>
               {/if}
             </div>

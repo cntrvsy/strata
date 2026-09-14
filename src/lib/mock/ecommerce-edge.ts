@@ -1,3 +1,14 @@
+/**
+ * @strata-layout {
+ *   "customers": { "x": 100, "y": 120 },
+ *   "orders": { "x": 560, "y": 120 },
+ *   "orderItems": { "x": 560, "y": 480 },
+ *   "products": { "x": 100, "y": 480 },
+ *   "DISCOUNT_RULES_KV": { "x": 1040, "y": 120, "relations": [{ "to": "orders" }] },
+ *   "CartCheckoutLockDO": { "x": 1040, "y": 480, "relations": [{ "to": "products" }] },
+ *   "PRODUCT_MEDIA_R2": { "x": 100, "y": 860, "relations": [{ "to": "products" }] }
+ * }
+ */
 import { sqliteTable, integer, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
@@ -30,7 +41,6 @@ import { relations } from "drizzle-orm";
 
 /**
  * Registered Customers
- * @strata { "target": "d1", "x": 100, "y": 120 }
  */
 export const customers = sqliteTable("customers", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -41,7 +51,6 @@ export const customers = sqliteTable("customers", {
 
 /**
  * Product Catalog & Live Stock Counts
- * @strata { "target": "d1", "x": 100, "y": 480 }
  */
 export const products = sqliteTable("products", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -56,7 +65,6 @@ export const products = sqliteTable("products", {
 
 /**
  * Purchase Orders Ledger
- * @strata { "target": "d1", "x": 580, "y": 120 }
  */
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -72,7 +80,6 @@ export const orders = sqliteTable("orders", {
 
 /**
  * Order Line Items (Composite Constraint Junction)
- * @strata { "target": "d1", "x": 580, "y": 480 }
  */
 export const orderItems = sqliteTable("order_items", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -116,27 +123,3 @@ export const productsRelations = relations(products, ({ many }) => ({
   orderItems: many(orderItems),
 }));
 
-// ============================================================================
-// SECTION 3: CLOUDFLARE EDGE INFRASTRUCTURE
-// ============================================================================
-
-/**
- * Atomic Cart Stock Reservation Lock (Cloudflare Durable Object)
- * Locks inventory during the 10-minute checkout window to prevent flash-sale overselling.
- * @strata { "target": "do", "binding": "CartCheckoutLockDO", "x": 1040, "y": 480, "relations": [{ "to": "products" }], "path": "./src/do/CartCheckoutLockDO.ts", "class": "CartCheckoutLockDO", "methods": ["reserveStock", "releaseExpiredHold", "commitOrderInventory", "getAvailableStock"] }
- */
-export const CartCheckoutLockDO = {};
-
-/**
- * Global Promotional Discounts Cache (Cloudflare KV)
- * Low-latency coupon code validation and regional flash-sale pricing rules.
- * @strata { "target": "kv", "binding": "DISCOUNT_RULES_KV", "x": 1040, "y": 120, "relations": [{ "to": "orders" }], "schema": { "code": "string", "discountPercent": "number", "maxRedemptions": "number", "expiresAt": "number" } }
- */
-export const DISCOUNT_RULES_KV = {};
-
-/**
- * High-Performance Product Media Catalog (Cloudflare R2 Bucket)
- * Stores responsive WebP product imagery and PDF spec sheets served from custom CDN edge.
- * @strata { "target": "r2", "binding": "PRODUCT_MEDIA_R2", "x": 100, "y": 860, "relations": [{ "to": "products" }], "public": true, "cors": true, "customDomain": "cdn.storefront.dev", "folders": { "thumbnails": "image/webp", "gallery": "image/webp", "manuals": "application/pdf" } }
- */
-export const PRODUCT_MEDIA_R2 = {};

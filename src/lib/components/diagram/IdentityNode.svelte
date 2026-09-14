@@ -14,7 +14,10 @@
     Sparkles,
     ArrowUpRight,
     Link2,
+    Copy,
+    Check,
   } from "lucide-svelte";
+  import { toast } from "svelte-sonner";
 
   const { data, selected } = $props<{
     data: {
@@ -54,8 +57,48 @@
         },
   );
 
-  async function handleScaffoldMirror() {
-    await schemaState.scaffoldWebhookMirror(data.provider);
+  const mirrorTableName = $derived(isClerk ? "clerkUsers" : "workosUsers");
+  const snippet = $derived(
+    isClerk
+      ? `// Recommended D1 Webhook User Mirror
+export const clerkUsers = sqliteTable("clerkUsers", {
+  id: text("id").primaryKey(), // Clerk User ID (user_2...)
+  clerkUserId: text("clerk_user_id").notNull().unique(),
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  imageUrl: text("image_url"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});`
+      : `// Recommended D1 WorkOS Users Mirror
+export const workosUsers = sqliteTable("workosUsers", {
+  id: text("id").primaryKey(),
+  workosUserId: text("workos_user_id").notNull().unique(),
+  workosOrgId: text("workos_org_id"),
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});`
+  );
+
+  let copied = $state(false);
+
+  async function handleCopySnippet() {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      copied = true;
+      toast.success(`Copied ${mirrorTableName} Schema Snippet`, {
+        description: "Paste into your schema file in VS Code or Cursor."
+      });
+      setTimeout(() => {
+        copied = false;
+      }, 2000);
+    } catch (e) {
+      console.error("Failed to copy snippet:", e);
+    }
   }
 </script>
 
@@ -135,11 +178,16 @@
         <button
           type="button"
           class="btn btn-xs btn-outline btn-primary w-full gap-1.5 font-sans font-semibold text-[10px] shadow-sm hover:scale-[1.01] transition-transform"
-          onclick={handleScaffoldMirror}
-          title="Create a local D1 mirror table with webhook fields"
+          onclick={handleCopySnippet}
+          title="Copy local D1 mirror table schema snippet"
         >
-          <Sparkles class="w-3 h-3" />
-          Scaffold D1 Mirror Table
+          {#if copied}
+            <Check class="w-3 h-3 text-success" />
+            <span>Copied {mirrorTableName}!</span>
+          {:else}
+            <Copy class="w-3 h-3" />
+            <span>Copy {mirrorTableName} Schema</span>
+          {/if}
         </button>
 
         <a

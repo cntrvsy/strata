@@ -22,9 +22,9 @@
     schemaState.showNewTableModal = false;
   }
 
-  function openScaffoldModal() {
+  function openAuthBlueprints() {
     close();
-    schemaState.showScaffoldAuthModal = true;
+    schemaState.openHelpTopic("identity-auth");
   }
 
   const targets = [
@@ -139,10 +139,10 @@
         <button
           type="button"
           class="btn btn-xs btn-ghost text-secondary hover:bg-secondary/10 font-bold gap-1 text-[11px]"
-          onclick={openScaffoldModal}
+          onclick={openAuthBlueprints}
         >
           <Sparkles class="w-3 h-3" />
-          <span>Scaffold Auth & SSO Mirrors →</span>
+          <span>View Auth & Identity Blueprints →</span>
         </button>
       </div>
     </div>

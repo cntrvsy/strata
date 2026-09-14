@@ -7,9 +7,9 @@
  *   "organizations": { "x": 620, "y": 140 },
  *   "memberships": { "x": 620, "y": 560 },
  *   "subscriptions": { "x": 620, "y": 940 },
- *   "TenantRateLimiterDO": { "x": 1120, "y": 140 },
- *   "API_KEY_CACHE_KV": { "x": 1120, "y": 560 },
- *   "TENANT_ASSETS_R2": { "x": 1120, "y": 940 }
+ *   "TenantRateLimiterDO": { "x": 1120, "y": 140, "relations": [{ "to": "organizations" }] },
+ *   "API_KEY_CACHE_KV": { "x": 1120, "y": 560, "relations": [{ "to": "memberships" }] },
+ *   "TENANT_ASSETS_R2": { "x": 1120, "y": 940, "relations": [{ "to": "organizations" }] }
  * }
  */
 import { sqliteTable, integer, text, uniqueIndex } from "drizzle-orm/sqlite-core";
@@ -48,7 +48,6 @@ import { relations } from "drizzle-orm";
 
 /**
  * User Identity Table (Better Auth Core + Custom SaaS Extensions)
- * @strata { "target": "d1" }
  */
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -63,7 +62,6 @@ export const user = sqliteTable("user", {
 
 /**
  * Active Authentication Sessions (Better Auth Core)
- * @strata { "target": "d1" }
  */
 export const session = sqliteTable("session", {
   id: text("id").primaryKey(),
@@ -78,7 +76,6 @@ export const session = sqliteTable("session", {
 
 /**
  * Social & OAuth Accounts (Better Auth Core)
- * @strata { "target": "d1" }
  */
 export const account = sqliteTable("account", {
   id: text("id").primaryKey(),
@@ -96,7 +93,6 @@ export const account = sqliteTable("account", {
 
 /**
  * Email & OTP Verification Tokens (Better Auth Core)
- * @strata { "target": "d1" }
  */
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(),
@@ -113,7 +109,6 @@ export const verification = sqliteTable("verification", {
 
 /**
  * Tenant Organizations
- * @strata { "target": "d1" }
  */
 export const organizations = sqliteTable("organizations", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -127,7 +122,6 @@ export const organizations = sqliteTable("organizations", {
 
 /**
  * Tenant Team Memberships & Role-Based Access Control
- * @strata { "target": "d1" }
  */
 export const memberships = sqliteTable("memberships", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -139,7 +133,6 @@ export const memberships = sqliteTable("memberships", {
 
 /**
  * Stripe Billing Subscriptions
- * @strata { "target": "d1" }
  */
 export const subscriptions = sqliteTable("subscriptions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -185,24 +178,4 @@ export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
   }),
 }));
 
-// ============================================================================
-// SECTION 4: CLOUDFLARE EDGE INFRASTRUCTURE
-// ============================================================================
 
-/**
- * Sub-millisecond Tenant API Token Cache (Cloudflare KV)
- * @strata { "target": "kv", "binding": "API_KEY_CACHE_KV", "relations": [{ "to": "memberships" }], "schema": { "orgId": "string", "scope": "string", "rateLimit": "number" } }
- */
-export const API_KEY_CACHE_KV = {};
-
-/**
- * Tenant Rate Limiting & Token Bucket (Cloudflare Durable Object)
- * @strata { "target": "do", "binding": "TenantRateLimiterDO", "relations": [{ "to": "organizations" }], "path": "./src/do/TenantRateLimiterDO.ts", "class": "TenantRateLimiterDO", "methods": ["consumeToken", "getRemainingQuota", "resetRateLimit"] }
- */
-export const TenantRateLimiterDO = {};
-
-/**
- * Tenant Brand Assets & CSV Exports (Cloudflare R2 Bucket)
- * @strata { "target": "r2", "binding": "TENANT_ASSETS_R2", "relations": [{ "to": "organizations" }], "public": true, "cors": true, "folders": { "logos": "image/*", "exports": "text/csv" } }
- */
-export const TENANT_ASSETS_R2 = {};

@@ -20,6 +20,7 @@
   import RelationEdge from "#lib/components/diagram/RelationEdge.svelte";
   import ContextMenu from "#lib/components/diagram/ContextMenu.svelte";
   import { PlatformService } from "#lib/services/platform";
+  import { toast } from "svelte-sonner";
 
   const { onconnect, onnodedragstop } = $props<{
     onconnect: (connection: any) => void;
@@ -84,34 +85,47 @@
         ...n,
         selected: n.id === targetId
       }));
-    } else if (action === "scaffold_mirror" && targetId) {
+    } else if (action === "copy_mirror_snippet" && targetId) {
       const node = schemaState.nodes.find(n => n.id === targetId);
       const provider = (node?.data as any)?.provider;
-      if (provider) {
-        schemaState.scaffoldWebhookMirror(provider);
-      }
+      const isClerk = provider === 'clerk';
+      const mirrorName = isClerk ? 'clerkUsers' : 'workosUsers';
+      const snippet = isClerk
+        ? `// Recommended D1 Webhook User Mirror\nexport const clerkUsers = sqliteTable("clerkUsers", {\n  id: text("id").primaryKey(),\n  clerkUserId: text("clerk_user_id").notNull().unique(),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  imageUrl: text("image_url"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`
+        : `// Recommended D1 WorkOS Users Mirror\nexport const workosUsers = sqliteTable("workosUsers", {\n  id: text("id").primaryKey(),\n  workosUserId: text("workos_user_id").notNull().unique(),\n  workosOrgId: text("workos_org_id"),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`;
+      navigator.clipboard.writeText(snippet);
+      toast.success(`Copied ${mirrorName} Schema Snippet`, {
+        description: "Paste into your schema file in VS Code or Cursor."
+      });
+    } else if (action === "open_blueprint_guide") {
+      schemaState.openHelpTopic("identity-auth");
     } else if (action === "open_docs") {
       const provider = contextMenu.nodeData?.provider;
       const url = provider === 'clerk'
         ? "https://clerk.com/docs/integrations/webhooks/sync-data"
         : "https://workos.com/docs/events";
       PlatformService.openExternal(url);
-    } else if (action === "add_field" && targetId) {
+    } else if ((action === "inspect_node" || action === "add_field") && targetId) {
       schemaState.activeInspectorNodeId = targetId;
       schemaState.nodes = schemaState.nodes.map(n => ({
         ...n,
         selected: n.id === targetId
       }));
-    } else if (action === "rename_table" && targetId) {
-      schemaState.promptRenameEntity(targetId);
-    } else if (action === "delete_table" && targetId) {
-      schemaState.promptConfirm({
-        title: "Delete Entity",
-        message: `Are you sure you want to delete entity "${targetId}" from your schema? This will remove its column definitions and relationship declarations.`,
-        confirmLabel: "Delete Entity",
-        isDanger: true,
-        onConfirm: () => schemaState.deleteTable(targetId),
-      });
+    } else if (action === "open_in_editor" && targetId) {
+      const node = schemaState.nodes.find(n => n.id === targetId);
+      const targetFile = schemaState.getTargetFilePath(targetId) || schemaState.filePath;
+      const line = (node?.data as any)?.line;
+      if (targetFile) {
+        PlatformService.openInEditor(targetFile, line);
+      }
+    } else if (action === "copy_drizzle_code" && targetId) {
+      const snippet = schemaState.getTableDefinitionSnippet(targetId);
+      if (snippet) {
+        navigator.clipboard.writeText(snippet);
+        toast.success(`Copied "${targetId}" Drizzle Schema`, {
+          description: "Paste directly into your schema file."
+        });
+      }
     }
   }
 </script>
@@ -126,11 +140,21 @@
     {onnodedragstop}
     {onconnect}
     ondelete={({ nodes, edges }) => {
-      for (const node of nodes) {
-        schemaState.deleteTable(node.id);
+      if (schemaState.isSandboxMode) {
+        for (const node of nodes) {
+          schemaState.deleteTable(node.id);
+        }
+        for (const edge of edges) {
+          schemaState.deleteRelation(edge.source, edge.target, edge.label);
+        }
+        return;
       }
-      for (const edge of edges) {
-        schemaState.deleteRelation(edge.source, edge.target, edge.label);
+
+      // In real disk mode, inform the user that domain code must be deleted intentionally in their editor
+      if (nodes.length > 0) {
+        toast.info("Delete Code in Your Editor", {
+          description: "To prevent accidental code loss, delete the table declaration in your editor. Strata will update instantly."
+        });
       }
     }}
     onnodecontextmenu={(e) => {

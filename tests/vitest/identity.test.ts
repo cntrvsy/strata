@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseSchema } from '../../src/lib/parser/core';
-import {
-  scaffoldBetterAuthClusterInSchema,
-  scaffoldClerkMirrorTableInSchema,
-  scaffoldWorkOSMirrorTableInSchema
-} from '../../src/lib/parser/mutators';
 import { schemaState } from '../../src/lib/state';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -115,36 +110,82 @@ describe('Modern Identity Integration (Phase 4: Better Auth, Clerk, WorkOS)', ()
     expect((boundaryEdge?.data as any)?.provider).toBe('workos');
   });
 
-  it('should scaffold complete Better Auth cluster in schema', () => {
-    const initial = `import { sqliteTable, integer } from "drizzle-orm/sqlite-core";`;
-    const updated = scaffoldBetterAuthClusterInSchema(initial);
+  it('should parse complete Better Auth cluster schema cleanly', () => {
+    const code = `
+      import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
-    expect(updated).toContain('export const user = sqliteTable("user"');
-    expect(updated).toContain('export const session = sqliteTable("session"');
-    expect(updated).toContain('export const account = sqliteTable("account"');
-    expect(updated).toContain('export const verification = sqliteTable("verification"');
+      export const user = sqliteTable("user", {
+        id: text("id").primaryKey(),
+        name: text("name").notNull(),
+        email: text("email").notNull().unique(),
+        emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+        image: text("image"),
+        createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+        updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+      });
 
-    // Re-parsing should now detect the full Better Auth cluster
-    const result = parseSchema(updated);
+      export const session = sqliteTable("session", {
+        id: text("id").primaryKey(),
+        expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+        token: text("token").notNull().unique(),
+        createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+        updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+        ipAddress: text("ip_address"),
+        userAgent: text("user_agent"),
+        userId: text("user_id").notNull().references(() => user.id)
+      });
+
+      export const account = sqliteTable("account", {
+        id: text("id").primaryKey(),
+        accountId: text("account_id").notNull(),
+        providerId: text("provider_id").notNull(),
+        userId: text("user_id").notNull().references(() => user.id),
+        accessToken: text("access_token"),
+        refreshToken: text("refresh_token"),
+        idToken: text("id_token"),
+        accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
+        refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+        scope: text("scope"),
+        password: text("password"),
+        createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+        updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+      });
+
+      export const verification = sqliteTable("verification", {
+        id: text("id").primaryKey(),
+        identifier: text("identifier").notNull(),
+        value: text("value").notNull(),
+        expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+        createdAt: integer("created_at", { mode: "timestamp" }),
+        updatedAt: integer("updated_at", { mode: "timestamp" })
+      });
+    `;
+
+    const result = parseSchema(code);
     expect(result.success).toBe(true);
     expect(result.nodes.filter(n => (n.data as any).isBetterAuth)).toHaveLength(4);
   });
 
-  it('should scaffold Clerk webhook mirror table', () => {
-    const initial = `import { sqliteTable } from "drizzle-orm/sqlite-core";`;
-    const updated = scaffoldClerkMirrorTableInSchema(initial, 'users');
+  it('should parse Clerk and WorkOS mirror schemas cleanly', () => {
+    const code = `
+      import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 
-    expect(updated).toContain('export const users = sqliteTable("users"');
-    expect(updated).toContain('clerkUserId: text("clerk_user_id").notNull().unique()');
-  });
+      export const users = sqliteTable("users", {
+        id: integer("id").primaryKey(),
+        clerkUserId: text("clerk_user_id").notNull().unique()
+      });
 
-  it('should scaffold WorkOS SSO mirror table', () => {
-    const initial = `import { sqliteTable } from "drizzle-orm/sqlite-core";`;
-    const updated = scaffoldWorkOSMirrorTableInSchema(initial, 'workosUsers');
+      export const workosUsers = sqliteTable("workosUsers", {
+        id: text("id").primaryKey(),
+        workosUserId: text("workos_user_id").notNull().unique(),
+        workosOrgId: text("workos_org_id")
+      });
+    `;
 
-    expect(updated).toContain('export const workosUsers = sqliteTable("workosUsers"');
-    expect(updated).toContain('workosUserId: text("workos_user_id").notNull().unique()');
-    expect(updated).toContain('workosOrgId: text("workos_org_id")');
+    const result = parseSchema(code);
+    expect(result.success).toBe(true);
+    expect(result.nodes.some(n => (n.data as any).provider === 'clerk')).toBe(true);
+    expect(result.nodes.some(n => (n.data as any).provider === 'workos')).toBe(true);
   });
 
   it('should support selecting virtual IdentityNode in schemaState.activeInspectorNodeId', async () => {
@@ -172,36 +213,5 @@ describe('Modern Identity Integration (Phase 4: Better Auth, Clerk, WorkOS)', ()
     expect(schemaState.activeInspectorNodeId).toBe('__clerk_identity__');
     expect(schemaState.selectedNode?.type).toBe('identity');
     expect((schemaState.selectedNode?.data as any).provider).toBe('clerk');
-  });
-
-  it('should scaffold webhook mirror table directly through schemaState', async () => {
-    const code = `
-      import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
-
-      export const posts = sqliteTable("posts", {
-        id: integer("id").primaryKey(),
-        clerkUserId: text("clerk_user_id").notNull()
-      });
-    `;
-
-    const writtenFiles: Record<string, string> = {};
-
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args: any) => {
-      if (cmd === 'read_schema_file') return writtenFiles['/project/schema.ts'] || code;
-      if (cmd === 'write_schema_file') {
-        writtenFiles[args.path] = args.content;
-        return;
-      }
-      return '';
-    });
-
-    schemaState.filePath = '/project/schema.ts';
-    await schemaState.syncWithFile();
-
-    await schemaState.scaffoldWebhookMirror('clerk');
-
-    expect(writtenFiles['/project/schema.ts']).toBeDefined();
-    expect(writtenFiles['/project/schema.ts']).toContain('export const clerkUsers = sqliteTable("clerkUsers"');
-    expect(schemaState.nodes.some(n => n.id === 'clerkUsers')).toBe(true);
   });
 });

@@ -120,28 +120,6 @@ export class PlatformService {
 		}
 	}
 
-	static async mutateWranglerConfig(
-		configPath: string,
-		action: "add" | "remove",
-		bindingType: "kv" | "do" | "r2",
-		bindingName: string,
-		extra: any = {}
-	): Promise<void> {
-		if (!this.isTauri()) throw new Error("Tauri API unavailable in web browser");
-		try {
-			const { invoke } = await import("@tauri-apps/api/core");
-			await invoke("mutate_wrangler_config", {
-				configPath,
-				action,
-				bindingType,
-				bindingName,
-				extra
-			});
-		} catch (err) {
-			throw normalizePlatformError(err, configPath);
-		}
-	}
-
 	static async selectFile(extensions: string[], defaultPath?: string, filterName: string = "TypeScript"): Promise<string | null> {
 		if (!this.isTauri()) return null;
 		const { open } = await import("@tauri-apps/plugin-dialog");
@@ -265,8 +243,71 @@ export class PlatformService {
 
 	static async openInEditor(filePath: string, line?: number): Promise<void> {
 		if (!filePath) return;
-		const targetUrl = `vscode://file/${filePath}${line ? `:${line}` : ''}`;
-		await this.openExternal(targetUrl);
+		if (this.isTauri()) {
+			const targetLine = line && line > 0 ? line : 1;
+			const preferredEditor = typeof localStorage !== 'undefined'
+				? localStorage.getItem('strata_preferred_editor') || 'auto'
+				: 'auto';
+
+			// If preferred editor is 'system', open directly via OS default
+			if (preferredEditor === 'system') {
+				try {
+					const { openPath } = await import('@tauri-apps/plugin-opener');
+					await openPath(filePath);
+					return;
+				} catch (err) {
+					console.warn('[Strata] Failed to open path via plugin-opener:', filePath, err);
+					return;
+				}
+			}
+
+			// Try editor deep-link schemes with exact line numbers
+			const { openUrl, openPath } = await import('@tauri-apps/plugin-opener');
+			const normalizedPath = filePath.replace(/\\/g, '/');
+
+			if (preferredEditor === 'cursor') {
+				try {
+					await openUrl(`cursor://file/${normalizedPath}:${targetLine}`);
+					return;
+				} catch (e) {
+					console.warn('[Strata] Failed to open via cursor:// scheme:', e);
+				}
+			} else if (preferredEditor === 'zed') {
+				try {
+					await openUrl(`zed://file/${normalizedPath}:${targetLine}`);
+					return;
+				} catch (e) {
+					console.warn('[Strata] Failed to open via zed:// scheme:', e);
+				}
+			} else if (preferredEditor === 'vscode') {
+				try {
+					await openUrl(`vscode://file/${normalizedPath}:${targetLine}`);
+					return;
+				} catch (e) {
+					console.warn('[Strata] Failed to open via vscode:// scheme:', e);
+				}
+			} else {
+				// 'auto': try vscode first, then cursor, then fall back to openPath
+				try {
+					await openUrl(`vscode://file/${normalizedPath}:${targetLine}`);
+					return;
+				} catch (e) {
+					try {
+						await openUrl(`cursor://file/${normalizedPath}:${targetLine}`);
+						return;
+					} catch (e2) {
+						// proceed to openPath fallback
+					}
+				}
+			}
+
+			// Fallback: open file with OS default app
+			try {
+				await openPath(filePath);
+			} catch (err) {
+				console.warn('[Strata] Failed to open path via plugin-opener fallback:', filePath, err);
+			}
+		}
 	}
 
 	static async checkForUpdate(): Promise<{

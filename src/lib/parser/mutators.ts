@@ -58,10 +58,24 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 }
 
 /**
- * Batches updates to node positions inside @strata JSDoc metadata in a single AST pass.
+ * Batches updates to node positions inside @strata JSDoc metadata or @strata-layout manifest.
  */
 export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): string {
+	// If the schema file contains a consolidated @strata-layout manifest,
+	// update the manifest directly. This leaves all table declarations 100% clean of position diffs.
+	if (/@strata-layout\s+{/.test(code)) {
+		const positionsMap: Record<string, { x: number; y: number }> = {};
+		for (const node of nodes) {
+			positionsMap[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
+		}
+		return updateLayoutManifestInSchema(code, positionsMap);
+	}
+
+	// Single-file monolith mode: update inline @strata comments for declared tables,
+	// and record undeclared entities (identity, external bindings) in @strata-layout without dummy JS objects.
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	const unattachedNodes: Node[] = [];
+
 	for (const node of nodes) {
 		const decl = sf.getVariableDeclaration(node.id);
 		if (decl) {
@@ -88,31 +102,16 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 					statement.addJsDoc({ description: `\n * @strata { "x": ${Math.round(node.position.x)}, "y": ${Math.round(node.position.y)} }\n ` });
 				}
 			}
-		} else if (node.data && (node.data as any).target && (node.data as any).target !== 'd1') {
-			const target = (node.data as any).target;
-			const strata = (node.data as any).strata;
-			const strataObj: any = {
-				target,
-				x: Math.round(node.position.x),
-				y: Math.round(node.position.y)
-			};
-			if (strata?.binding) strataObj.binding = strata.binding;
-			if (strata?.class) strataObj.class = strata.class;
-			if (strata?.path) strataObj.path = strata.path;
-			if (strata?.folders) strataObj.folders = strata.folders;
-			if (strata?.schema) strataObj.schema = strata.schema;
-			if (strata?.relations) strataObj.relations = strata.relations;
-
-			const content = `\n/** \n * @strata ${JSON.stringify(strataObj)} \n */\nexport const ${node.id} = {};\n`;
-			sf.insertText(sf.getFullWidth(), content);
+		} else {
+			unattachedNodes.push(node);
 		}
 	}
+
 	let result = sf.getFullText();
-	const virtualNodes = nodes.filter(n => n.type === 'identity');
-	if (virtualNodes.length > 0) {
+	if (unattachedNodes.length > 0) {
 		const positionsMap: Record<string, { x: number; y: number }> = {};
-		for (const vn of virtualNodes) {
-			positionsMap[vn.id] = { x: Math.round(vn.position.x), y: Math.round(vn.position.y) };
+		for (const node of unattachedNodes) {
+			positionsMap[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
 		}
 		result = updateLayoutManifestInSchema(result, positionsMap);
 	}
@@ -186,21 +185,28 @@ export function addTableToSchema(
 	if (target === 'd1') {
 		const { code: columnsCode, imports } = generateD1TableColumns(finalName, extra?.presets);
 		ensureImports(sf, "drizzle-orm/sqlite-core", imports);
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
-		sf.insertText(sf.getFullWidth(), content);
-	} else if (target === 'do') {
-		const className = extra?.class || "MyClass";
-		const classPath = extra?.path || `./src/${className}.ts`;
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
-	} else if (target === 'r2') {
-		const bucketName = extra?.bucket_name ? `, "bucket": "${extra.bucket_name}"` : '';
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}${bucketName}} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		const hasLayoutManifest = /@strata-layout\s+{/.test(code);
+		if (hasLayoutManifest) {
+			const content = `\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
+			sf.insertText(sf.getFullWidth(), content);
+			return updateLayoutManifestInSchema(sf.getFullText(), {
+				[finalName]: { x: Math.round(Math.random() * 400), y: Math.round(Math.random() * 400) }
+			});
+		} else {
+			const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
+			sf.insertText(sf.getFullWidth(), content);
+			return sf.getFullText();
+		}
 	} else {
-		const kvId = extra?.id ? `, "id": "${extra.id}"` : '';
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}${kvId}} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		// External Cloudflare worker bindings (KV, DO, R2) are declared in wrangler.jsonc,
+		// never as dummy empty JS objects in the Drizzle schema.
+		// If @strata-layout exists, store the node's visual position there.
+		if (/@strata-layout\s+{/.test(code)) {
+			return updateLayoutManifestInSchema(code, {
+				[finalName]: { x: Math.round(Math.random() * 400), y: Math.round(Math.random() * 400) }
+			});
+		}
+		return code;
 	}
 	return sf.getFullText();
 }
@@ -439,8 +445,27 @@ export function addEdgeToSchema(
 	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
 	const isTargetTable = targetDecl ? targetDecl.getInitializer()?.getText().includes('sqliteTable') : true;
 
-	// --- Synthetic Relations (KV/DO) ---
+	// --- Synthetic Relations (KV/DO/R2) ---
 	if (targetDecl && (!isSourceTable || !isTargetTable)) {
+		// In files with @strata-layout (e.g. modular root barrel), store synthetic relations in the manifest
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			if (match) {
+				try {
+					const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+					const manifest = JSON.parse(cleanJson);
+					if (!manifest[source]) manifest[source] = { x: 100, y: 100 };
+					if (!manifest[source].relations) manifest[source].relations = [];
+					if (!manifest[source].relations.some((r: any) => r.to === target)) {
+						manifest[source].relations.push({ to: target });
+						return updateLayoutManifestInSchema(code, { [source]: manifest[source] });
+					}
+					return code;
+				} catch {}
+			}
+		}
+
+		// Fallback for single-file schemas with inline JSDoc
 		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
@@ -1169,138 +1194,13 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 			}
 		}
 	} else {
-		const content = `\n/**\n * @strata ${JSON.stringify(strataVal)}\n */\nexport const strataConfig = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		// Store in @strata-layout manifest under __config__ without creating dummy JS variable!
+		return updateLayoutManifestInSchema(code, {
+			__config__: {
+				wranglerPath: config.wranglerPath
+			}
+		} as any);
 	}
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds the standard Better Auth Drizzle D1 table cluster (user, session, account, verification).
- */
-export function scaffoldBetterAuthClusterInSchema(code: string): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	const tablesToScaffold = [
-		{
-			name: 'user',
-			code: `export const user = sqliteTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
-	image: text("image"),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
-});\n`
-		},
-		{
-			name: 'session',
-			code: `export const session = sqliteTable("session", {
-	id: text("id").primaryKey(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	token: text("token").notNull().unique(),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-	ipAddress: text("ip_address"),
-	userAgent: text("user_agent"),
-	userId: text("user_id").notNull().references(() => user.id)
-});\n`
-		},
-		{
-			name: 'account',
-			code: `export const account = sqliteTable("account", {
-	id: text("id").primaryKey(),
-	accountId: text("account_id").notNull(),
-	providerId: text("provider_id").notNull(),
-	userId: text("user_id").notNull().references(() => user.id),
-	accessToken: text("access_token"),
-	refreshToken: text("refresh_token"),
-	idToken: text("id_token"),
-	accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
-	refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
-	scope: text("scope"),
-	password: text("password"),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
-});\n`
-		},
-		{
-			name: 'verification',
-			code: `export const verification = sqliteTable("verification", {
-	id: text("id").primaryKey(),
-	identifier: text("identifier").notNull(),
-	value: text("value").notNull(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`
-		}
-	];
-
-	for (const tbl of tablesToScaffold) {
-		if (!sf.getVariableDeclaration(tbl.name)) {
-			sf.insertText(sf.getFullWidth(), `\n${tbl.code}`);
-		}
-	}
-
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds a local D1 mirror table for Clerk webhooks.
- */
-export function scaffoldClerkMirrorTableInSchema(code: string, tableName = 'users'): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	let targetName = tableName;
-	let counter = 1;
-	while (sf.getVariableDeclaration(targetName)) {
-		targetName = `${tableName}${counter++}`;
-	}
-
-	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
-	id: text("id").primaryKey(),
-	clerkUserId: text("clerk_user_id").notNull().unique(),
-	email: text("email").notNull(),
-	firstName: text("first_name"),
-	lastName: text("last_name"),
-	imageUrl: text("image_url"),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`;
-
-	sf.insertText(sf.getFullWidth(), snippet);
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds a local D1 mirror table for WorkOS Directory Sync / SSO.
- */
-export function scaffoldWorkOSMirrorTableInSchema(code: string, tableName = 'workosUsers'): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	let targetName = tableName;
-	let counter = 1;
-	while (sf.getVariableDeclaration(targetName)) {
-		targetName = `${tableName}${counter++}`;
-	}
-
-	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
-	id: text("id").primaryKey(),
-	workosUserId: text("workos_user_id").notNull().unique(),
-	workosOrgId: text("workos_org_id"),
-	email: text("email").notNull(),
-	firstName: text("first_name"),
-	lastName: text("last_name"),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`;
-
-	sf.insertText(sf.getFullWidth(), snippet);
 	return sf.getFullText();
 }
 

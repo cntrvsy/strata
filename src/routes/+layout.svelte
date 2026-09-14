@@ -1,7 +1,6 @@
 <script lang="ts">
 	import './layout.css';
 	import Titlebar from '#lib/components/layout/Titlebar.svelte';
-	import Navbar from '#lib/components/layout/Navbar.svelte';
 	import BottomBar from '#lib/components/layout/BottomBar.svelte';
 	import { onMount } from 'svelte';
 	import { Toaster } from 'svelte-sonner';
@@ -37,7 +36,6 @@
 		}}
 	/>
 	<Titlebar />
-	<Navbar />
 	<main class="flex-1 min-h-0 w-full relative overflow-hidden">
 		{@render children()}
 	</main>

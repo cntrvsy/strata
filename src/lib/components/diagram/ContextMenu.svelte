@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Plus, Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink } from "lucide-svelte";
+  import { Plus, Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal } from "lucide-svelte";
 
   const { x, y, type, targetId, nodeType, nodeData, onClose, onAction } = $props<{
     x: number;
@@ -72,12 +72,22 @@
       <button
         class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
         onclick={() => {
-          onAction("scaffold_mirror", targetId);
+          onAction("copy_mirror_snippet", targetId);
           onClose();
         }}
       >
-        <Sparkles class="w-3.5 h-3.5 opacity-80 text-warning" />
-        Scaffold Mirror Table
+        <Copy class="w-3.5 h-3.5 opacity-80 text-warning" />
+        Copy Mirror Schema
+      </button>
+      <button
+        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
+        onclick={() => {
+          onAction("open_blueprint_guide", targetId);
+          onClose();
+        }}
+      >
+        <Sparkles class="w-3.5 h-3.5 opacity-80 text-secondary" />
+        View Auth Blueprints
       </button>
       <div class="h-px bg-base-300/40 my-1"></div>
       <button
@@ -92,40 +102,40 @@
       </button>
     {:else}
       <div
-        class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-40 border-b border-base-300/40 mb-1 leading-none text-base-content/70"
+        class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-40 border-b border-base-300/40 mb-1 leading-none text-base-content/70 flex items-center justify-between"
       >
-        {targetId}
+        <span>{targetId}</span>
+        <span class="badge badge-xs badge-neutral text-[8px] uppercase">{nodeData?.target || 'd1'}</span>
       </div>
       <button
-        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
+        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
         onclick={() => {
-          onAction("add_field", targetId);
+          onAction("open_in_editor", targetId);
           onClose();
         }}
       >
-        <Plus class="w-3.5 h-3.5 opacity-60 text-primary" />
-        Add Field
+        <ExternalLink class="w-3.5 h-3.5 opacity-75 text-primary" />
+        Open in Editor
       </button>
       <button
         class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
         onclick={() => {
-          onAction("rename_table", targetId);
+          onAction("inspect_node", targetId);
           onClose();
         }}
       >
-        <FilePen class="w-3.5 h-3.5 opacity-60 text-secondary" />
-        Rename Entity
+        <SlidersHorizontal class="w-3.5 h-3.5 opacity-60 text-secondary" />
+        Inspect Architecture
       </button>
-      <div class="h-px bg-base-300/40 my-1"></div>
       <button
-        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-error/10 hover:text-error transition-all text-left font-semibold text-error/90"
+        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
         onclick={() => {
-          onAction("delete_table", targetId);
+          onAction("copy_drizzle_code", targetId);
           onClose();
         }}
       >
-        <Trash2 class="w-3.5 h-3.5 opacity-70" />
-        Delete Entity
+        <Copy class="w-3.5 h-3.5 opacity-60 text-info" />
+        Copy Drizzle Code
       </button>
     {/if}
   {:else if type === "canvas"}

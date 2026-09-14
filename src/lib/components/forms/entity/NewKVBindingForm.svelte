@@ -1,18 +1,20 @@
 <!--
   NewKVBindingForm.svelte
 
-  Summary: Dedicated form for configuring Cloudflare Workers KV Namespace bindings.
+  Summary: Dedicated form and recipe generator for Cloudflare Workers KV Namespace bindings.
   Expects: onClose callback.
-  Output: Dispatches KV namespace entity creation to schemaState.
+  Output: Provides copyable wrangler.jsonc recipe and optional sandbox canvas addition.
 -->
 <script lang="ts">
-  import { ArrowRight, TriangleAlert, Info } from "lucide-svelte";
+  import { Copy, Check, Info, TriangleAlert, Sparkles } from "lucide-svelte";
   import { schemaState } from "#lib/state";
+  import { toast } from "svelte-sonner";
 
   let { onClose }: { onClose: () => void } = $props();
 
   let bindingName = $state("");
   let kvNamespaceId = $state("");
+  let copied = $state(false);
 
   const sanitizedBinding = $derived(
     bindingName
@@ -32,19 +34,35 @@
 
   const isValid = $derived(sanitizedBinding.length > 0 && !isDuplicate);
 
-  async function handleSubmit(e: SubmitEvent) {
-    e.preventDefault();
-    if (!isValid) return;
+  const recipeJsonc = $derived(
+`{
+  "binding": "${sanitizedBinding || 'MY_KV'}",
+  "id": "${kvNamespaceId.trim() || 'local-kv-id'}"
+}`
+  );
 
+  async function handleCopy() {
+    if (!isValid) return;
+    try {
+      await navigator.clipboard.writeText(recipeJsonc);
+      copied = true;
+      toast.success("Wrangler Recipe Copied", {
+        description: `Copied "${sanitizedBinding}" KV binding. Paste into your wrangler.jsonc kv_namespaces array.`
+      });
+      setTimeout(() => (copied = false), 2000);
+    } catch {}
+  }
+
+  async function handleAddToSandbox() {
+    if (!isValid) return;
     await schemaState.addTable(sanitizedBinding, "kv", {
       id: kvNamespaceId.trim() || undefined,
     });
-
     onClose();
   }
 </script>
 
-<form onsubmit={handleSubmit} class="flex flex-col gap-4">
+<div class="flex flex-col gap-4">
   <!-- Binding Variable Name -->
   <fieldset class="fieldset gap-1.5 p-0">
     <legend
@@ -66,9 +84,7 @@
         class="flex items-center gap-1.5 text-[11px] text-error mt-1 font-semibold"
       >
         <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
-        <span
-          >A binding or entity named "{sanitizedBinding}" already exists.</span
-        >
+        <span>A binding or entity named "{sanitizedBinding}" already exists.</span>
       </div>
     {/if}
   </fieldset>
@@ -86,19 +102,40 @@
       placeholder="e.g. 19ac9d9ad7cd48959e05c276643434342121219"
       class="input input-sm input-bordered w-full rounded-field bg-base-200/40 border-base-300/60 hover:border-base-content/30 focus:input-accent transition-all font-mono text-xs"
     />
-    <p class="text-[10px] opacity-60 mt-0.5">
-      Can be omitted during local development or bound to your Cloudflare
-      dashboard namespace ID later.
-    </p>
   </fieldset>
+
+  <!-- Recipe Code Block -->
+  <div class="flex flex-col gap-1.5">
+    <div class="flex items-center justify-between">
+      <span class="text-[10px] font-bold uppercase tracking-wider opacity-60">
+        wrangler.jsonc snippet
+      </span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs gap-1 text-[10.5px] font-semibold text-accent hover:bg-accent/10"
+        onclick={handleCopy}
+        disabled={!isValid}
+      >
+        {#if copied}
+          <Check class="w-3 h-3 text-success" />
+          <span>Copied</span>
+        {:else}
+          <Copy class="w-3 h-3" />
+          <span>Copy Snippet</span>
+        {/if}
+      </button>
+    </div>
+    <div class="bg-base-300/60 p-2.5 rounded-field font-mono text-[11px] border border-base-300 text-base-content/80 overflow-x-auto select-all">
+      <pre><code>{recipeJsonc}</code></pre>
+    </div>
+  </div>
 
   <div
     class="p-3 bg-base-200/50 border border-base-300/80 rounded-box text-[11px] opacity-75 leading-relaxed flex items-start gap-2"
   >
     <Info class="w-4 h-4 text-accent shrink-0 mt-0.5" />
     <span>
-      Adds a Key-Value storage binding to your Cloudflare Worker environment and
-      renders a KV node on the ERD canvas.
+      Cloudflare KV bindings are configured in <code>wrangler.jsonc</code>. Paste this snippet into your configuration and save in your editor—Strata will automatically detect and render the node on the canvas.
     </span>
   </div>
 
@@ -109,15 +146,31 @@
       class="btn btn-sm btn-ghost rounded-field text-xs"
       onclick={onClose}
     >
-      Cancel
+      Close
     </button>
-    <button
-      type="submit"
-      class="btn btn-sm btn-accent rounded-field text-xs font-bold shadow-sm"
-      disabled={!isValid}
-    >
-      <span>Configure KV Namespace</span>
-      <ArrowRight class="w-3.5 h-3.5" />
-    </button>
+    {#if schemaState.isSandboxMode}
+      <button
+        type="button"
+        class="btn btn-sm btn-accent rounded-field text-xs font-bold shadow-sm"
+        disabled={!isValid}
+        onclick={handleAddToSandbox}
+      >
+        <Sparkles class="w-3.5 h-3.5" />
+        <span>Add to Sandbox Canvas</span>
+      </button>
+    {:else}
+      <button
+        type="button"
+        class="btn btn-sm btn-accent rounded-field text-xs font-bold shadow-sm"
+        disabled={!isValid}
+        onclick={async () => {
+          await handleCopy();
+          onClose();
+        }}
+      >
+        <Copy class="w-3.5 h-3.5" />
+        <span>Copy Recipe & Close</span>
+      </button>
+    {/if}
   </div>
-</form>
+</div>

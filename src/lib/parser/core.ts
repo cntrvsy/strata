@@ -128,6 +128,9 @@ export function parseSchema(
 		// Extract @strata-layout manifest if present in the root file
 		const manifestDetails = extractStrataLayoutManifestDetails(code);
 		const layoutManifest = manifestDetails.manifest;
+		if (layoutManifest && (layoutManifest as any).__config__?.wranglerPath) {
+			wranglerPath = (layoutManifest as any).__config__.wranglerPath;
+		}
 		if (manifestDetails.error) {
 			auditIssues.push({
 				id: `audit_layout_manifest_${Date.now()}`,
@@ -361,6 +364,7 @@ export function parseSchema(
 								columns,
 								target,
 								strata: strataData,
+								line: decl.getStartLineNumber(),
 								moduleInfo: {
 									sourceFilePath,
 									moduleName,
@@ -449,6 +453,7 @@ export function parseSchema(
 									columns: extractColumns(decl),
 									target: strataData.target || 'd1',
 									strata: strataData,
+									line: decl.getStartLineNumber(),
 									moduleInfo: {
 										sourceFilePath: extImp.filePath,
 										moduleName,
@@ -518,6 +523,7 @@ export function parseSchema(
 													columns: extractColumns(decl),
 													target: strataData.target || 'd1',
 													strata: strataData,
+													line: decl.getStartLineNumber(),
 													moduleInfo: {
 														sourceFilePath: filePath,
 														moduleName,
@@ -717,6 +723,15 @@ export function parseSchema(
 					};
 				}
 			}
+			for (const [nodeId, meta] of Object.entries(layoutManifest)) {
+				if (meta && Array.isArray((meta as any).relations)) {
+					for (const rel of (meta as any).relations) {
+						if (rel && rel.to) {
+							addEdgeIfUnique(edges, nodeId, rel.to, true, 'synthetic');
+						}
+					}
+				}
+			}
 		}
 
 		// Cleanup: Ensure all edges point to existing nodes and emit actionable diagnostics for broken references
@@ -761,11 +776,12 @@ export function parseSchema(
 				warnings, 
 				auditIssues, 
 				wranglerPath,
+				layoutManifest: layoutManifest || undefined,
 				packageWrapperInfo: packageWrapperInfo || undefined
 			};
 		}
 
-		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath };
+		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath, layoutManifest: layoutManifest || undefined };
 	} catch (e: any) {
 		console.error("[Strata] Parse critical failure:", e);
 		

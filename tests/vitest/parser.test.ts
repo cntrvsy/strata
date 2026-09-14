@@ -656,15 +656,19 @@ describe('Mutation Logic', () => {
       expect(result.wranglerPath).toBe('../wrangler.toml');
     });
 
-    it('should write and update project configuration JSDoc metadata', () => {
+    it('should write and update project configuration JSDoc metadata in @strata-layout manifest', () => {
       const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
       let mutated = updateProjectConfigInSchema(baseCode, { wranglerPath: '../../wrangler.toml' });
-      expect(mutated).toContain('"target":"project"');
-      expect(mutated).toContain('"wranglerPath":"../../wrangler.toml"');
+      expect(mutated).toContain('@strata-layout');
+      expect(mutated).toContain('"wranglerPath": "../../wrangler.toml"');
+      const parsed1 = parseSchema(mutated);
+      expect(parsed1.wranglerPath).toBe('../../wrangler.toml');
 
       // Update existing config
       mutated = updateProjectConfigInSchema(mutated, { wranglerPath: './wrangler.toml' });
-      expect(mutated).toContain('"wranglerPath":"./wrangler.toml"');
+      expect(mutated).toContain('"wranglerPath": "./wrangler.toml"');
+      const parsed2 = parseSchema(mutated);
+      expect(parsed2.wranglerPath).toBe('./wrangler.toml');
     });
 
     it('should correctly mutate DO methods using JSDoc fallbacks', async () => {

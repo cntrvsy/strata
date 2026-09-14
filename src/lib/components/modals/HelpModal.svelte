@@ -25,7 +25,13 @@
     Copy,
     Layers,
     ShieldCheck,
+    Shield,
+    Users,
+    Building2,
+    ExternalLink,
+    FileCode,
   } from "lucide-svelte";
+  import { toast } from "svelte-sonner";
   import { fade } from "svelte/transition";
   import { schemaState } from "#lib/state";
   import { SAMPLE_TEMPLATES } from "#lib/mock";
@@ -36,6 +42,182 @@
   let searchQuery = $state("");
   let copied = $state(false);
   let copiedTopicId = $state<string | null>(null);
+
+  // Sync activeTab with schemaState.activeHelpTab
+  $effect(() => {
+    if (show && schemaState.activeHelpTab) {
+      activeTab = schemaState.activeHelpTab;
+    }
+  });
+
+  // Auth Blueprint State
+  type AuthProviderKey = "better-auth" | "clerk" | "workos";
+  let activeAuthProvider = $state<AuthProviderKey>("better-auth");
+  let authArchetype = $state<"barrel" | "single">("barrel");
+  let authCopied = $state(false);
+
+  const authBlueprints = {
+    "better-auth": {
+      name: "Better Auth D1 Cluster",
+      badge: "4 Tables + Relations",
+      badgeClass: "badge-secondary",
+      icon: Shield,
+      description: "Complete Cloudflare D1 authentication schema (user, session, account, verification) with relational foreign keys, timestamps, and Drizzle relations.",
+      recommendedFile: "src/schema/auth.ts",
+      barrelExport: 'export * from "./auth";',
+      docsUrl: "https://www.better-auth.com/docs/installation",
+      snippet: `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
+
+export const user = sqliteTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
+  image: text("image"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});
+
+export const session = sqliteTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" })
+});
+
+export const account = sqliteTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
+});
+
+export const verification = sqliteTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account)
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id]
+  })
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id]
+  })
+}));`
+    },
+    clerk: {
+      name: "Clerk Webhook Mirror",
+      badge: "1 D1 Mirror Table",
+      badgeClass: "border-purple-500/50 text-purple-400",
+      icon: Users,
+      description: "Local Cloudflare D1 user table for fast joins and user profile queries synchronized via Clerk Webhooks (user.created, user.updated).",
+      recommendedFile: "src/schema/clerk.ts",
+      barrelExport: 'export * from "./clerk";',
+      docsUrl: "https://clerk.com/docs/integrations/webhooks/sync-data",
+      snippet: `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+/**
+ * Recommended Clerk Webhook User Mirror
+ * Sync user profile, images, and email from Clerk Webhook events into Cloudflare D1.
+ */
+export const clerkUsers = sqliteTable("clerkUsers", {
+  id: text("id").primaryKey(), // Clerk User ID (user_2...)
+  clerkUserId: text("clerk_user_id").notNull().unique(),
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  imageUrl: text("image_url"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});`
+    },
+    workos: {
+      name: "WorkOS Directory Sync & SSO",
+      badge: "2 D1 Mirror Tables",
+      badgeClass: "border-emerald-500/50 text-emerald-400",
+      icon: Building2,
+      description: "Local Cloudflare D1 tables for enterprise organizations and Directory Sync (SCIM) users synchronized via WorkOS Webhooks.",
+      recommendedFile: "src/schema/workos.ts",
+      barrelExport: 'export * from "./workos";',
+      docsUrl: "https://workos.com/docs/events",
+      snippet: `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+/**
+ * WorkOS Organization Mirror Table
+ * Synchronized via WorkOS Webhook Events (org.created, org.updated).
+ */
+export const organizations = sqliteTable("organizations", {
+  id: text("id").primaryKey(), // WorkOS Org ID (org_...)
+  name: text("name").notNull(),
+  workosOrgId: text("workos_org_id").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});
+
+/**
+ * WorkOS Enterprise Users Mirror Table
+ * Synchronized via Directory Sync (SCIM) webhooks.
+ */
+export const workosUsers = sqliteTable("workosUsers", {
+  id: text("id").primaryKey(),
+  workosUserId: text("workos_user_id").notNull().unique(),
+  workosOrgId: text("workos_org_id").references(() => organizations.workosOrgId),
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+});`
+    }
+  };
+
+  const currentBp = $derived(authBlueprints[activeAuthProvider]);
+
+  async function copyAuthBlueprint(providerKey: AuthProviderKey) {
+    try {
+      const blueprint = authBlueprints[providerKey];
+      await navigator.clipboard.writeText(blueprint.snippet);
+      authCopied = true;
+      toast.success(`Copied ${blueprint.name} Schema`, {
+        description: `Paste into ${authArchetype === 'barrel' ? blueprint.recommendedFile : 'schema.ts'}.`
+      });
+      setTimeout(() => {
+        authCopied = false;
+      }, 2000);
+    } catch (e) {
+      console.error("[Strata] Copy blueprint failed:", e);
+      toast.error("Failed to copy blueprint to clipboard");
+    }
+  }
 
   function loadStarterTemplate(key: string) {
     schemaState.loadSandboxDemo(key);
@@ -452,7 +634,7 @@ ${plainContent.trim()}
                 <ul class="list-disc pl-4 space-y-1.5 text-xs">
                   <li><strong>D1-Resident Auth (Better Auth / Lucia):</strong> Strata automatically detects standard auth tables (<code>user</code>, <code>session</code>, <code>account</code>, <code>verification</code>) and tags them with <code>🛡️ Better Auth</code>. Add custom fields (e.g. <code>stripeCustomerId</code>, <code>role</code>) directly to the user table without breaking CLI compatibility.</li>
                   <li><strong>Cloud IdP Boundaries (Clerk & WorkOS):</strong> When tables contain external identity references (e.g. <code>clerkUserId</code> or <code>workosOrgId</code>), Strata spawns visual Identity Boundary Nodes with animated connection edges.</li>
-                  <li><strong>1-Click Webhook Mirror Scaffolding:</strong> Easily generate local D1 mirror tables (<code>clerkUsers</code> or <code>workosUsers</code>) for fast local joins and webhook sync, complete with copyable Drizzle migration definitions.</li>
+                  <li><strong>Zero-Lock-in Webhook Mirror Blueprints:</strong> Copy pre-architected local D1 mirror tables (<code>clerkUsers</code> or <code>workosUsers</code>) for fast local joins and webhook sync, complete with copyable Drizzle migration definitions and zero barrel contamination.</li>
                   <li><strong>Tailored Identity Inspector:</strong> Selecting an identity node provides provider-specific branding, bound table navigation, official documentation links, and webhook configuration status.</li>
                 </ul>`,
     },
@@ -465,7 +647,7 @@ ${plainContent.trim()}
         "Strata is designed to run side-by-side with VS Code, Cursor, or WebStorm rather than replacing your editor.",
       content: `<p class="mb-2">Strata pairs with your primary developer environment:</p>
                 <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>"Open in Editor" Integration:</strong> Click the active file pill in the Navbar or the Editor button in the Inspector to jump directly to your code in VS Code or Cursor.</li>
+                  <li><strong>"Open in Editor" Integration:</strong> Click the active file pill in the App Header or the Editor button in the Inspector to jump directly to your code in VS Code or Cursor.</li>
                   <li><strong>Instant Diagnostic Navigation:</strong> Clicking any schema warning (e.g. <code>Line 42 ↗</code>) opens your external editor directly to that exact line of code.</li>
                   <li><strong>Contextual Drizzle Previews:</strong> Inspect any table to view syntax-highlighted Drizzle definitions and copy code snippets in one click.</li>
                   <li><strong>Self-Trigger Watcher Debounce:</strong> AST mutations initiated within Strata bypass the file watcher so you never experience feedback loops or jitter while editing.</li>
@@ -528,15 +710,15 @@ export const users = sqliteTable("users", {});</pre>
     {
       id: "wrangler-sync",
       category: "cloudflare",
-      title: "Wrangler Configuration Binding Sync",
-      tags: ["wrangler", "toml", "json", "jsonc", "sync"],
+      title: "Wrangler Bindings & 1-Click Recipe Alignment",
+      tags: ["wrangler", "toml", "json", "jsonc", "recipe"],
       summary:
-        "Visual modifications to KV, DO, or R2 targets automatically synchronize configuration parameters back to Wrangler configs.",
-      content: `<p class="mb-2">Adding, deleting, or renaming non-D1 targets updates configurations in real-time:</p>
+        "Strata discovers Wrangler bindings in read-only mode and generates copyable wrangler.jsonc snippets to prevent blind file mutations.",
+      content: `<p class="mb-2">Strata maintains a strict boundary between database schema and Cloudflare Worker infrastructure:</p>
                 <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>TOML Mutator:</strong> Surgically edits wrangler.toml headers while preserving comments.</li>
-                  <li><strong>JSON/JSONC Mutator:</strong> Formats bindings safely without structural breakage.</li>
-                  <li><strong>Path Auto-Detection:</strong> Scans up to 12 parent levels to identify config locations.</li>
+                  <li><strong>Read-Only Config Discovery:</strong> Automatically detects <code>wrangler.jsonc</code> or <code>wrangler.toml</code> in parent directories up to 12 levels deep.</li>
+                  <li><strong>1-Click Clipboard Recipes:</strong> When you design a KV, DO, or R2 binding in Strata, click "Copy Wrangler Binding Recipe" to copy the clean, formatted JSONC snippet into your clipboard.</li>
+                  <li><strong>Zero File Corruption:</strong> Strata never executes blind AST or regex writes to your Wrangler files. You maintain 100% control over your Cloudflare configuration.</li>
                 </ul>`,
     },
     {
@@ -665,16 +847,16 @@ export const users = sqliteTable("users", {});</pre>
         "wrangler",
       ],
       summary:
-        "How Durable Object classes must be exported across all major Cloudflare Workers web frameworks.",
-      content: `<p class="mb-2">The Cloudflare Workers runtime requires every Durable Object class bound in <code>wrangler.toml</code> to be exported from your worker entrypoint module. Here is how each framework handles it:</p>
+        "How Durable Object classes must be exported from your Worker entrypoint (main in wrangler.jsonc).",
+      content: `<p class="mb-2">The Cloudflare Workers runtime requires every Durable Object class bound in <code>wrangler.jsonc</code> / <code>wrangler.toml</code> to be exported from your worker entrypoint module (<code>main</code>). Strata leverages this authoritative Cloudflare requirement for <strong>zero-config auto-discovery</strong>:</p>
                 <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class directly in your main entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>):<br/><code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { TelemetrySessionDO } from './durable-objects/TelemetrySessionDO';</code></li>
+                  <li><strong>Automatic Re-Export Following:</strong> Point Strata to your project. Strata reads <code>main</code> from <code>wrangler.jsonc</code> (e.g. <code>src/index.ts</code>), follows statements like <code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { SessionDO } from './durable-objects/SessionDO';</code>, and automatically extracts public RPC methods with zero manual path setup.</li>
+                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class directly in your main entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>).</li>
                   <li><strong>SvelteKit:</strong> Ensure <code>vite.config.ts</code> references the DO class file inside <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/durable-objects/TelemetrySessionDO.ts'] })</code>.</li>
                   <li><strong>Remix (Vite):</strong> Re-export the DO class from your custom server entrypoint (e.g. <code>server.ts</code> or <code>app/entry.server.ts</code>).</li>
-                  <li><strong>Astro (Advanced Mode):</strong> Configure a custom worker entry file (<code>src/worker.ts</code>) in <code>astro.config.mjs</code> and re-export the DO class.</li>
-                  <li><strong>Nuxt / Nitro:</strong> Re-export the DO class in a custom Nitro server plugin or entry file (<code>server/index.ts</code>).</li>
-                  <li><strong>Next.js (OpenNext):</strong> Re-export the DO class in your custom worker wrapper file (<code>worker.ts</code>).</li>
-                  <li><strong>Why Dragging Triggers Re-bundling:</strong> When you drag nodes in Strata, JSDoc tags update in <code>schema.ts</code>. Your dev server (Vite or Wrangler) re-bundles the entrypoint, which raises a runtime error if the DO class export is missing.</li>
+                  <li><strong>Astro / Nuxt:</strong> Re-export the DO class from your custom worker wrapper file (e.g. <code>src/worker.ts</code> or <code>server/index.ts</code>).</li>
+                  <li><strong>Workers RPC Introspection:</strong> Public methods on the DO class are parsed via TypeScript AST into interactive canvas card signatures.</li>
+                  <li><strong>Git-Clean Positions:</strong> Moving or dragging DO cards on the canvas touches only the root <code>@strata-layout</code> manifest, keeping both Drizzle schema files and Worker entrypoints 100% clean of Git noise.</li>
                 </ul>`,
     },
     {
@@ -712,7 +894,7 @@ export const users = sqliteTable("users", {});</pre>
                 <ul class="list-disc pl-4 space-y-1">
                   <li><strong>Direct Binding Source:</strong> Strata parses <code>wrangler.jsonc</code> or <code>wrangler.toml</code> directly as the source of truth for KV, DO, D1, and R2 bindings.</li>
                   <li><strong>Binding Mismatches:</strong> If an entity name in <code>schema.ts</code> JSDoc metadata does not match Wrangler bindings, Strata flags a mismatch warning in the Bottom Bar.</li>
-                  <li><strong>Automatic Sync:</strong> Updating entity names on the visual canvas automatically updates both JSDoc tags and Wrangler configuration files.</li>
+                  <li><strong>1-Click Alignment:</strong> Click "Copy Wrangler Binding Recipe" in the Bottom Bar or inspector drawers to copy missing binding declarations into your clipboard.</li>
                 </ul>`,
     },
     {
@@ -856,32 +1038,20 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
    - Logical Relations: Use Drizzle's relations() query builder API, either in domain files or a dedicated relations.ts:
      export const usersRelations = relations(users, ({ many }) => ({ posts: many(posts) }));
 
-5. CLOUDFLARE STORAGE TARGETS (KV, DO, R2):
-   - Non-SQL entities MUST be declared as TypeScript constants (export const <NAME> = {};) directly beneath their @strata JSDoc.
-   - In Modular Barrel mode, do NOT include inline "x" and "y" inside @strata (all coordinates belong in the root @strata-layout manifest).
-   - Durable Objects (DO):
-     "path" MUST be relative to the schema file (e.g. "../../../../apps/api/src/do/UserDO.ts" in monorepos, or use a tsconfig alias like "@api/do/UserDO.ts"):
+5. CLOUDFLARE STORAGE TARGETS & WRANGLER BINDINGS (KV, DO, R2):
+   - External Cloudflare bindings (KV, Durable Objects, R2) are configured in wrangler.jsonc, NEVER as dummy empty JavaScript constants (export const MY_KV = {};) in the Drizzle schema.
+   - Keep domain files (users.ts, posts.ts) 100% pure Drizzle SQL tables.
+   - In the root @strata-layout manifest, non-SQL entities and their coordinates can be visually mapped alongside D1 tables:
      /**
-      * @strata { "target": "do", "path": "./src/do/UserDO.ts", "class": "UserDO", "methods": ["getUserInfo", "updateStatus"] }
+      * @strata-layout {
+      *   "users": { "x": 100, "y": 120 },
+      *   "SESSIONS_KV": { "x": 100, "y": 480, "relations": [{ "to": "users" }] },
+      *   "UserDO": { "x": 560, "y": 480 }
+      * }
       */
-     export const UserDO = {};
-   - KV Namespaces:
-     /**
-      * @strata { "target": "kv", "schema": { "sessionToken": "string", "failedAttempts": { "type": "number", "ttl": 3600 } } }
-      */
-     export const SESSIONS_KV = {};
-   - R2 Buckets:
-     /**
-      * @strata { "target": "r2", "folders": { "avatars": "image/*", "documents": "application/pdf" } }
-      */
-     export const ASSETS_BUCKET = {};
 
 6. SYNTHETIC CROSS-STORAGE LINKS:
-   - To link non-SQL targets with D1 tables without polluting domain files, declare synthetic links on the storage target inside index.ts:
-     /**
-      * @strata { "target": "kv", "relations": [{ "to": "users" }] }
-      */
-     export const SESSIONS_KV = {};
+   - To link worker bindings (KV, DO, R2) to D1 tables without touching domain files, declare synthetic links directly in the root @strata-layout manifest: "relations": [{ "to": "users" }].
 
 7. EXTERNAL IDE PAIRING & ZERO-JITTER WORKFLOW:
    - Strata pairs side-by-side with your primary editor (VS Code, Cursor). Changes saved to disk update the canvas in real-time.
@@ -931,11 +1101,20 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
     if (catId === "all") return docTopics.length;
     if (catId === "starter-templates")
       return Object.keys(SAMPLE_TEMPLATES).length;
+    if (catId === "identity-auth") return 3;
     if (catId === "ai") return 1;
     if (catId === "jsdoc-builder") return 1;
     return docTopics.filter((t) => t.category === catId).length;
   }
 </script>
+
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape" && show) {
+      show = false;
+    }
+  }}
+/>
 
 {#if show}
   <div
@@ -1031,6 +1210,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                     : 'text-base-content/75 hover:bg-base-200'}"
                   onclick={() => {
                     activeTab = cat.id;
+                    schemaState.activeHelpTab = cat.id;
                     searchQuery = ""; // clear search when navigating tabs
                   }}
                 >
@@ -1526,6 +1706,224 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                 </div>
                 <pre
                   class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{activeJSDocOutput}</pre>
+              </div>
+            </div>
+          {:else if activeTab === "identity-auth" && !searchQuery}
+            <!-- Interactive Auth & Identity Blueprints Studio -->
+            <div class="flex flex-col gap-4 font-sans text-xs">
+              <div
+                class="flex items-center justify-between border-b border-base-300 pb-2 mb-1"
+              >
+                <div class="flex items-center gap-2">
+                  <ShieldCheck class="w-4 h-4 text-secondary" />
+                  <h3
+                    class="font-black text-sm uppercase tracking-wide text-base-content"
+                  >
+                    Auth & Identity Blueprints
+                  </h3>
+                </div>
+                <span
+                  class="badge badge-sm badge-secondary badge-outline font-mono text-[10px]"
+                >
+                  Copy-Paste Architecture
+                </span>
+              </div>
+
+              <!-- Why Copy-Paste Explainer Banner -->
+              <div
+                class="p-3.5 bg-secondary/10 border border-secondary/25 rounded-2xl flex items-start gap-3"
+              >
+                <Info class="w-4 h-4 text-secondary shrink-0 mt-0.5" />
+                <div class="flex flex-col gap-1 text-[11px] leading-relaxed">
+                  <span class="font-bold text-secondary text-xs">
+                    Non-Destructive & Zero Scope Creep
+                  </span>
+                  <p class="text-base-content/80">
+                    Strata never guesses your folder structure or secretly pollutes your modular barrel files. Copy the production-ready Drizzle D1 schema, paste it into your preferred file in VS Code or Cursor, and save. Strata's native file watcher will instantly visualize the entities on the canvas!
+                  </p>
+                </div>
+              </div>
+
+              <!-- Provider Tabs Switcher -->
+              <div class="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  class="p-3 rounded-xl border text-left flex flex-col gap-1.5 transition-all {activeAuthProvider === 'better-auth'
+                    ? 'border-secondary bg-secondary/10 shadow-xs'
+                    : 'border-base-300/80 bg-base-200/40 hover:bg-base-200 text-base-content/70 hover:text-base-content'}"
+                  onclick={() => (activeAuthProvider = "better-auth")}
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 font-bold text-xs">
+                      <Shield class="w-4 h-4 text-secondary" />
+                      <span>Better Auth</span>
+                    </div>
+                    <span class="badge badge-xs badge-secondary font-mono text-[9px]">4 Tables</span>
+                  </div>
+                  <span class="text-[10px] opacity-70">D1-Resident Auth Cluster</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="p-3 rounded-xl border text-left flex flex-col gap-1.5 transition-all {activeAuthProvider === 'clerk'
+                    ? 'border-purple-500 bg-purple-500/10 shadow-xs'
+                    : 'border-base-300/80 bg-base-200/40 hover:bg-base-200 text-base-content/70 hover:text-base-content'}"
+                  onclick={() => (activeAuthProvider = "clerk")}
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 font-bold text-xs">
+                      <Users class="w-4 h-4 text-purple-400" />
+                      <span>Clerk Mirror</span>
+                    </div>
+                    <span class="badge badge-xs border-purple-500/50 text-purple-400 font-mono text-[9px]">1 Table</span>
+                  </div>
+                  <span class="text-[10px] opacity-70">Webhook User Sync</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="p-3 rounded-xl border text-left flex flex-col gap-1.5 transition-all {activeAuthProvider === 'workos'
+                    ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
+                    : 'border-base-300/80 bg-base-200/40 hover:bg-base-200 text-base-content/70 hover:text-base-content'}"
+                  onclick={() => (activeAuthProvider = "workos")}
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 font-bold text-xs">
+                      <Building2 class="w-4 h-4 text-emerald-400" />
+                      <span>WorkOS SSO</span>
+                    </div>
+                    <span class="badge badge-xs border-emerald-500/50 text-emerald-400 font-mono text-[9px]">2 Tables</span>
+                  </div>
+                  <span class="text-[10px] opacity-70">Enterprise SCIM & SSO</span>
+                </button>
+              </div>
+
+              <!-- Selected Blueprint Details & Setup Archetype -->
+              <div class="bg-base-200/40 border border-base-300/80 rounded-2xl p-4 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex flex-col gap-0.5">
+                    <span class="font-bold text-sm text-base-content">{currentBp.name}</span>
+                    <span class="text-[11px] text-base-content/70">{currentBp.description}</span>
+                  </div>
+                  <a
+                    href={currentBp.docsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn-ghost btn-xs text-primary gap-1 font-semibold text-[10.5px]"
+                  >
+                    <span>Docs</span>
+                    <ExternalLink class="w-3 h-3" />
+                  </a>
+                </div>
+
+                <!-- Setup Archetype Selection -->
+                <div class="pt-2 border-t border-base-300/50 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">
+                      Placement Archetype
+                    </span>
+                    <div class="flex items-center gap-1 p-0.5 bg-base-300/50 rounded-lg">
+                      <button
+                        type="button"
+                        class="btn btn-xs rounded-md text-[10px] px-2 {authArchetype === 'barrel' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost opacity-70'}"
+                        onclick={() => (authArchetype = "barrel")}
+                      >
+                        <Layers class="w-3 h-3" />
+                        <span>Modular Barrel (Recommended)</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-xs rounded-md text-[10px] px-2 {authArchetype === 'single' ? 'btn-primary font-bold shadow-xs' : 'btn-ghost opacity-70'}"
+                        onclick={() => (authArchetype = "single")}
+                      >
+                        <FileCode class="w-3 h-3" />
+                        <span>Single-File Monolith</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Step-by-Step Instructions -->
+                  {#if authArchetype === "barrel"}
+                    <div class="p-3 bg-base-100 rounded-xl border border-base-300/60 flex flex-col gap-1 text-[11px] text-base-content/85 font-mono">
+                      <div class="flex items-center gap-2 text-primary font-bold">
+                        <span>1. Create file:</span>
+                        <code class="px-1.5 py-0.5 bg-base-200 rounded text-[10.5px]">{currentBp.recommendedFile}</code>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span>2. Paste the schema blueprint snippet below into that file.</span>
+                      </div>
+                      <div class="flex items-center gap-2 text-secondary font-bold">
+                        <span>3. Re-export in <code class="px-1.5 py-0.5 bg-base-200 rounded text-[10.5px]">src/schema/index.ts</code>:</span>
+                        <code class="px-1.5 py-0.5 bg-base-200 rounded text-[10.5px]">{currentBp.barrelExport}</code>
+                      </div>
+                      <div class="text-[10px] text-base-content/60 font-sans mt-1">
+                        💡 Saving triggers Strata's native file watcher to auto-render the nodes without any merge conflicts in your barrel!
+                      </div>
+                    </div>
+                  {:else}
+                    <div class="p-3 bg-base-100 rounded-xl border border-base-300/60 flex flex-col gap-1 text-[11px] text-base-content/85 font-mono">
+                      <div class="flex items-center gap-2 text-primary font-bold">
+                        <span>1. Open:</span>
+                        <code class="px-1.5 py-0.5 bg-base-200 rounded text-[10.5px]">src/schema.ts</code>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span>2. Paste the schema blueprint snippet below at the end of the file.</span>
+                      </div>
+                      <div class="text-[10px] text-base-content/60 font-sans mt-1">
+                        💡 Saving in your editor immediately renders the schema nodes on the canvas.
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+
+                <!-- Code Blueprint Output & Copy -->
+                <div class="flex flex-col gap-2 pt-2 border-t border-base-300/50">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-mono font-bold text-base-content/70">
+                      {authArchetype === "barrel" ? currentBp.recommendedFile : "src/schema.ts"}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-primary font-bold gap-1 px-3 shadow-sm active:scale-95"
+                      onclick={() => copyAuthBlueprint(activeAuthProvider)}
+                    >
+                      {#if authCopied}
+                        <Check class="w-3 h-3" />
+                        <span>Copied!</span>
+                      {:else}
+                        <Copy class="w-3 h-3" />
+                        <span>Copy Blueprint</span>
+                      {/if}
+                    </button>
+                  </div>
+                  <pre
+                    class="bg-neutral text-neutral-content p-4 rounded-xl text-[10.5px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-72 overflow-y-auto selection:bg-primary/30 select-all"
+                  ><code>{currentBp.snippet}</code></pre>
+                </div>
+              </div>
+
+              <!-- Supporting Documentation Topics Below -->
+              <div class="mt-2 flex flex-col gap-2">
+                <span class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/50">
+                  Architecture References & Identity Topics
+                </span>
+                {#each filteredTopics as topic (topic.id)}
+                  <div
+                    class="bg-base-200/40 border border-base-300/60 rounded-2xl p-4 flex flex-col gap-2 transition-all hover:border-base-300 hover:shadow-xs group/card"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <h4
+                        class="font-bold text-xs text-base-content group-hover/card:text-primary transition-colors flex items-center gap-1.5"
+                      >
+                        <ShieldCheck class="w-3.5 h-3.5 text-secondary shrink-0" />
+                        {topic.title}
+                      </h4>
+                    </div>
+                    <div class="text-[11px] text-base-content/70 leading-relaxed font-sans">
+                      {@html topic.content}
+                    </div>
+                  </div>
+                {/each}
               </div>
             </div>
           {:else}

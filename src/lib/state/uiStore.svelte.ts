@@ -23,7 +23,18 @@ export class UIState {
 
 	/** Modal visibility flags */
 	showNewTableModal = $state(false);
-	showScaffoldAuthModal = $state(false);
+	/** Legacy alias: forwarding to Help Center Auth Blueprints */
+	get showScaffoldAuthModal() {
+		return this.showHelpModal && this.activeHelpTab === 'identity-auth';
+	}
+	set showScaffoldAuthModal(val: boolean) {
+		if (val) {
+			this.activeHelpTab = 'identity-auth';
+			this.showHelpModal = true;
+		} else if (this.activeHelpTab === 'identity-auth') {
+			this.showHelpModal = false;
+		}
+	}
 	get showScaffoldModal() {
 		return this.showScaffoldAuthModal;
 	}
@@ -32,12 +43,8 @@ export class UIState {
 	}
 	showProjectSettingsModal = $state(false);
 	showHelpModal = $state(false);
+	activeHelpTab = $state<string>("all");
 	showExportToast = $state(false);
-	showCodeViewerModal = $state(false);
-
-	/** Rename Entity Modal State */
-	showRenameModal = $state(false);
-	renameEntityTargetId = $state<string | null>(null);
 
 	/** Confirmation Dialog Modal State */
 	showConfirmModal = $state(false);
@@ -46,6 +53,7 @@ export class UIState {
 		message: string;
 		confirmLabel: string;
 		isDanger?: boolean;
+		warnings?: string[];
 		onConfirm: () => void;
 	} | null>(null);
 

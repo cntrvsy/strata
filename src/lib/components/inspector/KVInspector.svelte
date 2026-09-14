@@ -1,13 +1,12 @@
 <!--
   KVInspector.svelte
 
-  Summary: Sub-inspector displaying and mutating key-value mappings for Cloudflare KV.
+  Summary: Clean read-only telemetry viewer for Cloudflare KV namespaces and key patterns.
   Expects: tableName (string), data (object showing columns), isReadOnly (boolean).
+  Output: Key patterns, types, TTL, and metadata breakdown.
 -->
 <script lang="ts">
-  import { Pencil, Trash2, Check, SlidersHorizontal } from "lucide-svelte";
-  import { toast } from "svelte-sonner";
-  import { schemaState } from "#lib/state";
+  import { Zap, Clock, Tag } from "lucide-svelte";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -15,215 +14,68 @@
     isReadOnly: boolean;
   }>();
 
-  let editingColumnName = $state<string | null>(null);
-  let newColumnName = $state("");
-
-  // Advanced settings state
-  let expandedKey = $state<string | null>(null);
-  let selectedType = $state("string");
-  let selectedTtl = $state<number | null>(null);
-  let selectedMetadata = $state("");
-
-  async function submitRenameColumn() {
-    if (!editingColumnName || !newColumnName) return;
-    await schemaState.renameColumn(tableName, editingColumnName, newColumnName);
-    editingColumnName = null;
-  }
-
-  async function deleteColumn(colName: string) {
-    schemaState.promptConfirm({
-      title: "Delete Key",
-      message: `Are you sure you want to delete key pattern "${colName}" from "${tableName}"? This change will be saved to disk.`,
-      confirmLabel: "Delete Key",
-      isDanger: true,
-      onConfirm: () => schemaState.deleteColumn(tableName, colName),
-    });
-  }
-
-  function toggleSettings(col: any) {
-    if (expandedKey === col.name) {
-      expandedKey = null;
-    } else {
-      expandedKey = col.name;
-      selectedType = col.definition || "string";
-      selectedTtl = col.ttl !== undefined && col.ttl !== null ? col.ttl : null;
-      selectedMetadata = col.metadata || "";
-    }
-  }
-
-  async function saveKeySettings(colName: string) {
-    if (selectedTtl !== null && selectedTtl !== undefined && selectedTtl < 60) {
-      toast.error("Invalid expiration TTL", {
-        description:
-          "Cloudflare KV expiration TTL must be at least 60 seconds.",
-      });
-      return;
-    }
-    await schemaState.updateColumnModifiers(tableName, colName, {
-      defaultVal: selectedType,
-      ttl: selectedTtl,
-      metadata: selectedMetadata,
-    });
-    expandedKey = null;
-  }
+  const columns = $derived(data?.columns || []);
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="p-2.5 rounded-box bg-accent/10 border border-accent/20 text-accent flex flex-col gap-0.5 text-[10px] mb-1">
-    <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace Binding</span>
-    <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+  <div class="p-2.5 rounded-box bg-accent/10 border border-accent/20 text-accent flex items-center justify-between text-[10px] mb-1">
+    <div class="flex flex-col gap-0.5">
+      <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace</span>
+      <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+    </div>
+    <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
   </div>
 
-  {#each data.columns as col}
-
-    <div
-      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-2 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
-      data-testid="field-row-{col.name}"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 grow">
-          {#if editingColumnName === col.name}
-            <div class="flex items-center gap-1 grow">
-              <input
-                bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
-                onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
-                data-testid="field-rename-input-{col.name}"
-              />
-              <button
-                class="btn btn-primary btn-xs btn-circle"
-                onclick={submitRenameColumn}
-                data-testid="field-rename-submit-{col.name}"
-              >
-                <Check class="w-3 h-3" />
-              </button>
-            </div>
-          {:else}
-            <div class="flex items-center gap-2 group/col-title">
-              <span
-                class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
-                data-testid="field-name-{col.name}"
-              >
-                {col.name}
-              </span>
-              {#if !isReadOnly}
-                <button
-                  class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200"
-                  onclick={() => {
-                    editingColumnName = col.name;
-                    newColumnName = col.name;
-                  }}
-                  data-testid="field-rename-btn-{col.name}"
-                >
-                  <Pencil class="w-2.5 h-2.5 opacity-60" />
-                </button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-        <div class="flex items-center gap-1.5">
-          {#if col.ttl !== undefined && col.ttl !== null}
-            <span
-              class="badge badge-xs bg-info/10 text-info border-info/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono"
-            >
-              TTL: {col.ttl}s
-            </span>
-          {/if}
-          {#if col.metadata}
-            <span
-              class="badge badge-xs bg-success/10 text-success border-success/20 px-1 py-0.5 rounded text-[8px] font-bold font-mono truncate max-w-20"
-              title={col.metadata}
-            >
-              Meta: {col.metadata}
-            </span>
-          {/if}
-          <span
-            class="text-[9px] font-mono opacity-75 text-base-content/80 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-bold"
-          >
-            {col.definition}
-          </span>
-          {#if !isReadOnly}
-            <button
-              class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-base-content/65 hover:bg-base-200 transition-all"
-              onclick={() => toggleSettings(col)}
-              title="Advanced Settings"
-              data-testid="field-settings-btn-{col.name}"
-            >
-              <SlidersHorizontal class="w-3 h-3" />
-            </button>
-            <button
-              class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-              onclick={() => deleteColumn(col.name)}
-              title="Delete Key"
-              data-testid="field-delete-btn-{col.name}"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      {#if expandedKey === col.name && !isReadOnly}
-        <div
-          class="border-t border-base-300 pt-2 mt-1 flex flex-col gap-2.5 animate-in fade-in duration-200"
-        >
-          <div class="grid grid-cols-2 gap-2">
-            <fieldset class="fieldset gap-1 p-0">
-              <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
-                >Value Type</legend
-              >
-              <select
-                bind:value={selectedType}
-                class="select select-xs select-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:select-primary transition-all text-[10px] font-medium"
-              >
-                <option value="string">String</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="any">Any</option>
-              </select>
-            </fieldset>
-            <fieldset class="fieldset gap-1 p-0">
-              <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
-                >Expiration TTL (s)</legend
-              >
-              <input
-                type="number"
-                bind:value={selectedTtl}
-                placeholder="None"
-                min="60"
-                class="input input-xs input-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:input-primary transition-all text-[10px]"
-              />
-            </fieldset>
-          </div>
-
-          <fieldset class="fieldset gap-1 p-0">
-            <legend class="fieldset-legend text-[9.5px] font-bold text-base-content/80 uppercase"
-              >Metadata String / Description</legend
-            >
-            <textarea
-              bind:value={selectedMetadata}
-              placeholder="e.g. user-profile or system-config"
-              rows="2"
-              class="textarea textarea-bordered w-full rounded-field bg-base-100 border-base-300 text-base-content focus:textarea-primary transition-all text-[10.5px] font-mono leading-tight resize-y"
-            ></textarea>
-          </fieldset>
-
-          <div class="flex justify-end gap-1.5">
-            <button
-              class="btn btn-ghost btn-xs rounded-field px-3 text-[10px]"
-              onclick={() => (expandedKey = null)}
-            >
-              Cancel
-            </button>
-            <button
-              class="btn btn-primary btn-xs rounded-field px-4 text-[10px] font-semibold"
-              onclick={() => saveKeySettings(col.name)}
-            >
-              Save Settings
-            </button>
-          </div>
-        </div>
-      {/if}
+  {#if columns.length === 0}
+    <div class="p-4 text-center text-xs text-base-content/60 font-mono">
+      No key patterns mapped for {tableName}
     </div>
-  {/each}
+  {:else}
+    {#each columns as col}
+      <div
+        class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
+        data-testid="field-row-{col.name}"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span
+              class="font-mono font-bold text-xs text-base-content group-hover/field:text-accent transition-colors truncate"
+              data-testid="field-name-{col.name}"
+            >
+              {col.name}
+            </span>
+          </div>
+
+          <span
+            class="text-[9px] font-mono opacity-80 uppercase bg-base-300/50 px-2 py-0.5 rounded border border-base-300/30 font-bold shrink-0 text-base-content/80"
+          >
+            {col.definition || "string"}
+          </span>
+        </div>
+
+        {#if (col.ttl !== undefined && col.ttl !== null) || col.metadata}
+          <div class="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
+            {#if col.ttl !== undefined && col.ttl !== null}
+              <span
+                class="badge badge-xs bg-info/10 text-info border-info/20 px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono gap-1"
+              >
+                <Clock class="w-2.5 h-2.5" />
+                TTL: {col.ttl}s
+              </span>
+            {/if}
+            {#if col.metadata}
+              <span
+                class="badge badge-xs bg-success/10 text-success border-success/20 px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono gap-1 truncate max-w-40"
+                title={col.metadata}
+              >
+                <Tag class="w-2.5 h-2.5" />
+                {col.metadata}
+              </span>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/each}
+  {/if}
 </div>
+

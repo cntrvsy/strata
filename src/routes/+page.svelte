@@ -20,75 +20,51 @@
   import LoadingOverlay from "#lib/components/layout/LoadingOverlay.svelte";
   import PackageWrapperEmptyState from "#lib/components/layout/PackageWrapperEmptyState.svelte";
   import GlobalModals from "#lib/components/modals/GlobalModals.svelte";
-  import ConnectionPickerModal from "#lib/components/modals/ConnectionPickerModal.svelte";
   import CanvasSearchPalette from "#lib/components/diagram/CanvasSearchPalette.svelte";
 
-  let pendingConnection = $state<Connection | null>(null);
   let showSearchPalette = $state(false);
 
   /**
    * Handles Svelte Flow connection events (dragging a line between nodes).
-   * Opens the ConnectionPickerModal to select relationship intent and field targets.
    */
   async function onconnect(connection: Connection) {
     if (!connection.source || !connection.target) return;
-    
+    if (connection.source === connection.target) return;
+
     // Duplicate Edge Guard
     const exists = schemaState.edges.some(
       (e) =>
-        e.source === connection.source &&
-        e.target === connection.target &&
-        (!connection.sourceHandle || e.sourceHandle === connection.sourceHandle)
+        (e.source === connection.source && e.target === connection.target) ||
+        (e.source === connection.target && e.target === connection.source)
     );
     if (exists) {
       const { toast } = await import("svelte-sonner");
       toast.info("Relationship Already Exists", {
-        description: `A relationship between "${connection.source}" and "${connection.target}" is already present in your schema.`
+        description: `A connection between "${connection.source}" and "${connection.target}" is already present.`
       });
       return;
     }
 
-    pendingConnection = connection;
-  }
+    const sourceNode = schemaState.nodes.find((n) => n.id === connection.source);
+    const targetNode = schemaState.nodes.find((n) => n.id === connection.target);
+    const sourceType = (sourceNode?.data as any)?.target || "d1";
+    const targetType = (targetNode?.data as any)?.target || "d1";
 
-  async function handleConfirmConnection(
-    type: "foreign_key" | "drizzle_relation" | "synthetic",
-    details: { sourceCol?: string; targetCol?: string },
-  ) {
-    if (
-      !pendingConnection ||
-      !pendingConnection.source ||
-      !pendingConnection.target
-    )
-      return;
-    const conn = pendingConnection;
-    pendingConnection = null;
+    const isCrossStorage = sourceType !== "d1" || targetType !== "d1";
 
-    // Optimistic UI update for immediate feedback
-    schemaState.edges = addEdge(
-      {
-        ...conn,
-        sourceHandle: details.sourceCol || conn.sourceHandle,
-        targetHandle: details.targetCol || conn.targetHandle,
-        animated: type === "drizzle_relation",
-        style:
-          type === "synthetic"
-            ? "stroke: var(--color-accent); stroke-dasharray: 5 5; stroke-width: 2; opacity: 0.9;"
-            : "stroke: var(--color-primary); stroke-width: 2.25; opacity: 0.95;",
-        type: "smoothstep",
-      },
-      schemaState.edges,
-    );
-
-    if (type === "foreign_key" && details.sourceCol && details.targetCol) {
-      await schemaState.addForeignKeyRelation(
-        conn.source,
-        details.sourceCol,
-        conn.target,
-        details.targetCol,
-      );
+    if (isCrossStorage) {
+      // Connect as an architectural edge in @strata-layout (preserves Git-clean domain files)
+      await schemaState.addRelation(connection.source, connection.target);
+      const { toast } = await import("svelte-sonner");
+      toast.success("Architectural Binding Linked", {
+        description: `Connected "${connection.source}" to "${connection.target}" in Strata layout.`
+      });
     } else {
-      await schemaState.addRelation(conn.source, conn.target);
+      // D1 to D1: Inform the developer that relationships are code-driven
+      const { toast } = await import("svelte-sonner");
+      toast.info("Relationships Are Code-Driven", {
+        description: `Define foreign keys via .references() or relations() in your schema. Strata will visualize them live.`
+      });
     }
   }
 
@@ -263,10 +239,3 @@
 
 <GlobalModals />
 
-{#if pendingConnection}
-  <ConnectionPickerModal
-    connection={pendingConnection}
-    onConfirm={handleConfirmConnection}
-    onCancel={() => (pendingConnection = null)}
-  />
-{/if}

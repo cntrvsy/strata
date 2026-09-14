@@ -20,6 +20,7 @@
     Code,
     Database,
   } from "lucide-svelte";
+  import { toast } from "svelte-sonner";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
 
@@ -99,17 +100,11 @@ export const organizations = sqliteTable("organizations", {
     ),
   );
 
-  let isScaffolding = $state(false);
   let copiedSnippet = $state(false);
   let isSnippetOpen = $state(false);
 
-  async function handleScaffoldMirror() {
-    isScaffolding = true;
-    try {
-      await schemaState.scaffoldWebhookMirror(provider);
-    } finally {
-      isScaffolding = false;
-    }
+  function handleOpenBlueprintGuide() {
+    schemaState.openHelpTopic("identity-auth");
   }
 
   function handleOpenDocs() {
@@ -119,6 +114,9 @@ export const organizations = sqliteTable("organizations", {
   function handleCopySnippet() {
     navigator.clipboard.writeText(config.snippet);
     copiedSnippet = true;
+    toast.success(`Copied ${config.mirrorTableName} Schema Snippet`, {
+      description: "Paste into your schema module (e.g. src/schema/clerk.ts or src/schema.ts)."
+    });
     setTimeout(() => {
       copiedSnippet = false;
     }, 2000);
@@ -303,18 +301,28 @@ export const organizations = sqliteTable("organizations", {
           </div>
           <button
             class="btn btn-primary btn-sm w-full gap-2 font-bold shadow-sm"
-            onclick={handleScaffoldMirror}
-            disabled={isScaffolding}
-            data-testid="scaffold-mirror-btn"
+            onclick={handleCopySnippet}
+            data-testid="copy-mirror-btn"
           >
-            {#if isScaffolding}
-              <span class="loading loading-spinner loading-xs"></span>
-              <span>Scaffolding Mirror Table...</span>
+            {#if copiedSnippet}
+              <Check class="w-4 h-4 text-primary-content" />
+              <span>Copied {config.mirrorTableName} Snippet!</span>
             {:else}
-              <Sparkles class="w-4 h-4" />
-              <span>Scaffold {config.mirrorTableName} Mirror Table</span>
+              <Copy class="w-4 h-4" />
+              <span>Copy {config.mirrorTableName} D1 Snippet</span>
             {/if}
           </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs w-full text-secondary hover:bg-secondary/10 gap-1 text-[11px] font-semibold"
+            onclick={handleOpenBlueprintGuide}
+          >
+            <Sparkles class="w-3 h-3" />
+            <span>View Full Identity Blueprint Guide →</span>
+          </button>
+          <p class="text-[10px] text-base-content/60 leading-tight">
+            💡 Paste into your editor (e.g. <code class="text-primary font-mono font-semibold">src/schema/{config.mirrorTableName}.ts</code> or <code class="text-primary font-mono font-semibold">src/schema.ts</code>) and save. Strata's native file watcher will automatically render the mirror table!
+          </p>
         </div>
       {/if}
     </div>

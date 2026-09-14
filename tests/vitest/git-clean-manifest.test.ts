@@ -320,4 +320,119 @@ export const posts = sqliteTable("posts", {
     const manifest = extractStrataLayoutManifest(updated);
     expect(manifest?.__clerk_identity__).toEqual({ x: 50, y: 250 });
   });
+
+  it('should apply @strata-layout manifest coordinates to external wrangler bindings on cold parse', async () => {
+    const rootWithManifest = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 150 },
+       *   "RATE_LIMITER_DO": { "x": 620, "y": 280 }
+       * }
+       */
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", {
+        id: integer("id").primaryKey()
+      });
+    `;
+
+    const wranglerJson = JSON.stringify({
+      name: "my-worker",
+      main: "src/index.ts",
+      durable_objects: {
+        bindings: [
+          { name: "RATE_LIMITER_DO", class_name: "RateLimiterDO" }
+        ]
+      }
+    });
+
+    const mockFiles: Record<string, string> = {
+      '/app/schema/index.ts': rootWithManifest,
+      '/app/wrangler.jsonc': wranglerJson
+    };
+
+    const { PlatformService } = await import('../../src/lib/services/platform');
+    vi.spyOn(PlatformService, 'readText').mockImplementation(async (path: string) => {
+      const norm = path.replace(/\\/g, '/');
+      if (mockFiles[norm]) return mockFiles[norm];
+      throw new Error(`File not found: ${path}`);
+    });
+
+    schemaState.filePath = '/app/schema/index.ts';
+    await schemaState.syncWithFile();
+
+    const doNode = schemaState.nodes.find(n => n.id === 'RATE_LIMITER_DO');
+    expect(doNode).toBeDefined();
+    expect(doNode?.position.x).toBe(620);
+    expect(doNode?.position.y).toBe(280);
+  });
+
+  it('should follow Worker main entrypoint to resolve DO class and extract RPC methods (Option 1)', async () => {
+    const rootSchema = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 150 },
+       *   "SESSION_DO": { "x": 550, "y": 150 }
+       * }
+       */
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", {
+        id: integer("id").primaryKey()
+      });
+    `;
+
+    const wranglerConfig = JSON.stringify({
+      name: "worker-app",
+      main: "src/index.ts",
+      durable_objects: {
+        bindings: [
+          { name: "SESSION_DO", class_name: "SessionDO" }
+        ]
+      }
+    });
+
+    const workerIndex = `
+      import { DurableObject } from "cloudflare:workers";
+      export { SessionDO } from "./durable-objects/SessionDO";
+
+      export default {
+        async fetch(request, env) { return new Response("OK"); }
+      };
+    `;
+
+    const sessionDoClass = `
+      import { DurableObject } from "cloudflare:workers";
+
+      export class SessionDO extends DurableObject {
+        async getSession(token: string): Promise<any> { return {}; }
+        async invalidate(token: string): Promise<void> {}
+      }
+    `;
+
+    const mockFiles: Record<string, string> = {
+      '/project/src/schema/index.ts': rootSchema,
+      '/project/wrangler.jsonc': wranglerConfig,
+      '/project/src/index.ts': workerIndex,
+      '/project/src/durable-objects/SessionDO.ts': sessionDoClass
+    };
+
+    const { PlatformService } = await import('../../src/lib/services/platform');
+    vi.spyOn(PlatformService, 'readText').mockImplementation(async (path: string) => {
+      const norm = path.replace(/\\/g, '/');
+      if (mockFiles[norm]) return mockFiles[norm];
+      throw new Error(`File not found: ${path}`);
+    });
+
+    schemaState.filePath = '/project/src/schema/index.ts';
+    await schemaState.syncWithFile();
+
+    const doNode = schemaState.nodes.find(n => n.id === 'SESSION_DO');
+    expect(doNode).toBeDefined();
+    expect(doNode?.position).toEqual({ x: 550, y: 150 });
+    
+    // Check RPC methods extracted via Option 1
+    const methodNames = (doNode?.data as any)?.columns.map((c: any) => c.name);
+    expect(methodNames).toContain('getSession(token: string)');
+    expect(methodNames).toContain('invalidate(token: string)');
+  });
 });
+

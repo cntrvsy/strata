@@ -54,6 +54,7 @@ export interface ParseResult {
 	warnings?: string[];
 	auditIssues?: AuditIssue[];
 	wranglerPath?: string;
+	layoutManifest?: Record<string, any>;
 	packageWrapperInfo?: PackageWrapperInfo;
 }
 

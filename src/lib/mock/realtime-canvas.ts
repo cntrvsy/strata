@@ -1,3 +1,13 @@
+/**
+ * @strata-layout {
+ *   "canvasDocuments": { "x": 100, "y": 140 },
+ *   "documentRevisions": { "x": 560, "y": 140 },
+ *   "documentAssets": { "x": 560, "y": 520 },
+ *   "DocumentRoomDO": { "x": 1040, "y": 140, "relations": [{ "to": "canvasDocuments" }] },
+ *   "USER_PRESENCE_KV": { "x": 100, "y": 520, "relations": [{ "to": "canvasDocuments" }] },
+ *   "CANVAS_SNAPSHOTS_R2": { "x": 1040, "y": 520, "relations": [{ "to": "documentRevisions" }] }
+ * }
+ */
 import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
@@ -30,7 +40,6 @@ import { relations } from "drizzle-orm";
 /**
  * Team Collaborative Workspaces
  * Root container for shared projects and canvas boards.
- * @strata { "target": "d1", "x": 100, "y": 140 }
  */
 export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -42,7 +51,6 @@ export const workspaces = sqliteTable("workspaces", {
 /**
  * Canvas Documents (Whiteboards / Design Files)
  * Represents individual collaborative artboards.
- * @strata { "target": "d1", "x": 560, "y": 140 }
  */
 export const canvasDocuments = sqliteTable("canvas_documents", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -56,7 +64,6 @@ export const canvasDocuments = sqliteTable("canvas_documents", {
 /**
  * Document Revision Snapshots
  * Point-in-time state ledger pointing to compacted binary blobs in R2.
- * @strata { "target": "d1", "x": 560, "y": 520 }
  */
 export const documentRevisions = sqliteTable("document_revisions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -90,27 +97,3 @@ export const documentRevisionsRelations = relations(documentRevisions, ({ one })
   }),
 }));
 
-// ============================================================================
-// SECTION 3: CLOUDFLARE EDGE INFRASTRUCTURE
-// ============================================================================
-
-/**
- * Multiplayer Room Coordinator (Cloudflare Durable Object)
- * Coordinates live WebSocket connections, merges binary CRDT state, and broadcasts cursor positions.
- * @strata { "target": "do", "binding": "DocumentRoomDO", "x": 1040, "y": 140, "relations": [{ "to": "canvasDocuments" }], "path": "./src/do/DocumentRoomDO.ts", "class": "DocumentRoomDO", "methods": ["handleWebSocketUpgrade", "applyCrdtUpdate", "broadcastCursorMovement", "persistSnapshotToR2"] }
- */
-export const DocumentRoomDO = {};
-
-/**
- * Ephemeral Collaborator Presence (Cloudflare KV)
- * Stores active session heartbeats, selected canvas node IDs, and viewport coordinates with 5-minute TTL.
- * @strata { "target": "kv", "binding": "USER_PRESENCE_KV", "ttl": 300, "x": 100, "y": 520, "relations": [{ "to": "canvasDocuments" }], "schema": { "userId": "string", "documentId": "string", "cursorX": "number", "cursorY": "number", "lastSeen": "number" } }
- */
-export const USER_PRESENCE_KV = {};
-
-/**
- * Compressed Document Blobs & Thumbnails (Cloudflare R2 Bucket)
- * Stores compacted binary document state and generated WebP artboard previews.
- * @strata { "target": "r2", "binding": "CANVAS_SNAPSHOTS_R2", "x": 1040, "y": 520, "relations": [{ "to": "documentRevisions" }], "public": false, "cors": true, "customDomain": "cdn.canvas.internal", "folders": { "revisions": "application/octet-stream", "thumbnails": "image/webp" } }
- */
-export const CANVAS_SNAPSHOTS_R2 = {};

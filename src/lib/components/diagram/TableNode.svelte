@@ -8,6 +8,7 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
   import {
     Database,
     Key,
@@ -155,6 +156,11 @@
   }}
   ondblclick={() => {
     schemaState.activeInspectorNodeId = data.label;
+    const targetFile = data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath;
+    const line = (data as any).line;
+    if (targetFile) {
+      PlatformService.openInEditor(targetFile, line);
+    }
   }}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -219,11 +225,21 @@
             Issue
           </div>
         {/if}
-        <div
-          class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
-        >
-          {config.label}
-        </div>
+        {#if !isD1}
+          <div
+            class="badge badge-xs {config.bg} {config.text} border border-current/30 font-mono text-[9px] font-bold"
+            title="Cloudflare Worker Binding (configured in wrangler.jsonc)"
+          >
+            {config.label} • wrangler
+          </div>
+        {:else}
+          <div
+            class="badge badge-outline badge-xs opacity-60 font-mono text-[9px]"
+            title="Drizzle SQLite/D1 Table"
+          >
+            D1 Table
+          </div>
+        {/if}
       </div>
     </div>
 

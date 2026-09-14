@@ -297,9 +297,17 @@ describe('JSONC Parser & Configuration', () => {
       { id: 'MY_KV', type: 'table', data: { label: 'MY_KV', target: 'kv' }, position: { x: 0, y: 0 } }
     ];
 
-    const mutateSpy = vi.spyOn(PlatformService, 'mutateWranglerConfig').mockResolvedValue(undefined);
+    let copiedText = '';
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn(async (text: string) => {
+          copiedText = text;
+        })
+      }
+    });
+
     await schemaState.syncMissingWranglerBindings();
-    expect(mutateSpy).toHaveBeenCalledWith('/project/wrangler.toml', 'add', 'kv', 'MY_KV', expect.anything());
-    mutateSpy.mockRestore();
+    expect(copiedText).toContain('kv_namespaces');
+    expect(copiedText).toContain('MY_KV');
   });
 });
