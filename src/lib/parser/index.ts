@@ -45,5 +45,13 @@ export {
 } from './mutators';
 
 
-export type { ParseResult } from './types';
+export type { 
+	ParseResult,
+	StrataNode,
+	StrataEdge,
+	StrataNodeData,
+	StrataEdgeData,
+	ColumnDefinition,
+	StorageTarget
+} from './types';
 export { createIsolatedProject } from './project';

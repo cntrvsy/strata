@@ -17,6 +17,9 @@
   import { schemaState } from "#lib/state";
   import TableNode from "#lib/components/diagram/TableNode.svelte";
   import IdentityNode from "#lib/components/diagram/IdentityNode.svelte";
+  import DurableObjectNode from "#lib/components/diagram/DurableObjectNode.svelte";
+  import KVNamespaceNode from "#lib/components/diagram/KVNamespaceNode.svelte";
+  import R2BucketNode from "#lib/components/diagram/R2BucketNode.svelte";
   import RelationEdge from "#lib/components/diagram/RelationEdge.svelte";
   import ContextMenu from "#lib/components/diagram/ContextMenu.svelte";
   import { PlatformService } from "#lib/services/platform";
@@ -30,6 +33,9 @@
   const nodeTypes = {
     table: TableNode,
     identity: IdentityNode,
+    do: DurableObjectNode,
+    kv: KVNamespaceNode,
+    r2: R2BucketNode,
   };
 
   const edgeTypes = {

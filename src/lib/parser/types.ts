@@ -43,10 +43,58 @@ export interface PackageWrapperInfo {
 	drizzleConfigPath?: string;
 }
 
+export type StorageTarget = 'd1' | 'do' | 'kv' | 'r2';
+
+export interface ColumnDefinition {
+	name: string;
+	definition: string;
+	isPk?: boolean;
+	isReferences?: boolean;
+	notNull?: boolean;
+	defaultVal?: string;
+	isAuthCore?: boolean;
+	isCustomField?: boolean;
+	ttl?: number;
+	metadata?: string;
+}
+
+export interface StrataNodeData {
+	label?: string;
+	target?: StorageTarget;
+	columns?: ColumnDefinition[];
+	methods?: ColumnDefinition[];
+	patterns?: ColumnDefinition[];
+	folders?: ColumnDefinition[];
+	strata?: Record<string, any>;
+	line?: number;
+	moduleInfo?: ModuleInfo;
+	isExternal?: boolean;
+	isBetterAuth?: boolean;
+	provider?: 'clerk' | 'workos';
+	title?: string;
+	description?: string;
+	boundTables?: Array<{ tableId: string; colName: string }>;
+	[key: string]: any;
+}
+
+export interface StrataEdgeData {
+	relationType?: string;
+	isSynthetic?: boolean;
+	isIdentityBoundary?: boolean;
+	provider?: 'clerk' | 'workos';
+	sourceCol?: string;
+	targetCol?: string;
+	relationName?: string;
+	[key: string]: any;
+}
+
+export type StrataNode = Node<StrataNodeData>;
+export type StrataEdge = Edge<StrataEdgeData>;
+
 export interface ParseResult {
 	success: boolean;
-	nodes: Node[];
-	edges: Edge[];
+	nodes: StrataNode[];
+	edges: StrataEdge[];
 	error?: string;
 	errorLoc?: { line: number, column: number } | null;
 	externalImports?: { filePath: string; importNames: string[] }[];

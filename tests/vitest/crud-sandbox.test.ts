@@ -35,21 +35,29 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     const initialCount = schemaState.nodes.length;
 
     await schemaState.addTable('audit_logs', 'd1');
-    expect(schemaState.nodes.find(n => n.id === 'audit_logs')).toBeDefined();
+    const d1Node = schemaState.nodes.find(n => n.id === 'audit_logs');
+    expect(d1Node).toBeDefined();
+    expect(d1Node?.type).toBe('table');
+    expect(d1Node?.data.target).toBe('d1');
     expect(schemaState.nodes.length).toBe(initialCount + 1);
 
     await schemaState.addTable('rate_limiter', 'kv');
-    expect(schemaState.nodes.find(n => n.id === 'rate_limiter')).toBeDefined();
+    const kvNode = schemaState.nodes.find(n => n.id === 'rate_limiter');
+    expect(kvNode).toBeDefined();
+    expect(kvNode?.type).toBe('kv');
+    expect(kvNode?.data.target).toBe('kv');
 
     await schemaState.addTable('chat_room', 'do', { class: 'ChatRoomDO', path: './src/do/ChatRoom.ts' });
     const doNode = schemaState.nodes.find(n => n.id === 'chat_room');
     expect(doNode).toBeDefined();
-    expect((doNode?.data as any).target).toBe('do');
+    expect(doNode?.type).toBe('do');
+    expect(doNode?.data.target).toBe('do');
 
     await schemaState.addTable('media_bucket', 'r2');
     const r2Node = schemaState.nodes.find(n => n.id === 'media_bucket');
     expect(r2Node).toBeDefined();
-    expect((r2Node?.data as any).target).toBe('r2');
+    expect(r2Node?.type).toBe('r2');
+    expect(r2Node?.data.target).toBe('r2');
   });
 
   it('2. should rename an existing table in sandbox mode', async () => {
@@ -76,9 +84,9 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
 
     const ordersNode = schemaState.nodes.find(n => n.id === 'orders');
     expect(ordersNode).toBeDefined();
-    const cols = (ordersNode?.data as any).columns;
-    expect(cols.some((c: any) => c.name === 'total_amount')).toBe(true);
-    expect(cols.some((c: any) => c.name === 'status')).toBe(true);
+    const cols = ordersNode?.data.columns || [];
+    expect(cols.some(c => c.name === 'total_amount')).toBe(true);
+    expect(cols.some(c => c.name === 'status')).toBe(true);
   });
 
   it('5. should rename columns in sandbox mode', async () => {
@@ -87,9 +95,9 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
 
     await schemaState.renameColumn('products', 'cost', 'price');
     const node = schemaState.nodes.find(n => n.id === 'products');
-    const cols = (node?.data as any).columns;
-    expect(cols.some((c: any) => c.name === 'cost')).toBe(false);
-    expect(cols.some((c: any) => c.name === 'price')).toBe(true);
+    const cols = node?.data.columns || [];
+    expect(cols.some(c => c.name === 'cost')).toBe(false);
+    expect(cols.some(c => c.name === 'price')).toBe(true);
   });
 
   it('6. should update column modifiers (PK, NotNull, Default) in sandbox mode', async () => {
@@ -102,9 +110,9 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     });
 
     const node = schemaState.nodes.find(n => n.id === 'tokens');
-    const col = (node?.data as any).columns.find((c: any) => c.name === 'token_str');
+    const col = node?.data.columns?.find(c => c.name === 'token_str');
     expect(col).toBeDefined();
-    expect(col.notNull).toBe(true);
+    expect(col?.notNull).toBe(true);
   });
 
   it('7. should delete a column in sandbox mode', async () => {
@@ -114,8 +122,8 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     await schemaState.deleteColumn('settings', 'obsolete_setting');
 
     const node = schemaState.nodes.find(n => n.id === 'settings');
-    const cols = (node?.data as any).columns;
-    expect(cols.some((c: any) => c.name === 'obsolete_setting')).toBe(false);
+    const cols = node?.data.columns || [];
+    expect(cols.some(c => c.name === 'obsolete_setting')).toBe(false);
   });
 
   it('8. should add relations in sandbox mode', async () => {
@@ -149,9 +157,9 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     });
 
     const r2Node = schemaState.nodes.find(n => n.id === 'bucket_assets');
-    const strata = (r2Node?.data as any).strata;
-    expect(strata.public).toBe(true);
-    expect(strata.customDomain).toBe('cdn.example.com');
+    const strata = r2Node?.data.strata;
+    expect(strata?.public).toBe(true);
+    expect(strata?.customDomain).toBe('cdn.example.com');
   });
 
   it('11. should load all 5 production Cloudflare architecture templates cleanly', async () => {
@@ -162,7 +170,7 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     await schemaState.loadSandboxDemo('b2b-saas');
     expect(schemaState.nodes.some(n => n.id === 'organizations')).toBe(true);
     expect(schemaState.nodes.some(n => n.id === 'user')).toBe(true);
-    expect(schemaState.nodes.some(n => (n.data as any).isBetterAuth)).toBe(true);
+    expect(schemaState.nodes.some(n => n.data.isBetterAuth)).toBe(true);
 
     await schemaState.loadSandboxDemo('realtime-canvas');
     expect(schemaState.nodes.some(n => n.id === 'DocumentRoomDO')).toBe(true);
@@ -190,24 +198,66 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     await schemaState.addColumn('users_dup_test', 'email', 'text');
 
     const node = schemaState.nodes.find(n => n.id === 'users_dup_test');
-    const cols = (node?.data as any).columns;
-    expect(cols.filter((c: any) => c.name === 'email')).toHaveLength(1);
+    const cols = node?.data.columns || [];
+    expect(cols.filter(c => c.name === 'email')).toHaveLength(1);
   });
 
-  it('14. should add, rename, and remove Durable Object methods in sandbox mode without disk I/O errors', async () => {
+  it('14. should add and remove Durable Object RPC methods with first-class domain mutators', async () => {
     await schemaState.loadSandboxDemo('ai-agent-rag');
     const doNode = schemaState.nodes.find(n => n.id === 'AgentSessionDO');
     expect(doNode).toBeDefined();
+    expect(doNode?.type).toBe('do');
 
-    // Add a new method in sandbox mode
-    await expect(schemaState.addColumn('AgentSessionDO', 'clearSessionHistory', 'Promise<void>')).resolves.not.toThrow();
+    // Add a new method with dedicated domain mutator
+    await expect(schemaState.addMethod('AgentSessionDO', 'clearSessionHistory', 'Promise<void>')).resolves.not.toThrow();
     
-    // Check that the method was added to the node columns
+    // Verify method presence in node.data.methods
     const updatedDoNode = schemaState.nodes.find(n => n.id === 'AgentSessionDO');
-    const methods = (updatedDoNode?.data as any).columns.map((c: any) => c.name);
-    expect(methods.some((m: string) => m.startsWith('clearSessionHistory'))).toBe(true);
+    const methods = updatedDoNode?.data.methods?.map(m => m.name) || [];
+    expect(methods.some(m => m.startsWith('clearSessionHistory'))).toBe(true);
 
-    // Delete a method in sandbox mode
-    await expect(schemaState.deleteColumn('AgentSessionDO', 'clearSessionHistory')).resolves.not.toThrow();
+    // Delete method with dedicated domain mutator
+    await expect(schemaState.deleteMethod('AgentSessionDO', 'clearSessionHistory')).resolves.not.toThrow();
+    const finalDoNode = schemaState.nodes.find(n => n.id === 'AgentSessionDO');
+    const remainingMethods = finalDoNode?.data.methods?.map(m => m.name) || [];
+    expect(remainingMethods.some(m => m.startsWith('clearSessionHistory'))).toBe(false);
+  });
+
+  it('15. should add and remove KV key patterns with first-class domain mutators', async () => {
+    await schemaState.addTable('rate_limiter_kv', 'kv');
+    const kvNode = schemaState.nodes.find(n => n.id === 'rate_limiter_kv');
+    expect(kvNode).toBeDefined();
+    expect(kvNode?.type).toBe('kv');
+
+    // Add pattern
+    await schemaState.addPattern('rate_limiter_kv', 'user:ip:*', 'number', 60);
+    const updatedKvNode = schemaState.nodes.find(n => n.id === 'rate_limiter_kv');
+    const patterns = updatedKvNode?.data.patterns || [];
+    expect(patterns.some(p => p.name === 'user:ip:*' && p.ttl === 60)).toBe(true);
+
+    // Delete pattern
+    await schemaState.deletePattern('rate_limiter_kv', 'user:ip:*');
+    const finalKvNode = schemaState.nodes.find(n => n.id === 'rate_limiter_kv');
+    const remainingPatterns = finalKvNode?.data.patterns || [];
+    expect(remainingPatterns.some(p => p.name === 'user:ip:*')).toBe(false);
+  });
+
+  it('16. should add and remove R2 folder prefixes with first-class domain mutators', async () => {
+    await schemaState.addTable('storage_vault', 'r2');
+    const r2Node = schemaState.nodes.find(n => n.id === 'storage_vault');
+    expect(r2Node).toBeDefined();
+    expect(r2Node?.type).toBe('r2');
+
+    // Add folder prefix
+    await schemaState.addFolder('storage_vault', 'documents', 'application/pdf');
+    const updatedR2Node = schemaState.nodes.find(n => n.id === 'storage_vault');
+    const folders = updatedR2Node?.data.folders || [];
+    expect(folders.some(f => f.name === 'documents/')).toBe(true);
+
+    // Delete folder prefix
+    await schemaState.deleteFolder('storage_vault', 'documents');
+    const finalR2Node = schemaState.nodes.find(n => n.id === 'storage_vault');
+    const remainingFolders = finalR2Node?.data.folders || [];
+    expect(remainingFolders.some(f => f.name === 'documents/')).toBe(false);
   });
 });

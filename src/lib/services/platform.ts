@@ -195,6 +195,10 @@ export class PlatformService {
 
 	private static cachedChannel: "store" | "standalone" | null = null;
 
+	static resetCacheForTesting(): void {
+		this.cachedChannel = null;
+	}
+
 	static async getDistributionChannel(): Promise<"store" | "standalone"> {
 		if (this.cachedChannel) return this.cachedChannel;
 		if (!this.isTauri()) {

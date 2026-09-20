@@ -19,7 +19,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-  open: vi.fn(async () => '/path/to/schema.ts'),
+  open: vi.fn(async (): Promise<string | null> => '/path/to/schema.ts'),
 }));
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
@@ -40,7 +40,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 describe('PlatformService Adapter Unit Tests', () => {
   beforeEach(() => {
-    (PlatformService as any).cachedChannel = null;
+    PlatformService.resetCacheForTesting();
     vi.clearAllMocks();
   });
 
@@ -83,7 +83,7 @@ describe('PlatformService Adapter Unit Tests', () => {
 
   it('should handle dialog cancellation (returning null)', async () => {
     const dialog = await import('@tauri-apps/plugin-dialog');
-    vi.mocked(dialog.open).mockResolvedValueOnce(null as any);
+    vi.mocked(dialog.open).mockResolvedValueOnce(null);
     const path = await PlatformService.selectFile(['ts']);
     expect(path).toBeNull();
   });

@@ -11,7 +11,7 @@ import { createStateMachine } from "#lib/state/fsm";
 import { OperationQueue } from "#lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath, getRelativeImportSpecifier, createIsolatedProject } from "#lib/parser";
+import { resolveRelativePath, getRelativeImportSpecifier, createIsolatedProject, type StrataNode, type StrataEdge } from "#lib/parser";
 import type { AuditIssue, PackageWrapperInfo } from "#lib/parser/types";
 import { uiState } from "#lib/state/uiStore.svelte";
 
@@ -592,7 +592,7 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 /**
  * Preserves selection state and in-memory node positions across re-parses.
  */
-function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selectedNodeIds: Set<string>, existingNodes: Node[]): Node[] {
+function mapNodesWithExternalPositions(nodes: StrataNode[], filePath: string, selectedNodeIds: Set<string>, existingNodes: StrataNode[]): StrataNode[] {
 	return nodes.map(n => {
 		const existing = existingNodes.find(ex => ex.id === n.id);
 		const position = existing ? { x: existing.position.x, y: existing.position.y } : { x: n.position.x, y: n.position.y };
@@ -611,9 +611,9 @@ function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selected
 export class SchemaState {
 	// --- Visual State ---
 	/** The current set of Svelte Flow nodes (tables/entities) */
-	nodes = $state.raw([] as Node[]);
+	nodes = $state.raw([] as StrataNode[]);
 	/** The current set of Svelte Flow edges (relationships) */
-	edges = $state.raw([] as Edge[]);
+	edges = $state.raw([] as StrataEdge[]);
 	/** Flag to ignore the next file change event if triggered by our own write */
 	ignoreNextWatch = false;
 	/** Whether the schema is currently valid (parsed successfully) */
@@ -984,7 +984,27 @@ export class SchemaState {
 					let cols: any[] = [];
 					if (binding.type === 'kv') {
 						cols = binding.extra?.schema 
-							? Object.entries(binding.extra.schema).map(([k, v]) => ({ name: k, definition: v as string, isPk: false, notNull: false, isReferences: false }))
+							? Object.entries(binding.extra.schema).map(([k, v]) => {
+								if (typeof v === 'object' && v !== null) {
+									const vObj = v as any;
+									return {
+										name: k,
+										definition: String(vObj.type || 'string'),
+										ttl: vObj.ttl ? Number(vObj.ttl) : undefined,
+										metadata: vObj.metadata ? String(vObj.metadata) : undefined,
+										isPk: false,
+										notNull: false,
+										isReferences: false
+									};
+								}
+								return {
+									name: k,
+									definition: String(v),
+									isPk: false,
+									notNull: false,
+									isReferences: false
+								};
+							})
 							: [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }];
 					} else if (binding.type === 'do') {
 						cols = binding.extra?.methods 
@@ -992,7 +1012,13 @@ export class SchemaState {
 							: [];
 					} else if (binding.type === 'r2') {
 						cols = binding.extra?.folders
-							? Object.entries(binding.extra.folders).map(([k, v]) => ({ name: k, definition: v as string, isPk: false, notNull: false, isReferences: false }))
+							? Object.entries(binding.extra.folders).map(([k, v]) => ({
+								name: k.endsWith('/') ? k : `${k}/`,
+								definition: String(v),
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}))
 							: [];
 					}
 
@@ -1001,12 +1027,16 @@ export class SchemaState {
 						? { x: Math.round(manifestEntry.x), y: Math.round(manifestEntry.y) }
 						: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
 
+					const nodeType = binding.type;
 					finalNodes.push({
 						id: binding.name,
-						type: 'table',
+						type: nodeType,
 						data: {
 							label: binding.name,
 							columns: cols,
+							methods: binding.type === 'do' ? cols : undefined,
+							patterns: binding.type === 'kv' ? cols : undefined,
+							folders: binding.type === 'r2' ? cols : undefined,
 							target: binding.type,
 							strata: {
 								target: binding.type,
@@ -1373,7 +1403,20 @@ export class SchemaState {
 	/**
 	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
 	 */
-	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }) {
+	async updateTableMetadata(
+		tableName: string, 
+		metadata: { 
+			public?: boolean; 
+			customDomain?: string | null; 
+			cors?: boolean; 
+			class?: string; 
+			path?: string;
+			methods?: string[];
+			schema?: Record<string, any>;
+			folders?: Record<string, string>;
+			[key: string]: any;
+		}
+	) {
 		const targetNode = this.nodes.find(n => n.id === tableName);
 		const target = (targetNode?.data as any)?.target || 'd1';
 
@@ -1395,25 +1438,87 @@ export class SchemaState {
 	}
 
 	/**
+	 * Deletes an RPC method from a Durable Object actor.
+	 */
+	async deleteMethod(doName: string, methodName: string) {
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === doName);
+			if (binding && binding.extra?.methods) {
+				binding.extra.methods = binding.extra.methods.filter(
+					(m: string) => m !== methodName && !m.startsWith(methodName + '(')
+				);
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === doName);
+		const strata = targetNode?.data?.strata || {};
+		const currentMethods = strata.methods || [];
+		const updatedMethods = currentMethods.filter(
+			(m: string) => m !== methodName && !m.startsWith(methodName + '(')
+		);
+		await this.updateTableMetadata(doName, { methods: updatedMethods });
+	}
+
+	/**
+	 * Deletes a key pattern from a KV Namespace.
+	 */
+	async deletePattern(kvName: string, patternName: string) {
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === kvName);
+			if (binding && binding.extra?.schema) {
+				delete binding.extra.schema[patternName];
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === kvName);
+		const strata = targetNode?.data?.strata || {};
+		const currentSchema = { ...(strata.schema || {}) };
+		delete currentSchema[patternName];
+		await this.updateTableMetadata(kvName, { schema: currentSchema });
+	}
+
+	/**
+	 * Deletes a folder prefix mapping from an R2 Bucket.
+	 */
+	async deleteFolder(r2Name: string, folderName: string) {
+		const baseKey = folderName.replace(/\/$/, '');
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === r2Name);
+			if (binding && binding.extra?.folders) {
+				delete binding.extra.folders[baseKey];
+				delete binding.extra.folders[folderName];
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === r2Name);
+		const strata = targetNode?.data?.strata || {};
+		const currentFolders = { ...(strata.folders || {}) };
+		delete currentFolders[baseKey];
+		delete currentFolders[folderName];
+		await this.updateTableMetadata(r2Name, { folders: currentFolders });
+	}
+
+	/**
 	 * Deletes a column from a table in the schema and syncs to disk.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
 		const targetNode = this.nodes.find(n => n.id === tableName);
-		const target = (targetNode?.data as any)?.target || 'd1';
+		const target = targetNode?.data?.target || 'd1';
 
-		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
-			const binding = this.wranglerBindings.find(b => b.name === tableName);
-			if (binding) {
-				if (binding.type === 'do' && binding.extra?.methods) {
-					binding.extra.methods = binding.extra.methods.filter((m: string) => m !== colName && !m.startsWith(colName + '('));
-				} else if (binding.type === 'kv' && binding.extra?.schema) {
-					delete binding.extra.schema[colName];
-				} else if (binding.type === 'r2' && binding.extra?.folders) {
-					delete binding.extra.folders[colName];
-				}
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
+		if (target === 'do') {
+			return this.deleteMethod(tableName, colName);
+		}
+		if (target === 'kv') {
+			return this.deletePattern(tableName, colName);
+		}
+		if (target === 'r2') {
+			return this.deleteFolder(tableName, colName);
 		}
 
 		const targetFile = this.getTargetFilePath(tableName);
@@ -1460,8 +1565,8 @@ export class SchemaState {
 		const { removeEdgeFromSchema, resolveRelativePath } = await import("../parser");
 		
 		const matchingEdge = this.edges.find(e => 
-			e.source === source && e.target === target && 
-			(name ? (e.label === name || e.sourceHandle === name || (e.data as any)?.sourceCol === name) : true)
+			((e.source === source && e.target === target) || (e.source === target && e.target === source)) && 
+			(name ? (e.label === name || e.sourceHandle === name || (e.data as any)?.sourceCol === name || (e.data as any)?.relationNames?.includes(name)) : true)
 		);
 		const isVirtual = matchingEdge?.data?.isVirtual ?? false;
 
@@ -1684,6 +1789,99 @@ export class SchemaState {
 	}
 
 	/**
+	 * Adds an RPC method to a Durable Object actor.
+	 */
+	async addMethod(doName: string, methodName: string, returnType: string = 'Promise<void>') {
+		const targetNode = this.nodes.find(n => n.id === doName);
+		const existingMethods = targetNode?.data?.methods || targetNode?.data?.columns || [];
+		if (existingMethods.some(m => m.name.toLowerCase() === methodName.trim().toLowerCase() || m.name.startsWith(methodName.trim() + '('))) {
+			toast.warning("Method Already Exists", {
+				description: `Durable Object "${doName}" already has a method named "${methodName}".`
+			});
+			return;
+		}
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === doName);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.methods = binding.extra.methods || [];
+				binding.extra.methods.push(methodName);
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentMethods = strata.methods || [];
+		const updatedMethods = [...currentMethods, methodName];
+		await this.updateTableMetadata(doName, { methods: updatedMethods });
+	}
+
+	/**
+	 * Adds a key pattern to a KV Namespace cache.
+	 */
+	async addPattern(kvName: string, patternName: string, valueType: string = 'string', ttl?: number) {
+		const targetNode = this.nodes.find(n => n.id === kvName);
+		const existingPatterns = targetNode?.data?.patterns || targetNode?.data?.columns || [];
+		if (existingPatterns.some(p => p.name.toLowerCase() === patternName.trim().toLowerCase())) {
+			toast.warning("Pattern Already Exists", {
+				description: `KV Namespace "${kvName}" already has a pattern named "${patternName}".`
+			});
+			return;
+		}
+
+		const val = ttl !== undefined ? { type: valueType, ttl } : valueType;
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === kvName);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.schema = binding.extra.schema || {};
+				binding.extra.schema[patternName] = val;
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentSchema = { ...(strata.schema || {}) };
+		currentSchema[patternName] = val;
+		await this.updateTableMetadata(kvName, { schema: currentSchema });
+	}
+
+	/**
+	 * Adds a folder prefix mapping to an R2 Bucket.
+	 */
+	async addFolder(r2Name: string, folderName: string, mimeType: string = '*/*') {
+		const cleanName = folderName.endsWith('/') ? folderName : `${folderName}/`;
+		const targetNode = this.nodes.find(n => n.id === r2Name);
+		const existingFolders = targetNode?.data?.folders || targetNode?.data?.columns || [];
+		if (existingFolders.some(f => f.name.toLowerCase() === cleanName.toLowerCase())) {
+			toast.warning("Folder Prefix Already Exists", {
+				description: `R2 Bucket "${r2Name}" already has a prefix named "${cleanName}".`
+			});
+			return;
+		}
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === r2Name);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.folders = binding.extra.folders || {};
+				binding.extra.folders[folderName.replace(/\/$/, '')] = mimeType;
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentFolders = { ...(strata.folders || {}) };
+		currentFolders[folderName.replace(/\/$/, '')] = mimeType;
+		await this.updateTableMetadata(r2Name, { folders: currentFolders });
+	}
+
+	/**
 	 * Adds a column to a table and syncs to disk.
 	 */
 	async addColumn(
@@ -1694,31 +1892,23 @@ export class SchemaState {
 		referencesColumn?: string
 	) {
 		const targetNode = this.nodes.find(n => n.id === tableName);
-		const existingCols = (targetNode?.data as any)?.columns || [];
+		const target = targetNode?.data?.target || 'd1';
+
+		if (target === 'do') {
+			return this.addMethod(tableName, columnName, type);
+		}
+		if (target === 'kv') {
+			return this.addPattern(tableName, columnName, type);
+		}
+		if (target === 'r2') {
+			return this.addFolder(tableName, columnName, type);
+		}
+
+		const existingCols = targetNode?.data?.columns || [];
 		if (existingCols.some((c: any) => c.name.toLowerCase() === columnName.trim().toLowerCase())) {
 			toast.warning("Column Already Exists", {
 				description: `Table "${tableName}" already has a column named "${columnName}".`
 			});
-			return;
-		}
-
-		const target = (targetNode?.data as any)?.target || 'd1';
-		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
-			const binding = this.wranglerBindings.find(b => b.name === tableName);
-			if (binding) {
-				binding.extra = binding.extra || {};
-				if (binding.type === 'do') {
-					binding.extra.methods = binding.extra.methods || [];
-					binding.extra.methods.push(columnName);
-				} else if (binding.type === 'kv') {
-					binding.extra.schema = binding.extra.schema || {};
-					binding.extra.schema[columnName] = type;
-				} else if (binding.type === 'r2') {
-					binding.extra.folders = binding.extra.folders || {};
-					binding.extra.folders[columnName] = type;
-				}
-			}
-			await this.parseAndApply(this.rawCode);
 			return;
 		}
 

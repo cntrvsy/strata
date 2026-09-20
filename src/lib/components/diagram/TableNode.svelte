@@ -9,6 +9,9 @@
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import DurableObjectNode from "#lib/components/diagram/DurableObjectNode.svelte";
+  import KVNamespaceNode from "#lib/components/diagram/KVNamespaceNode.svelte";
+  import R2BucketNode from "#lib/components/diagram/R2BucketNode.svelte";
   import {
     Database,
     Key,
@@ -18,6 +21,8 @@
     HardDrive,
     CircleX,
     TriangleAlert,
+    Folder,
+    ShieldCheck,
   } from "lucide-svelte";
 
   const { data, selected, dragging } = $props<{
@@ -143,6 +148,13 @@
   );
 </script>
 
+{#if data.target === "do"}
+  <DurableObjectNode {data} {selected} {dragging} />
+{:else if data.target === "kv"}
+  <KVNamespaceNode {data} {selected} {dragging} />
+{:else if data.target === "r2"}
+  <R2BucketNode {data} {selected} {dragging} />
+{:else}
 <div
   class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
   data-testid="table-node"
@@ -192,18 +204,20 @@
         >
         {#if data.moduleInfo && !data.moduleInfo.isRootFile}
           <span
-            class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded gap-1"
+            class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded flex items-center gap-1"
             title={`Defined in ${data.moduleInfo.sourceFilePath}`}
           >
-            📁 {data.moduleInfo.moduleName}
+            <Folder class="w-3 h-3" />
+            {data.moduleInfo.moduleName}
           </span>
         {/if}
         {#if (data as any).isBetterAuth}
           <span
-            class="badge badge-sm badge-secondary/20 border border-secondary/40 text-secondary font-semibold text-[9px] px-1.5 py-0.5 rounded gap-1"
+            class="badge badge-sm badge-secondary/20 border border-secondary/40 text-secondary font-semibold text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Managed by Better Auth"
           >
-            🛡️ Better Auth
+            <ShieldCheck class="w-3 h-3" />
+            Better Auth
           </span>
         {/if}
       </div>
@@ -368,3 +382,5 @@
     style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
 </div>
+{/if}
+

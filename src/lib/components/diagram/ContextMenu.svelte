@@ -105,7 +105,7 @@
         class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-40 border-b border-base-300/40 mb-1 leading-none text-base-content/70 flex items-center justify-between"
       >
         <span>{targetId}</span>
-        <span class="badge badge-xs badge-neutral text-[8px] uppercase">{nodeData?.target || 'd1'}</span>
+        <span class="badge badge-xs {nodeData?.target === 'do' ? 'badge-secondary' : nodeData?.target === 'kv' ? 'badge-warning' : nodeData?.target === 'r2' ? 'badge-info' : 'badge-neutral'} text-[8px] uppercase">{nodeData?.target || 'd1'}</span>
       </div>
       <button
         class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
@@ -135,7 +135,15 @@
         }}
       >
         <Copy class="w-3.5 h-3.5 opacity-60 text-info" />
-        Copy Drizzle Code
+        {#if nodeData?.target === "do"}
+          Copy DO Interface
+        {:else if nodeData?.target === "kv"}
+          Copy KV Interface
+        {:else if nodeData?.target === "r2"}
+          Copy R2 Interface
+        {:else}
+          Copy Drizzle Code
+        {/if}
       </button>
     {/if}
   {:else if type === "canvas"}

@@ -15,7 +15,7 @@ const elk = new ELK();
  * Computes an organized, overlap-free layout for schema tables using the ELK layered algorithm.
  * Adapts node heights and widths dynamically depending on table names, columns, and Compact Mode.
  */
-export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[]> {
+export async function arrangeLayout<T extends Node>(nodes: T[], edges: Edge[]): Promise<T[]> {
   if (nodes.length === 0) return [];
 
   const isCompact = schemaState.compactMode;
@@ -25,6 +25,37 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
         id: node.id,
         width: 270,
         height: 180
+      };
+    }
+
+    if (node.type === 'do') {
+      const methods = (node.data?.methods as any[]) || (node.data?.columns as any[]) || [];
+      const hasPath = Boolean((node.data?.strata as any)?.path);
+      const height = Math.max(140, 44 + 32 + 24 + Math.max(1, methods.length) * 32 + (hasPath ? 30 : 0) + 16);
+      return {
+        id: node.id,
+        width: 270,
+        height
+      };
+    }
+
+    if (node.type === 'kv') {
+      const patterns = (node.data?.patterns as any[]) || (node.data?.columns as any[]) || [];
+      const height = Math.max(130, 44 + 24 + Math.max(1, patterns.length) * 32 + 30 + 16);
+      return {
+        id: node.id,
+        width: 260,
+        height
+      };
+    }
+
+    if (node.type === 'r2') {
+      const folders = (node.data?.folders as any[]) || (node.data?.columns as any[]) || [];
+      const height = Math.max(130, 44 + 32 + 24 + Math.max(1, folders.length) * 32 + 30 + 16);
+      return {
+        id: node.id,
+        width: 260,
+        height
       };
     }
 

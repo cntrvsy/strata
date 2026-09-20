@@ -1095,7 +1095,17 @@ export function updateColumnModifiersInSchema(
 export function updateTableMetadataInSchema(
 	code: string,
 	tableName: string,
-	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }
+	metadata: {
+		public?: boolean;
+		customDomain?: string | null;
+		cors?: boolean;
+		class?: string;
+		path?: string;
+		methods?: string[];
+		schema?: Record<string, any>;
+		folders?: Record<string, string>;
+		[key: string]: any;
+	}
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
@@ -1145,6 +1155,15 @@ export function updateTableMetadataInSchema(
 						} else {
 							delete strata.path;
 						}
+					}
+					if (metadata.methods !== undefined) {
+						strata.methods = metadata.methods;
+					}
+					if (metadata.schema !== undefined) {
+						strata.schema = metadata.schema;
+					}
+					if (metadata.folders !== undefined) {
+						strata.folders = metadata.folders;
 					}
 
 					doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));

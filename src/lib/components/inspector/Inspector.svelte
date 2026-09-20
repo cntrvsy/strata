@@ -100,7 +100,7 @@
     if (target === "d1" && rawCode) {
       const pattern = new RegExp(
         `(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
-        "m"
+        "m",
       );
       const match = rawCode.match(pattern);
       if (match) {
@@ -116,7 +116,8 @@
           if (col.isPk) chain += ".primaryKey()";
           if (col.isNotNull) chain += ".notNull()";
           if (col.isUnique) chain += ".unique()";
-          if (col.default !== undefined) chain += `.default(${JSON.stringify(col.default)})`;
+          if (col.default !== undefined)
+            chain += `.default(${JSON.stringify(col.default)})`;
           return `  ${col.name}: ${chain},`;
         })
         .join("\n");
@@ -199,7 +200,10 @@
             <button
               class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 text-primary"
               onclick={() => {
-                const targetFile = moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(selectedNode.id) || schemaState.filePath;
+                const targetFile =
+                  moduleInfo?.sourceFilePath ||
+                  schemaState.getTargetFilePath(selectedNode.id) ||
+                  schemaState.filePath;
                 const line = (data as any).line;
                 if (targetFile) {
                   PlatformService.openInEditor(targetFile, line);
@@ -232,7 +236,9 @@
               <span>Diagnostic Warning{nodeIssues.length > 1 ? "s" : ""}</span>
             </div>
             {#each nodeIssues as issue}
-              <div class="flex flex-col gap-1 border-b border-warning/10 pb-2 last:border-b-0 last:pb-0">
+              <div
+                class="flex flex-col gap-1 border-b border-warning/10 pb-2 last:border-b-0 last:pb-0"
+              >
                 <p class="text-[11px] text-base-content/80 leading-relaxed">
                   {issue.message}
                 </p>
@@ -271,7 +277,8 @@
             onclick={() => (activeTab = "relations")}
           >
             Relationships ({schemaState.edges.filter(
-              (e) => e.source === selectedNode.id || e.target === selectedNode.id,
+              (e) =>
+                e.source === selectedNode.id || e.target === selectedNode.id,
             ).length})
           </button>
         </div>
@@ -319,15 +326,27 @@
                   No relationships or edge bindings connected to this entity.
                 </div>
               {:else}
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-2.5">
                   {#each tableEdges as edge}
                     {@const isSource = edge.source === selectedNode.id}
                     {@const otherNode = isSource ? edge.target : edge.source}
                     {@const isVirtual = edge.data?.isVirtual}
-                    {@const isSynthetic = edge.data?.isSynthetic}
-                    {@const card = edge.data?.cardinality || "unknown"}
+                    {@const isSynthetic =
+                      edge.data?.isSynthetic || edge.data?.isIdentityBoundary}
+                    {@const isPhysical =
+                      edge.data?.isPhysical || (!isVirtual && !isSynthetic)}
+                    {@const card =
+                      edge.data?.cardinality &&
+                      edge.data.cardinality !== "unknown"
+                        ? edge.data.cardinality
+                        : isSynthetic
+                          ? "Topology"
+                          : isPhysical
+                            ? "FK"
+                            : "Virtual"}
+                    {@const relNames: string[] = ((edge.data as any)?.relationNames as string[]) || []}
                     <div
-                      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/40 hover:border-base-300/80 transition-all group animate-in fade-in duration-150"
+                      class="bg-base-200/40 p-3 rounded-box flex flex-col gap-2 border border-base-300/60 hover:border-base-300 transition-all group animate-in fade-in duration-150 shadow-2xs"
                     >
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
@@ -338,33 +357,85 @@
                           >
                             {isSource ? "→" : "←"}
                           </span>
-                          <span class="font-bold text-xs text-base-content font-mono"
+                          <span
+                            class="font-bold text-xs text-base-content font-mono"
                             >{otherNode}</span
                           >
                         </div>
 
                         <span
-                          class="badge badge-outline badge-xs text-[9px] uppercase font-mono text-base-content/80 px-1.5 py-0.5 rounded leading-none"
+                          class="badge {isSynthetic
+                            ? 'badge-accent'
+                            : isPhysical
+                              ? 'badge-primary'
+                              : 'badge-secondary'} badge-outline badge-xs text-[9px] uppercase font-mono px-1.5 py-0.5 rounded leading-none"
                         >
                           {card}
                         </span>
                       </div>
 
+                      <!-- Pedigree Badges & Details -->
                       <div
-                        class="flex items-center justify-between mt-1 text-[10px] text-base-content/60"
+                        class="flex flex-col gap-1.5 pt-1 border-t border-base-300/30 text-[10px]"
                       >
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center justify-between">
                           <span
-                            class="px-1.5 py-0.5 rounded bg-base-200 font-mono text-[9px] font-semibold text-base-content/70 border border-base-300/60"
+                            class="px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold border {isSynthetic
+                              ? 'bg-accent/10 text-accent border-accent/20'
+                              : isPhysical
+                                ? 'bg-primary/10 text-primary border-primary/20'
+                                : 'bg-secondary/10 text-secondary border-secondary/20'}"
                           >
-                            {isSynthetic ? "Architectural" : isVirtual ? "Logical" : "Foreign Key"}
+                            {isSynthetic
+                              ? "Cloudflare Topology"
+                              : isPhysical
+                                ? "Physical Constraint"
+                                : "Virtual Query-Only"}
                           </span>
+
                           {#if edge.label}
-                            <span class="font-mono text-[10px] opacity-75"
-                              >{edge.label}</span
+                            <span
+                              class="font-mono text-[10px] opacity-75 font-medium truncate max-w-37.5"
                             >
+                              {edge.label}
+                            </span>
                           {/if}
                         </div>
+
+                        {#if isPhysical && edge.data?.sourceCol}
+                          <div
+                            class="text-[10px] text-base-content/75 font-mono flex items-center gap-1 mt-0.5"
+                          >
+                            <span class="opacity-50 text-[9px]">SQL:</span>
+                            <span class="truncate"
+                              >{edge.source}.{edge.data.sourceCol} → {edge.target}.{edge
+                                .data?.targetCol || "id"}</span
+                            >
+                          </div>
+                        {/if}
+
+                        {#if relNames.length > 0}
+                          <div
+                            class="text-[10px] text-base-content/75 font-mono flex items-center gap-1"
+                          >
+                            <span class="opacity-50 text-[9px]">Drizzle:</span>
+                            <span class="text-primary font-semibold truncate"
+                              >{relNames.join(", ")}</span
+                            >
+                          </div>
+                        {/if}
+
+                        {#if isVirtual && !isSynthetic}
+                          <div
+                            class="text-[9px] text-amber-500/90 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded mt-0.5 leading-relaxed"
+                          >
+                            Virtual Drizzle relation without SQLite foreign key
+                            constraint. Consider adding <code
+                              class="font-mono text-[9px] font-bold"
+                              >.references()</code
+                            > for SQL data integrity.
+                          </div>
+                        {/if}
                       </div>
                     </div>
                   {/each}
@@ -377,7 +448,9 @@
           {#if drizzleSnippet}
             <div class="flex flex-col gap-2 pt-3 border-t border-base-300/60">
               <div class="flex items-center justify-between px-1">
-                <span class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider flex items-center gap-1.5">
+                <span
+                  class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider flex items-center gap-1.5"
+                >
                   <Code class="w-3 h-3 text-primary" />
                   <span>Definition Preview</span>
                 </span>
@@ -396,7 +469,9 @@
                   {/if}
                 </button>
               </div>
-              <div class="relative rounded-box bg-base-200/50 border border-base-300/80 p-3 overflow-x-auto text-[11px] font-mono leading-relaxed text-base-content/90 max-h-48 scrollbar-thin select-text">
+              <div
+                class="relative rounded-box bg-base-200/50 border border-base-300/80 p-3 overflow-x-auto text-[11px] font-mono leading-relaxed text-base-content/90 max-h-48 scrollbar-thin select-text"
+              >
                 <pre class="whitespace-pre"><code>{drizzleSnippet}</code></pre>
               </div>
             </div>

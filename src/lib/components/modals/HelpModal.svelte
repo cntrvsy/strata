@@ -632,7 +632,7 @@ ${plainContent.trim()}
         "Model D1-resident authentication clusters and external Cloud Identity Providers as first-class visual nodes.",
       content: `<p class="mb-2">Strata treats identity as a core architectural topology layer:</p>
                 <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>D1-Resident Auth (Better Auth / Lucia):</strong> Strata automatically detects standard auth tables (<code>user</code>, <code>session</code>, <code>account</code>, <code>verification</code>) and tags them with <code>🛡️ Better Auth</code>. Add custom fields (e.g. <code>stripeCustomerId</code>, <code>role</code>) directly to the user table without breaking CLI compatibility.</li>
+                  <li><strong>D1-Resident Auth (Better Auth / Lucia):</strong> Strata automatically detects standard auth tables (<code>user</code>, <code>session</code>, <code>account</code>, <code>verification</code>) and tags them with <code>Better Auth</code>. Add custom fields (e.g. <code>stripeCustomerId</code>, <code>role</code>) directly to the user table without breaking CLI compatibility.</li>
                   <li><strong>Cloud IdP Boundaries (Clerk & WorkOS):</strong> When tables contain external identity references (e.g. <code>clerkUserId</code> or <code>workosOrgId</code>), Strata spawns visual Identity Boundary Nodes with animated connection edges.</li>
                   <li><strong>Zero-Lock-in Webhook Mirror Blueprints:</strong> Copy pre-architected local D1 mirror tables (<code>clerkUsers</code> or <code>workosUsers</code>) for fast local joins and webhook sync, complete with copyable Drizzle migration definitions and zero barrel contamination.</li>
                   <li><strong>Tailored Identity Inspector:</strong> Selecting an identity node provides provider-specific branding, bound table navigation, official documentation links, and webhook configuration status.</li>
@@ -767,29 +767,35 @@ export const users = sqliteTable("users", {});</pre>
     {
       id: "erd-relationships",
       category: "relationships",
-      title: "Physical vs Logical Relationships",
-      tags: ["relations", "cardinality", "foreign", "keys"],
+      title: "Unified ERD Relationships & Topology",
+      tags: ["relations", "cardinality", "foreign", "keys", "drizzle", "erd"],
       summary:
-        "Understand differences between solid SQLite foreign key lines and dashed logical relationships.",
-      content: `<p class="mb-2">Strata displays relationship lines based on database structure:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Solid Lines (FK):</strong> Extracted from SQLite <code>.references()</code> rules. Enforces engine constraint validation.</li>
-                  <li><strong>Dashed Lines (Relations):</strong> Modeled from Drizzle's logical <code>relations()</code> API queries.</li>
-                  <li><strong>Directional Arrowheads:</strong> Points from the Child table (has the key) to the Parent table (One side).</li>
+        "Understand Strata's unified 2-primitive connection architecture: Canonical Table-to-Table ERD lines and Cloudflare Service Topology links.",
+      content: `<p class="mb-2">Strata consolidates relational wiring down to two clean visual primitives:</p>
+                <ul class="list-disc pl-4 space-y-2 text-xs">
+                  <li><strong>Canonical Table-to-Table ERD Line:</strong> Exactly one edge connects related tables, merging physical SQLite <code>.references()</code> constraints and Drizzle ORM's <code>relations()</code> query accessors.
+                    <ul class="list-circle pl-4 mt-1 space-y-1 text-base-content/75">
+                      <li><strong>Solid Line (2px):</strong> Enforced database foreign key constraint (data integrity guaranteed).</li>
+                      <li><strong>Dashed Line:</strong> Virtual Drizzle query relation without physical SQLite constraints.</li>
+                      <li><strong>Cardinality Badges:</strong> Displays <code>1:N</code>, <code>1:1</code>, or <code>N:1</code> based on relational analysis.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cloudflare Service Topology Link:</strong> Curved Bezier pipeline lines connecting SQL tables to non-relational Cloudflare primitives (KV Namespaces, Durable Objects, R2 Buckets, and Clerk/WorkOS Auth IdPs).</li>
+                  <li><strong>Multi-FK Preservation:</strong> Multiple distinct foreign keys between the same tables (e.g. <code>sender_id</code> vs <code>receiver_id</code>) remain separate lines.</li>
                 </ul>`,
     },
     {
       id: "synthetic-relations",
       category: "relationships",
-      title: "Synthetic JSDoc Cross-Storage Relationships",
-      tags: ["synthetic", "jsdoc", "relations", "cross"],
+      title: "Cloudflare Service Topology Links",
+      tags: ["synthetic", "jsdoc", "relations", "cross", "kv", "do", "r2"],
       summary:
         "Map connections between D1 tables and KV, DO, or R2 targets without database engine overhead.",
-      content: `<p class="mb-2">Allows bridging SQL records to Cloudflare storage bindings:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Zero Overhead:</strong> Saves connections in table JSDoc metadata <code>relations</code> array.</li>
-                  <li><strong>Dashed Rendering:</strong> Display logical paths across databases and file binders visually.</li>
-                  <li><strong>Direct Binding Sync:</strong> Keeps your worker bindings in sync with schema declarations without boilerplate.</li>
+      content: `<p class="mb-2">Bridge relational SQL records to Cloudflare edge bindings:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Zero Runtime Overhead:</strong> Stored purely in JSDoc metadata or the root <code>@strata-layout</code> manifest.</li>
+                  <li><strong>Curved Pipeline Rendering:</strong> Rendered with distinct curved Bezier paths and animated pulses to separate service bindings from database foreign keys.</li>
+                  <li><strong>Side-by-Side Editor Workflow:</strong> Edit your Worker bindings in your external editor and watch Strata update in real time.</li>
                 </ul>`,
     },
     {
