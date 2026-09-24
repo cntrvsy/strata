@@ -9,7 +9,7 @@ vi.mock('#lib/services/platform', () => ({
 		getDistributionChannel: vi.fn().mockResolvedValue('standalone'),
 		openExternal: vi.fn().mockResolvedValue(undefined),
 		listenEvent: vi.fn(async (event: string, cb: any) => () => {}),
-		checkForUpdate: vi.fn(),
+		checkForUpdate: vi.fn<typeof PlatformService.checkForUpdate>(),
 		downloadAndInstallUpdate: vi.fn(),
 		relaunchApp: vi.fn(),
 	}
@@ -54,7 +54,7 @@ describe('UpdateState Unit Tests', () => {
 	});
 
 	it('should set status to up-to-date when checkForUpdate returns null (e.g., non-Tauri web env)', async () => {
-		vi.mocked(PlatformService.checkForUpdate).mockResolvedValueOnce(null as any);
+		vi.mocked(PlatformService.checkForUpdate).mockResolvedValueOnce(null);
 
 		await store.check();
 

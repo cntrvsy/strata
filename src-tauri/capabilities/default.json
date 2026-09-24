@@ -12,7 +12,14 @@
         { "url": "ms-windows-store:*" },
         { "url": "https://*" },
         { "url": "vscode:*" },
-        { "url": "cursor:*" }
+        { "url": "cursor:*" },
+        { "url": "zed:*" }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "**" }
       ]
     },
     "dialog:allow-open",

@@ -9,11 +9,10 @@
   import { schemaState } from "#lib/state";
   import { toast } from "svelte-sonner";
   import ProjectSettingsModal from "./ProjectSettingsModal.svelte";
-  import RenameEntityModal from "./RenameEntityModal.svelte";
   import ConfirmModal from "./ConfirmModal.svelte";
-  import ScaffoldAuthModal from "./ScaffoldAuthModal.svelte";
+  import HelpModal from "./HelpModal.svelte";
   import NewEntityModal from "#lib/components/forms/entity/NewEntityModal.svelte";
-  import CodeViewerModal from "./CodeViewerModal.svelte";
+  import ConnectionModelerModal from "./ConnectionModelerModal.svelte";
 
   // Watch for critical errors
   $effect(() => {
@@ -74,8 +73,7 @@
 </script>
 
 <NewEntityModal />
-<ScaffoldAuthModal />
+<HelpModal bind:show={schemaState.showHelpModal} />
 <ProjectSettingsModal />
-<RenameEntityModal />
 <ConfirmModal />
-<CodeViewerModal />
+<ConnectionModelerModal />

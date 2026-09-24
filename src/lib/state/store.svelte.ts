@@ -11,9 +11,24 @@ import { createStateMachine } from "#lib/state/fsm";
 import { OperationQueue } from "#lib/state/queue";
 import { toast } from "svelte-sonner";
 
-import { resolveRelativePath, getRelativeImportSpecifier } from "#lib/parser";
+import { resolveRelativePath, getRelativeImportSpecifier, createIsolatedProject, type StrataNode, type StrataEdge } from "#lib/parser";
 import type { AuditIssue, PackageWrapperInfo } from "#lib/parser/types";
 import { uiState } from "#lib/state/uiStore.svelte";
+
+export type NodeHighlightStatus = 'self' | 'upstream' | 'downstream' | 'transitive' | 'dimmed' | 'normal';
+
+export interface HighlightGraph {
+	isActive: boolean;
+	primaryActiveNodeId: string | null;
+	activeNodeIds: Set<string>;
+	getNodeHighlight: (nodeId: string) => NodeHighlightStatus;
+	isEdgeActive: (edgeId: string) => boolean;
+	isColumnHighlighted: (nodeId: string, colName: string) => boolean;
+	isFocusLocked: boolean;
+	focusLockedNodeId: string | null;
+	highlightMode: 'direct' | 'transitive';
+	connectedCount: number;
+}
 
 
 /**
@@ -214,8 +229,14 @@ async function loadExternalSchemas(
 	return externalFilesMap;
 }
 
-function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseWranglerBindings(tomlContent: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
+	let main: string | undefined = undefined;
+	const mainMatch = tomlContent.match(/^\s*main\s*=\s*["']([^"']+)["']/m);
+	if (mainMatch) {
+		main = mainMatch[1];
+	}
+
 	const blocks = tomlContent.split(/\[\[/);
 	
 	for (const block of blocks) {
@@ -224,19 +245,24 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 		
 		if (headerLine.startsWith('kv_namespaces')) {
 			let name = '';
+			let id = '';
 			for (const line of lines) {
 				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
 				if (match) {
 					name = match[1];
-					break;
+				}
+				const idMatch = line.match(/^\s*id\s*=\s*["']([^"']+)["']/);
+				if (idMatch) {
+					id = idMatch[1];
 				}
 			}
 			if (name) {
-				bindings.push({ type: 'kv', name, extra: {} });
+				bindings.push({ type: 'kv', name, extra: { id: id || undefined } });
 			}
 		} else if (headerLine.startsWith('durable_objects.bindings')) {
 			let name = '';
 			let className = '';
+			let scriptName = '';
 			for (const line of lines) {
 				const nameMatch = line.match(/^\s*name\s*=\s*["']([^"']+)["']/);
 				if (nameMatch) {
@@ -246,68 +272,257 @@ function parseWranglerBindings(tomlContent: string): { type: 'kv' | 'do' | 'r2';
 				if (classMatch) {
 					className = classMatch[1];
 				}
+				const scriptMatch = line.match(/^\s*script_name\s*=\s*["']([^"']+)["']/);
+				if (scriptMatch) {
+					scriptName = scriptMatch[1];
+				}
 			}
 			if (name) {
-				bindings.push({ type: 'do', name, extra: { class: className } });
+				bindings.push({
+					type: 'do',
+					name,
+					extra: {
+						class: className,
+						...(scriptName ? { script: scriptName } : {})
+					}
+				});
 			}
 		} else if (headerLine.startsWith('r2_buckets')) {
 			let name = '';
+			let bucketName = '';
 			for (const line of lines) {
 				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
 				if (match) {
 					name = match[1];
-					break;
+				}
+				const bMatch = line.match(/^\s*bucket_name\s*=\s*["']([^"']+)["']/);
+				if (bMatch) {
+					bucketName = bMatch[1];
 				}
 			}
 			if (name) {
-				bindings.push({ type: 'r2', name, extra: {} });
+				bindings.push({ type: 'r2', name, extra: { bucket_name: bucketName || undefined } });
 			}
 		}
 	}
-	return bindings;
+	return { bindings, main };
 }
 
-function parseJsonBindings(jsonContent: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseJsonBindings(jsonContent: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	const bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] = [];
 	const trimmed = jsonContent.trim();
 	if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-		return bindings;
+		return { bindings };
 	}
 	try {
 		const data = parseCleanJson(jsonContent);
+		const main = typeof data.main === 'string' ? data.main : undefined;
 
 		if (Array.isArray(data.kv_namespaces)) {
 			for (const kv of data.kv_namespaces) {
 				if (kv && kv.binding) {
-					bindings.push({ type: 'kv', name: kv.binding, extra: {} });
+					bindings.push({
+						type: 'kv',
+						name: kv.binding,
+						extra: {
+							id: kv.id || undefined,
+							binding: kv.binding
+						}
+					});
 				}
 			}
 		}
+
+		// Detect SQLite DO storage from migrations (e.g. new_sqlite_classes: ["TelemetrySessionDO"])
+		const sqliteDoClasses = new Set<string>();
+		if (Array.isArray(data.migrations)) {
+			for (const mig of data.migrations) {
+				if (Array.isArray(mig?.new_sqlite_classes)) {
+					for (const cls of mig.new_sqlite_classes) {
+						if (typeof cls === 'string') sqliteDoClasses.add(cls);
+					}
+				}
+			}
+		}
+
 		if (data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
 			for (const dobj of data.durable_objects.bindings) {
 				if (dobj && dobj.name) {
-					bindings.push({ type: 'do', name: dobj.name, extra: { class: dobj.class_name } });
+					const className = dobj.class_name || undefined;
+					const isSqlite = className ? sqliteDoClasses.has(className) : false;
+					bindings.push({
+						type: 'do',
+						name: dobj.name,
+						extra: {
+							class: className,
+							storage: isSqlite ? 'sqlite' : 'kv',
+							binding: dobj.name,
+							...(dobj.script_name ? { script_name: dobj.script_name } : {})
+						}
+					});
 				}
 			}
 		}
 		if (Array.isArray(data.r2_buckets)) {
 			for (const r2 of data.r2_buckets) {
 				if (r2 && r2.binding) {
-					bindings.push({ type: 'r2', name: r2.binding, extra: {} });
+					bindings.push({
+						type: 'r2',
+						name: r2.binding,
+						extra: {
+							bucket_name: r2.bucket_name || undefined,
+							binding: r2.binding
+						}
+					});
 				}
 			}
 		}
+		return { bindings, main };
 	} catch (e) {
 		console.warn("[Strata] Failed to parse JSON/JSONC wrangler config:", e);
 	}
-	return bindings;
+	return { bindings };
 }
 
-function parseWranglerContent(fileName: string, content: string): { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[] {
+function parseWranglerContent(fileName: string, content: string): { bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]; main?: string } {
 	if (fileName.endsWith('.json') || fileName.endsWith('.jsonc')) {
 		return parseJsonBindings(content);
 	}
 	return parseWranglerBindings(content);
+}
+
+function extractClassMethodsFromCode(code: string, className?: string): { name: string; definition: string; isPk: boolean; notNull: boolean; isReferences: boolean }[] {
+	try {
+		const { sourceFile: sf } = createIsolatedProject('class_methods_check.ts', code);
+		const classDecl = (className ? sf.getClass(className) : undefined) || sf.getClasses()[0];
+		if (classDecl) {
+			return (classDecl.getMethods() as any[])
+				.filter((m: any) => m.getScope() === 'public' || !m.getScope())
+				.map((m: any) => {
+					const paramStr = (m.getParameters() as any[]).map((p: any) => p.getText()).join(', ');
+					const retType = m.getReturnTypeNode()?.getText() || 'any';
+					return {
+						name: `${m.getName()}(${paramStr})`,
+						definition: retType,
+						isPk: false,
+						notNull: false,
+						isReferences: false
+					};
+				});
+		}
+	} catch {}
+	return [];
+}
+
+/**
+ * Option 1: Authoritative Cloudflare DO Class Resolution.
+ * Inspects the Worker entrypoint (`main` in wrangler.jsonc / wrangler.toml) to discover
+ * where the DO class is declared or re-exported, and dynamically extracts its RPC methods.
+ */
+async function resolveDurableObjectClassFromEntrypoint(
+	wranglerDir: string,
+	mainEntry: string | undefined,
+	className: string
+): Promise<{ filePath: string; methods: { name: string; definition: string; isPk: boolean; notNull: boolean; isReferences: boolean }[] } | null> {
+	if (!className) return null;
+
+	const entryCandidates = mainEntry 
+		? [
+			wranglerDir + '/' + mainEntry,
+			wranglerDir + '/' + (mainEntry.endsWith('.ts') || mainEntry.endsWith('.js') ? mainEntry : mainEntry + '.ts'),
+			wranglerDir + '/' + (mainEntry.endsWith('.ts') || mainEntry.endsWith('.js') ? mainEntry : mainEntry + '/index.ts'),
+		]
+		: [
+			wranglerDir + '/src/index.ts',
+			wranglerDir + '/src/worker.ts',
+			wranglerDir + '/index.ts',
+		];
+
+	let mainPath: string | null = null;
+	let mainContent: string | null = null;
+	for (const candidate of entryCandidates) {
+		try {
+			const text = await PlatformService.readText(candidate);
+			if (text) {
+				mainPath = candidate;
+				mainContent = text;
+				break;
+			}
+		} catch {}
+	}
+
+	if (!mainPath || !mainContent) {
+		// Convention fallback: check standard DO directories
+		for (const candidate of [
+			`${wranglerDir}/src/durable-objects/${className}.ts`,
+			`${wranglerDir}/src/do/${className}.ts`,
+			`${wranglerDir}/src/server/durable-objects/${className}.ts`,
+			`${wranglerDir}/src/${className}.ts`,
+		]) {
+			try {
+				const text = await PlatformService.readText(candidate);
+				if (text) {
+					const methods = extractClassMethodsFromCode(text, className);
+					return { filePath: candidate, methods };
+				}
+			} catch {}
+		}
+		return null;
+	}
+
+	// 1. Check if class is declared directly in main
+	const declaredMethods = extractClassMethodsFromCode(mainContent, className);
+	if (declaredMethods.length > 0 || mainContent.includes(`class ${className}`)) {
+		return { filePath: mainPath, methods: declaredMethods };
+	}
+
+	// 2. Check if main re-exports the class:
+	// export { SessionDO } from './durable-objects/SessionDO'
+	// export * from './durable-objects/SessionDO'
+	try {
+		const { sourceFile: sf } = createIsolatedProject('entrypoint.ts', mainContent);
+		for (const exportDecl of sf.getExportDeclarations()) {
+			const specifier = exportDecl.getModuleSpecifierValue();
+			if (!specifier) continue;
+
+			let matches = false;
+			let targetClassName = className;
+
+			const namedExports = exportDecl.getNamedExports();
+			if (namedExports.length > 0) {
+				for (const ne of namedExports) {
+					const exportedName = ne.getAliasNode()?.getText() || ne.getName();
+					if (exportedName === className) {
+						matches = true;
+						targetClassName = ne.getName();
+						break;
+					}
+				}
+			} else {
+				// export * from './...'
+				matches = true;
+			}
+
+			if (matches) {
+				const baseDir = mainPath.substring(0, mainPath.lastIndexOf('/'));
+				const targetBasePath = resolveRelativePath(baseDir + '/dummy.ts', specifier);
+				for (const ext of ['', '.ts', '.js', '/index.ts', '/index.js']) {
+					try {
+						const candidateFile = targetBasePath + ext;
+						const text = await PlatformService.readText(candidateFile);
+						if (text) {
+							const methods = extractClassMethodsFromCode(text, targetClassName);
+							return { filePath: candidateFile, methods };
+						}
+					} catch {}
+				}
+			}
+		}
+	} catch (e) {
+		console.warn('[Strata] Failed to inspect entrypoint export declarations:', e);
+	}
+
+	return null;
 }
 
 async function findWorkspaceRoot(filePath: string): Promise<string> {
@@ -376,8 +591,19 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		try {
 			const content = await PlatformService.readText(fullPath);
 			if (content) {
+				const parsed = parseWranglerContent(customWranglerPath, content);
+				const wranglerDir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+				for (const b of parsed.bindings) {
+					if (b.type === 'do' && b.extra?.class) {
+						const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
+						if (resolvedDO) {
+							b.extra.path = resolvedDO.filePath;
+							b.extra.methods = resolvedDO.methods;
+						}
+					}
+				}
 				return {
-					bindings: parseWranglerContent(customWranglerPath, content),
+					bindings: parsed.bindings,
 					configFilePath: fullPath
 				};
 			}
@@ -386,15 +612,25 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 
 	// Dynamic upward traversal to look for wrangler files
 	let currentDir = dir;
-	let prefix = '';
 	for (let depth = 0; depth < 12; depth++) {
 		for (const name of ['wrangler.toml', 'wrangler.jsonc', 'wrangler.json']) {
 			const candidate = currentDir + '/' + name;
 			try {
 				const content = await PlatformService.readText(candidate);
 				if (content) {
+					const parsed = parseWranglerContent(name, content);
+					const wranglerDir = candidate.substring(0, candidate.lastIndexOf('/'));
+					for (const b of parsed.bindings) {
+						if (b.type === 'do' && b.extra?.class) {
+							const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
+							if (resolvedDO) {
+								b.extra.path = resolvedDO.filePath;
+								b.extra.methods = resolvedDO.methods;
+							}
+						}
+					}
 					return {
-						bindings: parseWranglerContent(name, content),
+						bindings: parsed.bindings,
 						configFilePath: candidate
 					};
 				}
@@ -403,7 +639,6 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 		const lastSlash = currentDir.lastIndexOf('/');
 		if (lastSlash <= 0) break;
 		currentDir = currentDir.substring(0, lastSlash);
-		prefix += '../';
 	}
 	return { bindings: [], configFilePath: null };
 }
@@ -411,7 +646,7 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 /**
  * Preserves selection state and in-memory node positions across re-parses.
  */
-function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selectedNodeIds: Set<string>, existingNodes: Node[]): Node[] {
+function mapNodesWithExternalPositions(nodes: StrataNode[], filePath: string, selectedNodeIds: Set<string>, existingNodes: StrataNode[]): StrataNode[] {
 	return nodes.map(n => {
 		const existing = existingNodes.find(ex => ex.id === n.id);
 		const position = existing ? { x: existing.position.x, y: existing.position.y } : { x: n.position.x, y: n.position.y };
@@ -430,9 +665,9 @@ function mapNodesWithExternalPositions(nodes: Node[], filePath: string, selected
 export class SchemaState {
 	// --- Visual State ---
 	/** The current set of Svelte Flow nodes (tables/entities) */
-	nodes = $state.raw([] as Node[]);
+	nodes = $state.raw([] as StrataNode[]);
 	/** The current set of Svelte Flow edges (relationships) */
-	edges = $state.raw([] as Edge[]);
+	edges = $state.raw([] as StrataEdge[]);
 	/** Flag to ignore the next file change event if triggered by our own write */
 	ignoreNextWatch = false;
 	/** Whether the schema is currently valid (parsed successfully) */
@@ -450,7 +685,7 @@ export class SchemaState {
 	/** Convenient getter to retrieve the active inspector node object */
 	get activeInspectorNode() {
 		if (!this.activeInspectorNodeId) return undefined;
-		return this.nodes.find(n => n.id === this.activeInspectorNodeId);
+		return this.nodes.find(n => n.id === this.activeInspectorNodeId || (n.data as any)?.label === this.activeInspectorNodeId);
 	}
 
 	get selectedNode() {
@@ -465,9 +700,176 @@ export class SchemaState {
 	get hoveredNodeId() { return uiState.hoveredNodeId; }
 	set hoveredNodeId(val: string | null) { uiState.hoveredNodeId = val; }
 
+	/** Hovered column coordinates { nodeId, colName } */
+	get hoveredCol() { return uiState.hoveredCol; }
+	set hoveredCol(val: { nodeId: string; colName: string } | null) { uiState.hoveredCol = val; }
+
+	/** Subgraph Focus Lock */
+	get isFocusLocked() { return uiState.isFocusLocked; }
+	set isFocusLocked(val: boolean) { uiState.isFocusLocked = val; }
+
+	get focusLockedNodeId() { return uiState.focusLockedNodeId; }
+	set focusLockedNodeId(val: string | null) { uiState.focusLockedNodeId = val; }
+
+	get highlightMode() { return uiState.highlightMode; }
+	set highlightMode(val: 'direct' | 'transitive') { uiState.highlightMode = val; }
+
+	toggleFocusLock(targetNodeId?: string) { uiState.toggleFocusLock(targetNodeId); }
+	clearFocusLock() { uiState.clearFocusLock(); }
+
 	/** Whether compact mode is currently active (keys only) */
 	get compactMode() { return uiState.compactMode; }
 	set compactMode(val: boolean) { uiState.compactMode = val; }
+
+	/**
+	 * Single reactive derived memo for graph highlights.
+	 * Analyzes hover, selection, and focus lock to compute O(1) status lookups.
+	 */
+	get highlightGraph(): HighlightGraph {
+		const isLocked = uiState.isFocusLocked && !!uiState.focusLockedNodeId;
+		const lockedNodeId = isLocked ? uiState.focusLockedNodeId : null;
+		const hoveredCol = uiState.hoveredCol;
+		const hoveredNodeId = uiState.hoveredNodeId;
+		
+		let activeInitiatorIds: string[] = [];
+		if (lockedNodeId) {
+			activeInitiatorIds = [lockedNodeId];
+		} else if (hoveredCol) {
+			activeInitiatorIds = [hoveredCol.nodeId];
+		} else if (hoveredNodeId) {
+			activeInitiatorIds = [hoveredNodeId];
+		} else {
+			const selected = this.nodes.filter(n => n.selected).map(n => n.id);
+			if (selected.length > 0) {
+				activeInitiatorIds = selected;
+			}
+		}
+
+		if (activeInitiatorIds.length === 0) {
+			return {
+				isActive: false,
+				primaryActiveNodeId: null,
+				activeNodeIds: new Set(),
+				getNodeHighlight: () => 'normal',
+				isEdgeActive: () => true,
+				isColumnHighlighted: () => false,
+				isFocusLocked: false,
+				focusLockedNodeId: null,
+				highlightMode: uiState.highlightMode,
+				connectedCount: 0
+			};
+		}
+
+		const activeSet = new Set(activeInitiatorIds);
+		const nodeStatus = new Map<string, NodeHighlightStatus>();
+		const activeEdgeIds = new Set<string>();
+		const activeColumnKeys = new Set<string>();
+
+		for (const id of activeSet) {
+			nodeStatus.set(id, 'self');
+		}
+
+		// Helper to resolve standard or custom target column name
+		const getColFromTarget = (targetId: string, handle?: string | null): string => {
+			if (handle && handle !== 'target') return handle;
+			const targetNode = this.nodes.find(n => n.id === targetId || (n.data as any)?.label === targetId);
+			const pk = (targetNode?.data as any)?.columns?.find((c: any) => c.isPk)?.name;
+			return pk || 'id';
+		};
+
+		// 1. Column-specific matching
+		if (hoveredCol) {
+			const hNode = hoveredCol.nodeId;
+			const hCol = hoveredCol.colName;
+
+			for (const edge of this.edges) {
+				const src = edge.source;
+				const tgt = edge.target;
+				const srcCol = (edge.data as any)?.sourceCol || edge.sourceHandle || (typeof edge.label === 'string' ? edge.label : undefined);
+				const tgtCol = (edge.data as any)?.targetCol || getColFromTarget(tgt, edge.targetHandle);
+
+				if (src === hNode && srcCol === hCol) {
+					activeEdgeIds.add(edge.id);
+					nodeStatus.set(tgt, 'upstream');
+					activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (tgt === hNode && tgtCol === hCol) {
+					activeEdgeIds.add(edge.id);
+					nodeStatus.set(src, 'downstream');
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				}
+			}
+		} else {
+			// 2. Node-level matching
+			for (const edge of this.edges) {
+				const src = edge.source;
+				const tgt = edge.target;
+				const srcCol = (edge.data as any)?.sourceCol || edge.sourceHandle || (typeof edge.label === 'string' ? edge.label : undefined);
+				const tgtCol = (edge.data as any)?.targetCol || getColFromTarget(tgt, edge.targetHandle);
+
+				const isSrcActive = activeSet.has(src);
+				const isTgtActive = activeSet.has(tgt);
+
+				if (isSrcActive && isTgtActive) {
+					activeEdgeIds.add(edge.id);
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (isSrcActive) {
+					activeEdgeIds.add(edge.id);
+					if (!nodeStatus.has(tgt)) {
+						nodeStatus.set(tgt, 'upstream'); // target is referenced by active node
+					}
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (isTgtActive) {
+					activeEdgeIds.add(edge.id);
+					if (!nodeStatus.has(src)) {
+						nodeStatus.set(src, 'downstream'); // source references active node
+					}
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				}
+			}
+
+			// 3. Transitive 2nd-degree neighbors (if mode is transitive)
+			if (uiState.highlightMode === 'transitive') {
+				const directNeighbors = Array.from(nodeStatus.keys()).filter(id => !activeSet.has(id));
+				// Safeguard against hub-entity explosion (e.g. if > 12 direct neighbors)
+				if (directNeighbors.length <= 12) {
+					const directSet = new Set(directNeighbors);
+					for (const edge of this.edges) {
+						const src = edge.source;
+						const tgt = edge.target;
+						if (directSet.has(src) && !nodeStatus.has(tgt)) {
+							nodeStatus.set(tgt, 'transitive');
+							activeEdgeIds.add(edge.id);
+						} else if (directSet.has(tgt) && !nodeStatus.has(src)) {
+							nodeStatus.set(src, 'transitive');
+							activeEdgeIds.add(edge.id);
+						}
+					}
+				}
+			}
+		}
+
+		const primaryActiveNodeId = activeInitiatorIds.length === 1 ? activeInitiatorIds[0] : null;
+
+		return {
+			isActive: true,
+			primaryActiveNodeId,
+			activeNodeIds: activeSet,
+			getNodeHighlight: (nodeId: string) => {
+				return nodeStatus.get(nodeId) || 'dimmed';
+			},
+			isEdgeActive: (edgeId: string) => activeEdgeIds.has(edgeId),
+			isColumnHighlighted: (nodeId: string, colName: string) => activeColumnKeys.has(`${nodeId}:${colName}`),
+			isFocusLocked: isLocked,
+			focusLockedNodeId: lockedNodeId,
+			highlightMode: uiState.highlightMode,
+			connectedCount: nodeStatus.size - activeSet.size
+		};
+	}
 
 
 	// --- File State ---
@@ -503,6 +905,13 @@ export class SchemaState {
 	
 	/** True momentarily after a successful save operation */
 	isRecentlySaved = $state(false);
+
+	/** Signal counter to request diagram canvas fitView from external components */
+	fitViewTrigger = $state(0);
+	requestFitView() { this.fitViewTrigger++; }
+
+	/** True while auto-layout is animating node positions */
+	isArrangingLayout = $state(false);
 	
 	/** Whether the 'Export Successful' toast is visible */
 	get showExportToast() { return uiState.showExportToast; }
@@ -545,31 +954,24 @@ export class SchemaState {
 		return 'strata-app';
 	}
 
-	/** Rename Entity Modal State */
-	get showRenameModal() { return uiState.showRenameModal; }
-	set showRenameModal(val: boolean) { uiState.showRenameModal = val; }
-
-	get renameEntityTargetId() { return uiState.renameEntityTargetId; }
-	set renameEntityTargetId(val: string | null) { uiState.renameEntityTargetId = val; }
-
 	/** Confirmation Dialog Modal State */
 	get showConfirmModal() { return uiState.showConfirmModal; }
 	set showConfirmModal(val: boolean) { uiState.showConfirmModal = val; }
 
 	get confirmModalData() { return uiState.confirmModalData; }
-	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
-
-	/** Triggers the styled Rename Entity Modal */
-	promptRenameEntity(targetId: string) {
-		uiState.renameEntityTargetId = targetId;
-		uiState.showRenameModal = true;
-	}
+	set confirmModalData(val: { title: string; message: string; confirmLabel: string; isDanger?: boolean; warnings?: string[]; onConfirm: () => void } | null) { uiState.confirmModalData = val; }
 
 	/** Triggers the styled Confirmation Modal */
-	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; onConfirm: () => void }) {
+	promptConfirm(data: { title: string; message: string; confirmLabel: string; isDanger?: boolean; warnings?: string[]; onConfirm: () => void }) {
 		uiState.confirmModalData = data;
 		uiState.showConfirmModal = true;
 	}
+
+	/** Connection Modeler Modal State */
+	get showConnectionModelerModal() { return uiState.showConnectionModelerModal; }
+	set showConnectionModelerModal(val: boolean) { uiState.showConnectionModelerModal = val; }
+	get connectionModelerData() { return uiState.connectionModelerData; }
+	set connectionModelerData(val: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null } | null) { uiState.connectionModelerData = val; }
 
 	/** Whether the 'New Table' modal is currently visible */
 	get showNewTableModal() { return uiState.showNewTableModal; }
@@ -594,9 +996,15 @@ export class SchemaState {
 	get showHelpModal() { return uiState.showHelpModal; }
 	set showHelpModal(val: boolean) { uiState.showHelpModal = val; }
 
-	/** Whether the CodeMirror schema inspector modal is visible */
-	get showCodeViewerModal() { return uiState.showCodeViewerModal; }
-	set showCodeViewerModal(val: boolean) { uiState.showCodeViewerModal = val; }
+	/** Active tab within the developer Help Center */
+	get activeHelpTab() { return uiState.activeHelpTab; }
+	set activeHelpTab(val: string) { uiState.activeHelpTab = val; }
+
+	/** Opens the developer Help Center focused on a specific category or blueprint tab */
+	openHelpTopic(tabId: string) {
+		uiState.activeHelpTab = tabId;
+		uiState.showHelpModal = true;
+	}
 
 	/** List of JSDoc and AST audit issues */
 	auditIssues = $state<AuditIssue[]>([]);
@@ -605,13 +1013,14 @@ export class SchemaState {
 	packageWrapperInfo = $state<PackageWrapperInfo | null>(null);
 
 	/** The list of bindings parsed from wrangler.toml */
-	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra: any }[]>([]);
+	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra?: any }[]>([]);
 
 	/** Warnings about configuration mismatches between schema and wrangler bindings */
 	get validationWarnings() {
 		const warnings: string[] = [];
 		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
 		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
+		const r2Nodes = this.nodes.filter(n => (n.data as any)?.target === 'r2');
 
 		if (this.wranglerConfigFilePath) {
 			const filename = this.wranglerConfigFilePath.substring(this.wranglerConfigFilePath.lastIndexOf('/') + 1);
@@ -623,6 +1032,11 @@ export class SchemaState {
 			for (const doNode of doNodes) {
 				if (!this.wranglerBindings.some(b => b.name === doNode.id && b.type === 'do')) {
 					warnings.push(`Durable Object "${doNode.id}" is not configured in your ${filename}.`);
+				}
+			}
+			for (const r2 of r2Nodes) {
+				if (!this.wranglerBindings.some(b => b.name === r2.id && b.type === 'r2')) {
+					warnings.push(`R2 Bucket "${r2.id}" is not configured in your ${filename}.`);
 				}
 			}
 		}
@@ -688,50 +1102,25 @@ export class SchemaState {
 	}
 
 	/**
-	 * Auto-repairs malformed or missing @strata JSDoc for a given node symbol.
+	 * Auto-repairs malformed or missing @strata-layout coordinates for a given node symbol.
 	 */
 	async repairNodeJsdoc(symbolName: string) {
 		const node = this.nodes.find(n => n.id === symbolName);
 		if (!node) return;
-		const x = node.position.x || 100;
-		const y = node.position.y || 100;
-		const targetFilePath = this.getTargetFilePath(symbolName);
-		const isTargetExternal = Boolean(targetFilePath && this.filePath && targetFilePath !== this.filePath);
+		const x = Math.round(node.position.x || 100);
+		const y = Math.round(node.position.y || 100);
 		
-		const { updateNodePositionInSchema } = await import("../parser");
-		let currentCode = this.rawCode;
-		if (isTargetExternal && targetFilePath) {
-			currentCode = this.externalFilesMap.get(targetFilePath) || await PlatformService.readText(targetFilePath);
-		}
-		const updatedCode = updateNodePositionInSchema(currentCode, symbolName, x, y);
-		if (targetFilePath && !this.isSandboxMode) {
-			await this.queue.enqueue(async () => {
-				this.lastWriteTime = Date.now();
-				await PlatformService.writeText(targetFilePath, updatedCode);
-				if (isTargetExternal) {
-					this.externalFilesMap.set(targetFilePath, updatedCode);
-					await this.parseAndApply(this.rawCode);
-				} else {
-					this.rawCode = updatedCode;
-					await this.parseAndApply(updatedCode);
-				}
-			});
-		} else {
-			if (isTargetExternal && targetFilePath) {
-				this.externalFilesMap.set(targetFilePath, updatedCode);
-				await this.parseAndApply(this.rawCode);
-			} else {
-				this.rawCode = updatedCode;
-				await this.parseAndApply(updatedCode);
-			}
-		}
-		toast.success("JSDoc Repaired", {
-			description: `Cleaned and formatted @strata metadata for "${symbolName}".`
+		const { updateLayoutManifestInSchema } = await import("../parser");
+		await this.executeSchemaMutation("Repair JSDoc layout", (rootCode) =>
+			updateLayoutManifestInSchema(rootCode, { [symbolName]: { x, y } }, false)
+		);
+		toast.success("Layout Position Saved", {
+			description: `Consolidated position for "${symbolName}" in @strata-layout.`
 		});
 	}
 
 	/**
-	 * Applies a recommended audit quick-fix on disk (e.g. repairing a miscalculated path depth).
+	 * Applies a recommended audit quick-fix on disk (e.g. repairing a miscalculated path depth, D1 type mode, or layout manifest).
 	 */
 	async applyAuditFix(issue: AuditIssue) {
 		if (issue.suggestedFix?.action === 'fix_path' && issue.symbolName && issue.suggestedFix.payload?.correctedPath) {
@@ -741,8 +1130,47 @@ export class SchemaState {
 			toast.success("Path Depth Corrected", {
 				description: `Updated @strata path for "${issue.symbolName}" to ${issue.suggestedFix.payload.correctedPath}.`
 			});
-		} else if (issue.suggestedFix?.action === 'auto_repair_jsdoc' && issue.symbolName) {
-			await this.repairNodeJsdoc(issue.symbolName);
+		} else if (issue.suggestedFix?.action === 'fix_d1_type' && issue.symbolName && issue.suggestedFix.payload?.columnName && issue.suggestedFix.payload?.targetMode) {
+			const { fixD1ColumnTypeInSchema } = await import("../parser");
+			const targetFile = this.getTargetFilePath(issue.symbolName);
+			await this.executeSchemaMutation("Fix D1 column type", (code) =>
+				fixD1ColumnTypeInSchema(code, issue.symbolName!, issue.suggestedFix!.payload!.columnName, issue.suggestedFix!.payload!.targetMode),
+				targetFile
+			);
+			toast.success("Column Type Updated", {
+				description: `Converted "${issue.suggestedFix.payload.columnName}" to integer({ mode: "${issue.suggestedFix.payload.targetMode}" }).`
+			});
+		} else if (issue.suggestedFix?.action === 'auto_repair_jsdoc') {
+			if (issue.code === 'MALFORMED_LAYOUT_MANIFEST' || !issue.symbolName) {
+				const { extractStrataLayoutManifestDetails, updateLayoutManifestInSchema } = await import("../parser");
+				const details = extractStrataLayoutManifestDetails(this.rawCode);
+				if (details.manifest) {
+					await this.executeSchemaMutation("Repair layout manifest", (rootCode) =>
+						updateLayoutManifestInSchema(rootCode, details.manifest!)
+					);
+					toast.success("Layout Manifest Repaired", {
+						description: "Formatted and restored @strata-layout manifest."
+					});
+				}
+			} else {
+				await this.repairNodeJsdoc(issue.symbolName);
+			}
+		} else if (issue.suggestedFix?.action === 'migrate_dummy_to_manifest') {
+			const { consolidateDummyBindingsIntoManifest } = await import("../parser");
+			await this.executeSchemaMutation("Consolidate bindings to manifest", (rootCode) =>
+				consolidateDummyBindingsIntoManifest(rootCode)
+			);
+			toast.success("Bindings Consolidated", {
+				description: "Migrated non-SQL bindings into @strata-layout and stripped dummy variables."
+			});
+		} else if (issue.suggestedFix?.action === 'remove_unused_import' && issue.suggestedFix.payload?.moduleSpecifier) {
+			const { removeUnusedImportFromSchema } = await import("../parser");
+			await this.executeSchemaMutation("Remove unused import", (rootCode) =>
+				removeUnusedImportFromSchema(rootCode, issue.suggestedFix!.payload!.moduleSpecifier)
+			);
+			toast.success("Cleaned Barrel", {
+				description: `Removed unused import "${issue.suggestedFix.payload.moduleSpecifier}".`
+			});
 		}
 	}
 
@@ -794,38 +1222,186 @@ export class SchemaState {
 			// Discover wrangler.toml bindings
 			const { bindings: wranglerBindings, configFilePath } = this.filePath 
 				? await discoverWranglerBindings(this.filePath, this.wranglerPath)
-				: { bindings: [], configFilePath: null };
+				: { bindings: this.wranglerBindings, configFilePath: null };
 			this.wranglerBindings = wranglerBindings;
 			this.wranglerConfigFilePath = configFilePath;
 			const finalNodes = [...result.nodes];
 			
 			for (const binding of wranglerBindings) {
 				if (!finalNodes.some(n => n.id === binding.name)) {
+					const manifestEntry = (result.layoutManifest as any)?.[binding.name];
+					let cols: any[] = [];
+					if (binding.type === 'kv') {
+						const kvSchema = manifestEntry?.schema || binding.extra?.schema;
+						cols = kvSchema 
+							? Object.entries(kvSchema).map(([k, v]) => {
+								if (typeof v === 'object' && v !== null) {
+									const vObj = v as any;
+									return {
+										name: k,
+										definition: String(vObj.type || 'string'),
+										ttl: vObj.ttl ? Number(vObj.ttl) : undefined,
+										metadata: vObj.metadata ? String(vObj.metadata) : undefined,
+										isPk: false,
+										notNull: false,
+										isReferences: false
+									};
+								}
+								return {
+									name: k,
+									definition: String(v),
+									isPk: false,
+									notNull: false,
+									isReferences: false
+								};
+							})
+							: [];
+					} else if (binding.type === 'do') {
+						const doMethods = manifestEntry?.methods || binding.extra?.methods;
+						cols = doMethods 
+							? doMethods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m)
+							: [];
+					} else if (binding.type === 'r2') {
+						const r2Folders = manifestEntry?.folders || binding.extra?.folders;
+						cols = r2Folders
+							? Object.entries(r2Folders).map(([k, v]) => ({
+								name: k.endsWith('/') ? k : `${k}/`,
+								definition: String(v),
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}))
+							: [];
+					}
+
+					const initialPos = manifestEntry && typeof manifestEntry.x === 'number' && typeof manifestEntry.y === 'number'
+						? { x: Math.round(manifestEntry.x), y: Math.round(manifestEntry.y) }
+						: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
+
+					const nodeType = binding.type;
 					finalNodes.push({
 						id: binding.name,
-						type: 'table',
+						type: nodeType,
 						data: {
 							label: binding.name,
-							columns: binding.type === 'kv' ? [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }] : [],
+							columns: cols,
+							methods: binding.type === 'do' ? cols : undefined,
+							patterns: binding.type === 'kv' ? cols : undefined,
+							folders: binding.type === 'r2' ? cols : undefined,
 							target: binding.type,
 							strata: {
 								target: binding.type,
-								x: Math.round(Math.random() * 200),
-								y: Math.round(Math.random() * 200),
+								x: initialPos.x,
+								y: initialPos.y,
 								binding: binding.name,
-								class: binding.extra.class
+								class: binding.extra?.class_name || binding.extra?.class || manifestEntry?.class,
+								path: binding.extra?.path || manifestEntry?.path,
+								folders: manifestEntry?.folders || binding.extra?.folders,
+								schema: manifestEntry?.schema || binding.extra?.schema,
+								methods: manifestEntry?.methods || binding.extra?.methods,
+								public: manifestEntry?.public ?? binding.extra?.public,
+								cors: manifestEntry?.cors ?? binding.extra?.cors,
+								customDomain: manifestEntry?.customDomain || binding.extra?.customDomain,
+								relations: manifestEntry?.relations || binding.extra?.relations,
+								...binding.extra
 							},
 							isExternal: true
 						},
-						position: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) }
+						position: initialPos
 					});
+				}
+			}
+
+			// Also spawn nodes for any non-SQL targets declared in layoutManifest that aren't in wranglerBindings or finalNodes
+			if (result.layoutManifest) {
+				for (const [nodeId, manifestEntry] of Object.entries(result.layoutManifest)) {
+					const target = (manifestEntry as any)?.target;
+					if (target && (target === 'kv' || target === 'do' || target === 'r2') && !finalNodes.some(n => n.id === nodeId)) {
+						let cols: any[] = [];
+						if (target === 'kv' && (manifestEntry as any).schema) {
+							cols = Object.entries((manifestEntry as any).schema).map(([k, v]: [string, any]) => ({
+								name: k,
+								definition: typeof v === 'object' && v?.type ? String(v.type) : String(v || 'string'),
+								ttl: typeof v === 'object' ? v?.ttl : undefined,
+								metadata: typeof v === 'object' ? v?.metadata : undefined,
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}));
+						} else if (target === 'do' && (manifestEntry as any).methods) {
+							cols = (manifestEntry as any).methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m);
+						} else if (target === 'r2' && (manifestEntry as any).folders) {
+							cols = Object.entries((manifestEntry as any).folders).map(([k, v]: [string, any]) => ({
+								name: k.endsWith('/') ? k : `${k}/`,
+								definition: String(v),
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}));
+						}
+						const pos = typeof (manifestEntry as any).x === 'number' && typeof (manifestEntry as any).y === 'number'
+							? { x: Math.round((manifestEntry as any).x), y: Math.round((manifestEntry as any).y) }
+							: { x: 100, y: 100 };
+						finalNodes.push({
+							id: nodeId,
+							type: target,
+							data: {
+								label: nodeId,
+								columns: cols,
+								methods: target === 'do' ? cols : undefined,
+								patterns: target === 'kv' ? cols : undefined,
+								folders: target === 'r2' ? cols : undefined,
+								target,
+								strata: {
+									target,
+									x: pos.x,
+									y: pos.y,
+									binding: nodeId,
+									...manifestEntry
+								},
+								isExternal: true
+							},
+							position: pos
+						});
+					}
+				}
+			}
+
+			// Ensure all synthetic edges declared in layoutManifest connecting to finalNodes are preserved
+			const finalNodeIds = new Set(finalNodes.map(n => n.id));
+			const combinedEdges = [...result.edges];
+			if (result.layoutManifest) {
+				for (const [nodeId, meta] of Object.entries(result.layoutManifest)) {
+					if (meta && Array.isArray((meta as any).relations)) {
+						for (const rel of (meta as any).relations) {
+							if (rel && rel.to && finalNodeIds.has(nodeId) && finalNodeIds.has(rel.to)) {
+								const alreadyExists = combinedEdges.some(
+									e => (e.source === nodeId && e.target === rel.to) || (e.source === rel.to && e.target === nodeId)
+								);
+								if (!alreadyExists) {
+									combinedEdges.push({
+										id: `edge_${nodeId}_${rel.to}`,
+										source: nodeId,
+										target: rel.to,
+										type: 'relation',
+										label: 'synthetic',
+										data: {
+											isSynthetic: true,
+											edgeType: 'synthetic',
+											isVirtual: true
+										}
+									});
+								}
+							}
+						}
+					}
 				}
 			}
 
 			// Preserve selection state
 			const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
 			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath || 'sandbox', selectedNodeIds, this.nodes);
-			this.edges = result.edges;
+			this.edges = combinedEdges;
 			this.rawCode = code;
 			this.isValid = true;
 			this.error = null;
@@ -944,6 +1520,7 @@ export class SchemaState {
 		this.isSandboxMode = true;
 		this.sandboxTemplateKey = templateKey;
 		this.filePath = null;
+		this.wranglerBindings = template.wranglerBindings ? [...template.wranglerBindings] : [];
 		this.machine.send("OPEN");
 
 		const success = await this.parseAndApply(template.code);
@@ -1022,10 +1599,81 @@ export class SchemaState {
 	/**
 	 * Returns the source file defining a specific table/entity, or falls back to root schema.
 	 */
-	private getTargetFilePath(tableName: string): string | undefined {
+	getTargetFilePath(tableName: string): string | undefined {
 		if (this.isSandboxMode) return undefined;
-		const node = this.nodes.find(n => n.id === tableName);
+		const node = this.nodes.find(n => n.id === tableName || (n.data as any)?.label === tableName);
 		return (node?.data as any)?.moduleInfo?.sourceFilePath || this.filePath || undefined;
+	}
+
+	/**
+	 * Returns the Drizzle/TypeScript definition snippet for a given table or entity.
+	 * Searches across modular domain files, root schema code, and falls back to
+	 * synthesizing the definition from the node's AST properties.
+	 */
+	getTableDefinitionSnippet(tableName: string): string {
+		const node = this.nodes.find(n => n.id === tableName || (n.data as any)?.label === tableName);
+		if (!node) return "";
+
+		// 1. Identity Providers (Clerk, WorkOS)
+		if (node.type === "identity" || (node.data as any)?.provider) {
+			const isClerk = (node.data as any)?.provider === "clerk";
+			return isClerk
+				? `// Recommended D1 Webhook User Mirror\nexport const clerkUsers = sqliteTable("clerkUsers", {\n  id: text("id").primaryKey(),\n  clerkUserId: text("clerk_user_id").notNull().unique(),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  imageUrl: text("image_url"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`
+				: `// Recommended D1 WorkOS Users Mirror\nexport const workosUsers = sqliteTable("workosUsers", {\n  id: text("id").primaryKey(),\n  workosUserId: text("workos_user_id").notNull().unique(),\n  workosOrgId: text("workos_org_id"),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`;
+		}
+
+		const name = node.id;
+		const target = (node.data as any)?.target || (node.type === "table" ? "d1" : node.type) || "d1";
+		
+		// Resolve file content: check modular domain file first, then fall back to rawCode
+		const targetFile = (node.data as any)?.moduleInfo?.sourceFilePath || this.getTargetFilePath(name) || this.filePath;
+		const fileCode = (targetFile && this.externalFilesMap.get(targetFile)) || this.rawCode;
+
+		// 2. Exact regex extraction from source file
+		if (target === "d1" && fileCode) {
+			const pattern = new RegExp(
+				`(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
+				"m"
+			);
+			const match = fileCode.match(pattern);
+			if (match) return match[0].trim();
+		}
+
+		// 3. Robust AST synthesis fallback for D1 tables (works for sandbox mode or modified files)
+		if (target === "d1") {
+			const cols = ((node.data as any)?.columns || [])
+				.map((col: any) => {
+					let chain = col.definition || `text("${col.name}")`;
+					if (!chain.includes("(")) {
+						chain = `${chain}("${col.name}")`;
+					}
+					if (col.isPk && !chain.includes(".primaryKey(")) chain += ".primaryKey()";
+					if (col.notNull && !chain.includes(".notNull(")) chain += ".notNull()";
+					if (col.defaultVal !== undefined && col.defaultVal !== null && !chain.includes(".default(") && !chain.includes(".$defaultFn(")) {
+						chain += `.default(${col.defaultVal})`;
+					}
+					return `  ${col.name}: ${chain},`;
+				})
+				.join("\n");
+			return `export const ${name} = sqliteTable("${name}", {\n${cols}\n});`;
+		} else if (target === "kv") {
+			const fields = ((node.data as any)?.columns || (node.data as any)?.patterns || [])
+				.map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
+				.join("\n");
+			return `export interface ${name}KV {\n${fields}\n}`;
+		} else if (target === "r2") {
+			const fields = ((node.data as any)?.columns || (node.data as any)?.folders || [])
+				.map((c: any) => `  "${c.name}": "${c.definition || "*/*"}";`)
+				.join("\n");
+			return `export interface ${name}Bucket {\n${fields}\n}`;
+		} else if (target === "do") {
+			const methods = ((node.data as any)?.columns || (node.data as any)?.methods || [])
+				.map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
+				.join("\n");
+			return `export class ${name} {\n${methods}\n}`;
+		}
+
+		return "";
 	}
 
 	/**
@@ -1135,7 +1783,32 @@ export class SchemaState {
 	/**
 	 * Updates table/target JSDoc configuration metadata (e.g. public access, CORS for R2 buckets) and syncs to disk.
 	 */
-	async updateTableMetadata(tableName: string, metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }) {
+	async updateTableMetadata(
+		tableName: string, 
+		metadata: { 
+			public?: boolean; 
+			customDomain?: string | null; 
+			cors?: boolean; 
+			class?: string; 
+			path?: string;
+			methods?: string[];
+			schema?: Record<string, any>;
+			folders?: Record<string, string>;
+			[key: string]: any;
+		}
+	) {
+		const targetNode = this.nodes.find(n => n.id === tableName);
+		const target = (targetNode?.data as any)?.target || 'd1';
+
+		if (target !== 'd1' && (this.isSandboxMode || !this.filePath)) {
+			const binding = this.wranglerBindings.find(b => b.name === tableName);
+			if (binding) {
+				binding.extra = { ...binding.extra, ...metadata };
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		const { updateTableMetadataInSchema } = await import("../parser");
 		await this.executeSchemaMutation("Table metadata update", (code) => 
@@ -1145,9 +1818,89 @@ export class SchemaState {
 	}
 
 	/**
+	 * Deletes an RPC method from a Durable Object actor.
+	 */
+	async deleteMethod(doName: string, methodName: string) {
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === doName);
+			if (binding && binding.extra?.methods) {
+				binding.extra.methods = binding.extra.methods.filter(
+					(m: string) => m !== methodName && !m.startsWith(methodName + '(')
+				);
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === doName);
+		const strata = targetNode?.data?.strata || {};
+		const currentMethods = strata.methods || [];
+		const updatedMethods = currentMethods.filter(
+			(m: string) => m !== methodName && !m.startsWith(methodName + '(')
+		);
+		await this.updateTableMetadata(doName, { methods: updatedMethods });
+	}
+
+	/**
+	 * Deletes a key pattern from a KV Namespace.
+	 */
+	async deletePattern(kvName: string, patternName: string) {
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === kvName);
+			if (binding && binding.extra?.schema) {
+				delete binding.extra.schema[patternName];
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === kvName);
+		const strata = targetNode?.data?.strata || {};
+		const currentSchema = { ...(strata.schema || {}) };
+		delete currentSchema[patternName];
+		await this.updateTableMetadata(kvName, { schema: currentSchema });
+	}
+
+	/**
+	 * Deletes a folder prefix mapping from an R2 Bucket.
+	 */
+	async deleteFolder(r2Name: string, folderName: string) {
+		const baseKey = folderName.replace(/\/$/, '');
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === r2Name);
+			if (binding && binding.extra?.folders) {
+				delete binding.extra.folders[baseKey];
+				delete binding.extra.folders[folderName];
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const targetNode = this.nodes.find(n => n.id === r2Name);
+		const strata = targetNode?.data?.strata || {};
+		const currentFolders = { ...(strata.folders || {}) };
+		delete currentFolders[baseKey];
+		delete currentFolders[folderName];
+		await this.updateTableMetadata(r2Name, { folders: currentFolders });
+	}
+
+	/**
 	 * Deletes a column from a table in the schema and syncs to disk.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
+		const targetNode = this.nodes.find(n => n.id === tableName);
+		const target = targetNode?.data?.target || 'd1';
+
+		if (target === 'do') {
+			return this.deleteMethod(tableName, colName);
+		}
+		if (target === 'kv') {
+			return this.deletePattern(tableName, colName);
+		}
+		if (target === 'r2') {
+			return this.deleteFolder(tableName, colName);
+		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		const { removeColumnFromSchema } = await import("../parser");
 		await this.executeSchemaMutation("Column delete", (code) => 
@@ -1164,6 +1917,10 @@ export class SchemaState {
 		const target = (node?.data as any)?.target || 'd1';
 		const targetFile = this.getTargetFilePath(tableName);
 
+		if (this.isSandboxMode || !this.filePath) {
+			this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		}
+
 		const { removeTableFromSchema, removeTableFromLayoutManifest } = await import("../parser");
 		await this.executeSchemaMutation("Table delete", (code) => 
 			removeTableFromSchema(code, tableName),
@@ -1179,10 +1936,6 @@ export class SchemaState {
 		if (this.activeInspectorNodeId === tableName) {
 			this.activeInspectorNodeId = null;
 		}
-
-		if (target !== 'd1' && this.wranglerConfigFilePath) {
-			await this.syncToWranglerConfig('remove', { type: target, name: tableName });
-		}
 	}
 
 	/**
@@ -1192,14 +1945,18 @@ export class SchemaState {
 		const { removeEdgeFromSchema, resolveRelativePath } = await import("../parser");
 		
 		const matchingEdge = this.edges.find(e => 
-			e.source === source && e.target === target && 
-			(name ? (e.label === name || e.sourceHandle === name || (e.data as any)?.sourceCol === name) : true)
+			((e.source === source && e.target === target) || (e.source === target && e.target === source)) && 
+			(name ? (e.label === name || e.sourceHandle === name || (e.data as any)?.sourceCol === name || (e.data as any)?.relationNames?.includes(name)) : true)
 		);
 		const isVirtual = matchingEdge?.data?.isVirtual ?? false;
+		const isSynthetic = matchingEdge?.data?.isSynthetic || matchingEdge?.data?.isIdentityBoundary || (matchingEdge?.data as any)?.edgeType === 'synthetic' || matchingEdge?.label === 'synthetic';
 
 		let targetFile: string | undefined;
 
-		if (this.externalFilesMap.size > 0 && this.filePath) {
+		if (isSynthetic) {
+			// Synthetic architectural links always live in @strata-layout in the root file
+			targetFile = this.filePath || undefined;
+		} else if (this.externalFilesMap.size > 0 && this.filePath) {
 			if (isVirtual) {
 				// For logical relations, find the file containing ${source}Relations
 				for (const [filePath, content] of this.externalFilesMap.entries()) {
@@ -1235,12 +1992,32 @@ export class SchemaState {
 
 	/**
 	 * Persists the current rawCode to disk, including any pending node position updates.
+	 * In sandbox mode, updates the in-memory rawCode with layout positions and marks state clean.
 	 */
 	async saveToFile() {
 		if (this.isSandboxMode) {
-			toast.info("Playground Sandbox Active", {
-				description: "Playground edits run in-memory. Click 'Open Schema' to edit a real file on disk."
+			const { updateAllNodePositionsInSchema, updateLayoutManifestInSchema } = await import("../parser");
+			const isModular = this.externalFilesMap.size > 0 || this.nodes.some(n => {
+				const info = (n.data as any)?.moduleInfo;
+				return info && !info.isRootFile;
 			});
+
+			if (isModular || this.rawCode.includes('@strata-layout')) {
+				const positionsMap: Record<string, { x: number; y: number }> = {};
+				for (const node of this.nodes) {
+					positionsMap[node.id] = {
+						x: Math.round(node.position.x),
+						y: Math.round(node.position.y)
+					};
+				}
+				this.rawCode = updateLayoutManifestInSchema(this.rawCode, positionsMap, true);
+			} else {
+				this.rawCode = updateAllNodePositionsInSchema(this.rawCode, this.nodes);
+			}
+
+			this.machine.send("SUCCESS");
+			this.isRecentlySaved = true;
+			setTimeout(() => (this.isRecentlySaved = false), 1500);
 			return;
 		}
 
@@ -1255,7 +2032,7 @@ export class SchemaState {
 				return info && !info.isRootFile;
 			});
 
-			if (isModular) {
+			if (isModular || currentCode.includes('@strata-layout')) {
 				const positionsMap: Record<string, { x: number; y: number }> = {};
 				for (const node of this.nodes) {
 					positionsMap[node.id] = {
@@ -1296,11 +2073,6 @@ export class SchemaState {
 		}
 		if (this.activeInspectorNodeId === oldName) {
 			this.activeInspectorNodeId = newName;
-		}
-
-		if (target !== 'd1' && this.wranglerConfigFilePath) {
-			await this.syncToWranglerConfig('remove', { type: target, name: oldName });
-			await this.syncToWranglerConfig('add', { type: target, name: newName, extra });
 		}
 	}
 
@@ -1393,13 +2165,124 @@ export class SchemaState {
 			return;
 		}
 
+		if (target !== 'd1') {
+			if (this.isSandboxMode || !this.filePath) {
+				const existingIdx = this.wranglerBindings.findIndex(b => b.name === tableName);
+				const bindingEntry = {
+					type: target,
+					name: tableName,
+					extra: {
+						class: extra?.class,
+						path: extra?.path,
+						id: extra?.id,
+						bucket_name: extra?.bucket_name,
+						...(extra as any)
+					}
+				};
+				if (existingIdx >= 0) {
+					this.wranglerBindings[existingIdx] = bindingEntry;
+				} else {
+					this.wranglerBindings = [...this.wranglerBindings, bindingEntry];
+				}
+			}
+		}
+
 		await this.executeSchemaMutation("Table add", (code) => 
 			addTableToSchema(code, tableName, target, extra)
 		);
+	}
 
-		if (target !== 'd1') {
-			await this.syncToWranglerConfig('add', { type: target, name: tableName, extra });
+	/**
+	 * Adds an RPC method to a Durable Object actor.
+	 */
+	async addMethod(doName: string, methodName: string, returnType: string = 'Promise<void>') {
+		const targetNode = this.nodes.find(n => n.id === doName);
+		const existingMethods = targetNode?.data?.methods || targetNode?.data?.columns || [];
+		if (existingMethods.some(m => m.name.toLowerCase() === methodName.trim().toLowerCase() || m.name.startsWith(methodName.trim() + '('))) {
+			toast.warning("Method Already Exists", {
+				description: `Durable Object "${doName}" already has a method named "${methodName}".`
+			});
+			return;
 		}
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === doName);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.methods = binding.extra.methods || [];
+				binding.extra.methods.push(methodName);
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentMethods = strata.methods || [];
+		const updatedMethods = [...currentMethods, methodName];
+		await this.updateTableMetadata(doName, { methods: updatedMethods });
+	}
+
+	/**
+	 * Adds a key pattern to a KV Namespace cache.
+	 */
+	async addPattern(kvName: string, patternName: string, valueType: string = 'string', ttl?: number) {
+		const targetNode = this.nodes.find(n => n.id === kvName);
+		const existingPatterns = targetNode?.data?.patterns || targetNode?.data?.columns || [];
+		if (existingPatterns.some(p => p.name.toLowerCase() === patternName.trim().toLowerCase())) {
+			toast.warning("Pattern Already Exists", {
+				description: `KV Namespace "${kvName}" already has a pattern named "${patternName}".`
+			});
+			return;
+		}
+
+		const val = ttl !== undefined ? { type: valueType, ttl } : valueType;
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === kvName);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.schema = binding.extra.schema || {};
+				binding.extra.schema[patternName] = val;
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentSchema = { ...(strata.schema || {}) };
+		currentSchema[patternName] = val;
+		await this.updateTableMetadata(kvName, { schema: currentSchema });
+	}
+
+	/**
+	 * Adds a folder prefix mapping to an R2 Bucket.
+	 */
+	async addFolder(r2Name: string, folderName: string, mimeType: string = '*/*') {
+		const cleanName = folderName.endsWith('/') ? folderName : `${folderName}/`;
+		const targetNode = this.nodes.find(n => n.id === r2Name);
+		const existingFolders = targetNode?.data?.folders || targetNode?.data?.columns || [];
+		if (existingFolders.some(f => f.name.toLowerCase() === cleanName.toLowerCase())) {
+			toast.warning("Folder Prefix Already Exists", {
+				description: `R2 Bucket "${r2Name}" already has a prefix named "${cleanName}".`
+			});
+			return;
+		}
+
+		if (this.isSandboxMode || !this.filePath) {
+			const binding = this.wranglerBindings.find(b => b.name === r2Name);
+			if (binding) {
+				binding.extra = binding.extra || {};
+				binding.extra.folders = binding.extra.folders || {};
+				binding.extra.folders[folderName.replace(/\/$/, '')] = mimeType;
+			}
+			await this.parseAndApply(this.rawCode);
+			return;
+		}
+
+		const strata = targetNode?.data?.strata || {};
+		const currentFolders = { ...(strata.folders || {}) };
+		currentFolders[folderName.replace(/\/$/, '')] = mimeType;
+		await this.updateTableMetadata(r2Name, { folders: currentFolders });
 	}
 
 	/**
@@ -1413,13 +2296,26 @@ export class SchemaState {
 		referencesColumn?: string
 	) {
 		const targetNode = this.nodes.find(n => n.id === tableName);
-		const existingCols = (targetNode?.data as any)?.columns || [];
+		const target = targetNode?.data?.target || 'd1';
+
+		if (target === 'do') {
+			return this.addMethod(tableName, columnName, type);
+		}
+		if (target === 'kv') {
+			return this.addPattern(tableName, columnName, type);
+		}
+		if (target === 'r2') {
+			return this.addFolder(tableName, columnName, type);
+		}
+
+		const existingCols = targetNode?.data?.columns || [];
 		if (existingCols.some((c: any) => c.name.toLowerCase() === columnName.trim().toLowerCase())) {
 			toast.warning("Column Already Exists", {
 				description: `Table "${tableName}" already has a column named "${columnName}".`
 			});
 			return;
 		}
+
 		const targetFile = this.getTargetFilePath(tableName);
 		let targetImportPath: string | undefined;
 		if (referencesTable) {
@@ -1455,6 +2351,17 @@ export class SchemaState {
 	}
 
 	/**
+	 * Adds an explicit synthetic link in @strata-layout (e.g. D1 to non-SQL or architectural reference).
+	 */
+	async addSyntheticRelation(source: string, target: string) {
+		const { addEdgeToSchema } = await import("../parser");
+		await this.executeSchemaMutation("Synthetic Relation add", (code) =>
+			addEdgeToSchema(code, source, target, undefined, 'synthetic'),
+			this.filePath || undefined
+		);
+	}
+
+	/**
 	 * Adds or updates a physical Foreign Key relationship (.references()) on a specific column.
 	 * Checks for duplicate relationships before executing AST mutation.
 	 */
@@ -1486,39 +2393,28 @@ export class SchemaState {
 	}
 
 	/**
-	 * Scaffolds the standard Better Auth D1 cluster (user, session, account, verification).
+	 * Finds all references to a given table across domain module files in a modular project.
 	 */
-	async scaffoldBetterAuthCluster() {
-		const { scaffoldBetterAuthClusterInSchema } = await import("../parser");
-		await this.executeSchemaMutation("Scaffold Better Auth", (code) =>
-			scaffoldBetterAuthClusterInSchema(code)
-		);
-		toast.success("Better Auth Cluster Scaffolding Complete", {
-			description: "Generated user, session, account, and verification tables in your D1 schema."
-		});
-	}
+	findCrossModuleReferences(tableName: string): { file: string; lineContent: string }[] {
+		const references: { file: string; lineContent: string }[] = [];
+		const currentFile = this.getTargetFilePath(tableName);
 
-	/**
-	 * Scaffolds a local D1 mirror table for webhook sync with Clerk or WorkOS.
-	 */
-	async scaffoldWebhookMirror(provider: "clerk" | "workos") {
-		if (provider === "clerk") {
-			const { scaffoldClerkMirrorTableInSchema } = await import("../parser");
-			await this.executeSchemaMutation("Scaffold Clerk Mirror", (code) =>
-				scaffoldClerkMirrorTableInSchema(code, "clerkUsers")
-			);
-			toast.success("Clerk Webhook Mirror Scaffolding Complete", {
-				description: 'Generated "clerkUsers" mirror table in your D1 schema.'
-			});
-		} else {
-			const { scaffoldWorkOSMirrorTableInSchema } = await import("../parser");
-			await this.executeSchemaMutation("Scaffold WorkOS Mirror", (code) =>
-				scaffoldWorkOSMirrorTableInSchema(code, "workosUsers")
-			);
-			toast.success("WorkOS Webhook Mirror Scaffolding Complete", {
-				description: 'Generated "workosUsers" mirror table in your D1 schema.'
-			});
+		for (const [filePath, content] of this.externalFilesMap.entries()) {
+			if (filePath === currentFile) continue;
+			const lines = content.split('\n');
+			for (let idx = 0; idx < lines.length; idx++) {
+				const line = lines[idx];
+				const refRegex = new RegExp(`\\.references\\s*\\(\\s*\\(\\)\\s*=>\\s*${tableName}\\b`);
+				if (refRegex.test(line)) {
+					const fileName = filePath.split(/[/\\]/).pop() || filePath;
+					references.push({
+						file: fileName,
+						lineContent: line.trim()
+					});
+				}
+			}
 		}
+		return references;
 	}
 
 
@@ -1591,29 +2487,10 @@ export class SchemaState {
 	async syncMissingWranglerBindings() {
 		if (this.isSandboxMode) {
 			toast.info("Sandbox Playground Active", {
-				description: "Wrangler binding files (wrangler.toml/jsonc) operate in-memory while in Sandbox Mode. All node operations work seamlessly!"
+				description: "Wrangler binding files (wrangler.jsonc) operate in-memory while in Sandbox Mode."
 			});
 			return;
 		}
-
-		if (!this.wranglerConfigFilePath && this.filePath) {
-			const rootDir = await findProjectRoot(this.filePath);
-			const newWranglerPath = rootDir + '/wrangler.toml';
-			try {
-				await PlatformService.writeText(newWranglerPath, `# Wrangler Configuration generated by Strata\nname = "my-cloudflare-worker"\ncompatibility_date = "2024-01-01"\n`);
-				this.wranglerConfigFilePath = newWranglerPath;
-				toast.info("Created wrangler.toml", {
-					description: "Auto-generated wrangler.toml in project root."
-				});
-			} catch (e: any) {
-				toast.error("Failed to create wrangler.toml", {
-					description: e?.message || String(e)
-				});
-				return;
-			}
-		}
-
-		if (!this.wranglerConfigFilePath) return;
 
 		const unconfiguredNodes = this.nodes.filter(n => {
 			const target = (n.data as any)?.target;
@@ -1622,65 +2499,40 @@ export class SchemaState {
 		});
 
 		if (unconfiguredNodes.length === 0) {
-			toast.success("Wrangler Config Aligned", {
-				description: "All entity targets are configured."
+			toast.success("Wrangler Bindings Aligned", {
+				description: "All entity targets are configured in your Wrangler bindings."
 			});
 			return;
 		}
 
-		for (const node of unconfiguredNodes) {
-			const target = (node.data as any).target;
-			const extra = (node.data as any).strata || {};
-			await this.syncToWranglerConfig('add', { type: target, name: node.id, extra });
-		}
+		const kvEntries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'kv')
+			.map(n => `    { "binding": "${n.id}", "id": "${(n.data as any)?.strata?.id || n.id}" }`);
+		const doEntries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'do')
+			.map(n => `    { "name": "${n.id}", "class_name": "${(n.data as any)?.strata?.class || n.id}" }`);
+		const r2Entries = unconfiguredNodes
+			.filter(n => (n.data as any)?.target === 'r2')
+			.map(n => `    { "binding": "${n.id}", "bucket_name": "${(n.data as any)?.strata?.bucket_name || n.id}" }`);
 
-		toast.success("Wrangler Configuration Updated", {
-			description: `Added ${unconfiguredNodes.length} missing binding configuration(s).`
-		});
-	}
+		let snippet = "// Add the following binding(s) to your wrangler.jsonc:\n";
+		if (kvEntries.length > 0) snippet += `"kv_namespaces": [\n${kvEntries.join(",\n")}\n],\n`;
+		if (doEntries.length > 0) snippet += `"durable_objects": {\n  "bindings": [\n${doEntries.join(",\n")}\n  ]\n},\n`;
+		if (r2Entries.length > 0) snippet += `"r2_buckets": [\n${r2Entries.join(",\n")}\n],\n`;
 
-	/**
-	 * Synchronizes target modifications (KV/DO/R2 additions or deletions) directly to wrangler.toml or wrangler.jsonc.
-	 */
-	async syncToWranglerConfig(
-		action: 'add' | 'remove',
-		binding: { type: 'kv' | 'do' | 'r2'; name: string; extra?: any }
-	) {
-		if (this.isSandboxMode) return;
-		
-		// Auto-generate wrangler.toml if missing when adding a binding to a local file
-		if (!this.wranglerConfigFilePath && action === 'add' && this.filePath) {
-			const rootDir = await findProjectRoot(this.filePath);
-			const newWranglerPath = rootDir + '/wrangler.toml';
+		if (typeof navigator !== 'undefined' && navigator.clipboard) {
 			try {
-				await PlatformService.writeText(newWranglerPath, `# Wrangler Configuration generated by Strata\nname = "my-cloudflare-worker"\ncompatibility_date = "2024-01-01"\n`);
-				this.wranglerConfigFilePath = newWranglerPath;
-				toast.info("Created wrangler.toml", {
-					description: `Auto-generated wrangler.toml in project root to store ${binding.type.toUpperCase()} binding.`
+				await navigator.clipboard.writeText(snippet.trim());
+				toast.success("Wrangler Recipe Copied", {
+					description: `Copied configuration for ${unconfiguredNodes.length} binding(s) to clipboard. Paste into your wrangler.jsonc.`
 				});
-			} catch (e: any) {
-				console.error("[Strata] Failed to create wrangler.toml:", e);
-			}
+				return;
+			} catch {}
 		}
 
-		if (!this.wranglerConfigFilePath) return;
-		try {
-			await PlatformService.mutateWranglerConfig(
-				this.wranglerConfigFilePath,
-				action,
-				binding.type,
-				binding.name,
-				binding.extra || {}
-			);
-			toast.success(`Wrangler configuration synced`, {
-				description: `${action === 'add' ? 'Added' : 'Removed'} ${binding.type} binding: ${binding.name}`
-			});
-		} catch (err: any) {
-			console.error("[Strata] Failed to sync wrangler config:", err);
-			toast.error(`Wrangler sync failed`, {
-				description: err?.message || String(err)
-			});
-		}
+		toast.info("Unconfigured Wrangler Bindings", {
+			description: `${unconfiguredNodes.length} binding(s) need declaration in wrangler.jsonc.`
+		});
 	}
 
 

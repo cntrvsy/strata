@@ -106,24 +106,6 @@ async fn write_schema_file(
     state.coordinator.write_file(PathBuf::from(path), content)
 }
 
-#[tauri::command]
-async fn mutate_wrangler_config(
-    state: State<'_, CoordinatorState>,
-    config_path: String,
-    action: String,
-    binding_type: String,
-    binding_name: String,
-    extra: serde_json::Value,
-) -> Result<(), CoordinatorError> {
-    state.coordinator.mutate_wrangler(
-        PathBuf::from(config_path),
-        action,
-        binding_type,
-        binding_name,
-        extra,
-    )
-}
-
 #[cfg(target_os = "linux")]
 fn appimage_wayland_preload_fix() {
     use std::os::unix::process::CommandExt;
@@ -230,7 +212,6 @@ pub fn run() {
             unwatch_file,
             read_schema_file,
             write_schema_file,
-            mutate_wrangler_config,
             distribution::get_distribution_channel
         ])
         .run(tauri::generate_context!())

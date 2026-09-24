@@ -8,7 +8,7 @@
 <script lang="ts">
   import { fade, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { Database, Cpu, Zap, HardDrive, X, Sparkles } from "lucide-svelte";
+  import { Database, Cpu, Zap, HardDrive, X, Sparkles, ArrowRight } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import NewD1TableForm from "./NewD1TableForm.svelte";
   import NewDOBindingForm from "./NewDOBindingForm.svelte";
@@ -22,9 +22,9 @@
     schemaState.showNewTableModal = false;
   }
 
-  function openScaffoldModal() {
+  function openAuthBlueprints() {
     close();
-    schemaState.showScaffoldAuthModal = true;
+    schemaState.openHelpTopic("identity-auth");
   }
 
   const targets = [
@@ -139,10 +139,11 @@
         <button
           type="button"
           class="btn btn-xs btn-ghost text-secondary hover:bg-secondary/10 font-bold gap-1 text-[11px]"
-          onclick={openScaffoldModal}
+          onclick={openAuthBlueprints}
         >
           <Sparkles class="w-3 h-3" />
-          <span>Scaffold Auth & SSO Mirrors →</span>
+          <span>View Auth & Identity Blueprints</span>
+          <ArrowRight class="w-3 h-3" />
         </button>
       </div>
     </div>

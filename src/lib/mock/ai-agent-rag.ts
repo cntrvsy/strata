@@ -1,3 +1,14 @@
+/**
+ * @strata-layout {
+ *   "users": { "x": 100, "y": 120 },
+ *   "agentSessions": { "x": 560, "y": 120 },
+ *   "chatMessages": { "x": 560, "y": 480 },
+ *   "documentEmbeddings": { "x": 100, "y": 480 },
+ *   "PROMPT_REGISTRY_KV": { "x": 100, "y": 860, "relations": [{ "to": "agentSessions" }] },
+ *   "AgentSessionDO": { "x": 1020, "y": 480, "relations": [{ "to": "chatMessages" }] },
+ *   "KNOWLEDGE_BASE_R2": { "x": 1020, "y": 860, "relations": [{ "to": "documentEmbeddings" }] }
+ * }
+ */
 import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
@@ -34,7 +45,6 @@ import { relations } from "drizzle-orm";
 /**
  * User Accounts & AI Token Quotas
  * Tracks customer usage and billing tiers for rate-limiting model calls.
- * @strata { "target": "d1", "x": 100, "y": 120 }
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -47,7 +57,6 @@ export const users = sqliteTable("users", {
 /**
  * Agent Conversational Sessions
  * Stateful execution run linking users to ongoing chat threads.
- * @strata { "target": "d1", "x": 560, "y": 120 }
  */
 export const agentSessions = sqliteTable("agent_sessions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -61,7 +70,6 @@ export const agentSessions = sqliteTable("agent_sessions", {
 /**
  * Chat Message History & Token Accounting
  * Granular dialogue turn log capturing inputs, generated outputs, and tool responses.
- * @strata { "target": "d1", "x": 560, "y": 480 }
  */
 export const chatMessages = sqliteTable("chat_messages", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -75,7 +83,6 @@ export const chatMessages = sqliteTable("chat_messages", {
 /**
  * Document Knowledge Base Metadata
  * Tracks source documents ingested from R2 and cataloged for vector semantic search.
- * @strata { "target": "d1", "x": 100, "y": 480 }
  */
 export const documentEmbeddings = sqliteTable("document_embeddings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -109,27 +116,3 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   }),
 }));
 
-// ============================================================================
-// SECTION 3: CLOUDFLARE EDGE INFRASTRUCTURE (JSDOC METADATA)
-// ============================================================================
-
-/**
- * Global Edge Prompt Registry (Cloudflare KV)
- * Sub-millisecond global key-value cache for system prompts, few-shot examples, and tool definitions.
- * @strata { "target": "kv", "binding": "PROMPT_REGISTRY_KV", "ttl": 86400, "x": 100, "y": 860, "relations": [{ "to": "agentSessions" }], "schema": { "systemPrompt": "string", "temperature": "number", "topP": "number", "toolDefinitions": "string" } }
- */
-export const PROMPT_REGISTRY_KV = {};
-
-/**
- * Stateful Agent Streaming Session (Cloudflare Durable Object)
- * Manages client WebSockets, executes streaming LLM inference, coordinates RAG vector lookups, and orchestrates tool calls.
- * @strata { "target": "do", "binding": "AgentSessionDO", "x": 1020, "y": 480, "relations": [{ "to": "chatMessages" }], "path": "./src/do/AgentSessionDO.ts", "class": "AgentSessionDO", "methods": ["connectStream", "executeToolCall", "appendContext", "abortGeneration"] }
- */
-export const AgentSessionDO = {};
-
-/**
- * RAG Knowledge Base Corpus (Cloudflare R2 Bucket)
- * Scalable object storage holding ingested PDF manuals, policy docs, and precomputed embedding caches.
- * @strata { "target": "r2", "binding": "KNOWLEDGE_BASE_R2", "x": 1020, "y": 860, "relations": [{ "to": "documentEmbeddings" }], "public": false, "cors": true, "folders": { "documents": "application/pdf", "embeddings_cache": "application/json", "audio_transcripts": "text/plain" } }
- */
-export const KNOWLEDGE_BASE_R2 = {};

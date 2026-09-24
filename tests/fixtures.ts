@@ -29,8 +29,6 @@ export const test = base.extend({
             if (args?.path && args?.content !== undefined) {
               vfs[args.path] = args.content;
             }
-            return null;
-          case 'mutate_wrangler_config': return null;
           default: return {};
         }
       };

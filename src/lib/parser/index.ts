@@ -34,9 +34,7 @@ export {
 	updateProjectConfigInSchema,
 	updateTableMetadataInSchema,
 	addForeignKeyToColumnInSchema,
-	scaffoldBetterAuthClusterInSchema,
-	scaffoldClerkMirrorTableInSchema,
-	scaffoldWorkOSMirrorTableInSchema,
+	fixD1ColumnTypeInSchema,
 	extractStrataLayoutManifest,
 	updateLayoutManifestInSchema,
 	removeTableFromLayoutManifest,
@@ -44,9 +42,23 @@ export {
 	parseDrizzleConfigSchemaPath,
 	createD1ModuleCode,
 	addReExportToBarrel,
+	consolidateDummyBindingsIntoManifest,
+	removeUnusedImportFromSchema,
 	type TablePresets
 } from './mutators';
 
+export {
+	extractStrataLayoutManifestDetails
+} from './helpers';
 
-export type { ParseResult } from './types';
+
+export type { 
+	ParseResult,
+	StrataNode,
+	StrataEdge,
+	StrataNodeData,
+	StrataEdgeData,
+	ColumnDefinition,
+	StorageTarget
+} from './types';
 export { createIsolatedProject } from './project';

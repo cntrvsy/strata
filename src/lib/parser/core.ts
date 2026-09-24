@@ -7,7 +7,7 @@
  */
 import { SourceFile, VariableDeclaration, SyntaxKind } from 'ts-morph';
 import { type Node, type Edge, MarkerType } from '@xyflow/svelte';
-import type { ParseResult, AuditIssue } from '#lib/parser/types';
+import type { ParseResult, AuditIssue, StrataNode, StrataEdge } from '#lib/parser/types';
 import { createIsolatedProject } from '#lib/parser/project';
 import { findSqliteTableCall, isDrizzleTableDeclaration, parseColumnChain, resolvePathAlias, resolveRelativePath, extractStrataMetadata, extractStrataLayoutManifest, extractStrataLayoutManifestDetails, detectPackageWrapper } from '#lib/parser/helpers';
 
@@ -59,8 +59,8 @@ export function parseSchema(
 	const { project, sourceFile: sf } = createIsolatedProject(effectiveFileName, code);
 	try {
 		
-		const nodes: Node[] = [];
-		const edges: Edge[] = [];
+		const nodes: StrataNode[] = [];
+		const edges: StrataEdge[] = [];
 		const externalPaths: string[] = [];
 		const warnings: string[] = [];
 		const auditIssues: AuditIssue[] = [];
@@ -121,6 +121,8 @@ export function parseSchema(
 			}
 		}
 
+		const isModularBarrel = exportDecls.some(exp => Boolean(exp.getModuleSpecifierValue()));
+
 		// Find all exported declarations in main schema file
 		const variableStatements = sf.getVariableStatements();
 		const tableDeclarations = new Map<string, VariableDeclaration>();
@@ -128,6 +130,9 @@ export function parseSchema(
 		// Extract @strata-layout manifest if present in the root file
 		const manifestDetails = extractStrataLayoutManifestDetails(code);
 		const layoutManifest = manifestDetails.manifest;
+		if (layoutManifest && (layoutManifest as any).__config__?.wranglerPath) {
+			wranglerPath = (layoutManifest as any).__config__.wranglerPath;
+		}
 		if (manifestDetails.error) {
 			auditIssues.push({
 				id: `audit_layout_manifest_${Date.now()}`,
@@ -180,7 +185,6 @@ export function parseSchema(
 					}
 				}
 
-
 				if (strataData.target === 'project') {
 					if (strataData.wranglerPath) {
 						wranglerPath = strataData.wranglerPath;
@@ -189,6 +193,27 @@ export function parseSchema(
 
 				if (strataData.path) {
 					externalPaths.push(strataData.path);
+				}
+
+				const init = decl.getInitializer();
+				const isEmptyObj = init?.isKind(SyntaxKind.ObjectLiteralExpression) && init.getProperties().length === 0;
+				if (isModularBarrel && isEmptyObj) {
+					auditIssues.push({
+						id: `audit_dummy_binding_${decl.getName()}_${statement.getStartLineNumber()}`,
+						severity: 'warning',
+						code: 'BARREL_DUMMY_BINDING',
+						message: `Cloudflare binding "${decl.getName()}" is declared as a dummy empty JS constant in the schema barrel. In modular setups, bindings belong in wrangler.jsonc with visual metadata and synthetic relations consolidated into @strata-layout.`,
+						symbolName: decl.getName(),
+						line: statement.getStartLineNumber(),
+						rawMatch: statement.getText(),
+						suggestedFix: {
+							label: 'Consolidate into @strata-layout',
+							action: 'migrate_dummy_to_manifest',
+							payload: {
+								symbolName: decl.getName()
+							}
+						}
+					});
 				}
 
 				// Only process if it's a known storage target
@@ -213,7 +238,11 @@ export function parseSchema(
 									rawMatch: col.definition,
 									suggestedFix: {
 										label: 'Convert to integer({ mode: "timestamp" })',
-										action: 'fix_d1_type'
+										action: 'fix_d1_type',
+										payload: {
+											columnName: col.name,
+											targetMode: 'timestamp'
+										}
 									}
 								});
 							} else if (col.definition && /\bboolean\s*\(/.test(col.definition) && !col.definition.includes('mode:')) {
@@ -227,7 +256,11 @@ export function parseSchema(
 									rawMatch: col.definition,
 									suggestedFix: {
 										label: 'Convert to integer({ mode: "boolean" })',
-										action: 'fix_d1_type'
+										action: 'fix_d1_type',
+										payload: {
+											columnName: col.name,
+											targetMode: 'boolean'
+										}
 									}
 								});
 							}
@@ -353,14 +386,19 @@ export function parseSchema(
 					if (target !== 'schema') {
 						const sourceFilePath = filePath || 'schema.ts';
 						const moduleName = sourceFilePath.split(/[/\\]/).pop() || 'schema.ts';
+						const nodeType = target === 'd1' || !target ? 'table' : target;
 						nodes.push({
 							id: tableName,
-							type: 'table',
+							type: nodeType,
 							data: { 
 								label: tableName, 
 								columns,
+								methods: target === 'do' ? columns : undefined,
+								patterns: target === 'kv' ? columns : undefined,
+								folders: target === 'r2' ? columns : undefined,
 								target,
 								strata: strataData,
+								line: decl.getStartLineNumber(),
 								moduleInfo: {
 									sourceFilePath,
 									moduleName,
@@ -383,7 +421,7 @@ export function parseSchema(
 		}
 
 		// Process external files if provided
-		if (externalFilesMap) {
+		if (externalFilesMap && typeof (externalFilesMap as any).entries === 'function') {
 			// Populate all files from externalFilesMap into the project
 			for (const [fPath, content] of externalFilesMap.entries()) {
 				const tempName = `temp_${fPath.replace(/[\/.]/g, '_')}.ts`;
@@ -441,14 +479,21 @@ export function parseSchema(
 
 							// Register external node with first-class module identity
 							const moduleName = extImp.filePath.split(/[/\\]/).pop() || extImp.filePath;
+							const extTarget = strataData.target || 'd1';
+							const extNodeType = extTarget === 'd1' ? 'table' : extTarget;
+							const extCols = extractColumns(decl);
 							nodes.push({
 								id: name,
-								type: 'table',
+								type: extNodeType,
 								data: {
 									label: name,
-									columns: extractColumns(decl),
-									target: strataData.target || 'd1',
+									columns: extCols,
+									methods: extTarget === 'do' ? extCols : undefined,
+									patterns: extTarget === 'kv' ? extCols : undefined,
+									folders: extTarget === 'r2' ? extCols : undefined,
+									target: extTarget,
 									strata: strataData,
+									line: decl.getStartLineNumber(),
 									moduleInfo: {
 										sourceFilePath: extImp.filePath,
 										moduleName,
@@ -510,14 +555,21 @@ export function parseSchema(
 										
 										if (!nodes.some(n => n.id === tableName)) {
 											const moduleName = filePath.split(/[/\\]/).pop() || filePath;
+											const customTarget = strataData.target || 'd1';
+											const customNodeType = customTarget === 'd1' ? 'table' : customTarget;
+											const customCols = extractColumns(decl);
 											nodes.push({
 												id: tableName,
-												type: 'table',
+												type: customNodeType,
 												data: {
 													label: tableName,
-													columns: extractColumns(decl),
-													target: strataData.target || 'd1',
+													columns: customCols,
+													methods: customTarget === 'do' ? customCols : undefined,
+													patterns: customTarget === 'kv' ? customCols : undefined,
+													folders: customTarget === 'r2' ? customCols : undefined,
+													target: customTarget,
 													strata: strataData,
+													line: decl.getStartLineNumber(),
 													moduleInfo: {
 														sourceFilePath: filePath,
 														moduleName,
@@ -541,17 +593,9 @@ export function parseSchema(
 			}
 		}
 		
-		// Extract Drizzle-native relations across all project source files
+		// Extract unified relationships: Phase 1 (Physical FKs) then Phase 2 (Drizzle Relations)
 		const allSourceFiles = project.getSourceFiles();
-		for (const [tableName, decl] of tableDeclarations) {
-			if (decl.wasForgotten()) continue;
-			try {
-				const initializer = decl.getInitializer()?.getText() || '';
-				if (initializer.includes('sqliteTable')) {
-					extractRelations(tableName, decl, edges, allSourceFiles);
-				}
-			} catch {}
-		}
+		extractAllSchemaRelations(tableDeclarations, edges, allSourceFiles);
 
 		// Validation: Ensure all synthetic relations point to existing targets
 		const tableNames = new Set(nodes.map(n => n.id));
@@ -717,15 +761,55 @@ export function parseSchema(
 					};
 				}
 			}
+			for (const [nodeId, meta] of Object.entries(layoutManifest)) {
+				if (meta && Array.isArray((meta as any).relations)) {
+					for (const rel of (meta as any).relations) {
+						if (rel && rel.to) {
+							addEdgeIfUnique(edges, nodeId, rel.to, true, 'synthetic');
+						}
+					}
+				}
+			}
+		}
+
+		// Check for unused drizzle-orm/sqlite-core imports in a modular barrel
+		if (isModularBarrel) {
+			for (const imp of sf.getImportDeclarations()) {
+				if (imp.getModuleSpecifierValue() === 'drizzle-orm/sqlite-core') {
+					const hasTableCall = sf.getDescendantsOfKind(SyntaxKind.CallExpression).some(c => c.getExpression().getText() === 'sqliteTable');
+					if (!hasTableCall) {
+						auditIssues.push({
+							id: `audit_unused_drizzle_import_${imp.getStartLineNumber()}`,
+							severity: 'warning',
+							code: 'UNUSED_BARREL_IMPORT',
+							message: `Unused Drizzle import in schema barrel. Clean modular barrels should contain only @strata-layout and domain re-exports.`,
+							symbolName: 'sqliteTable',
+							line: imp.getStartLineNumber(),
+							rawMatch: imp.getText(),
+							suggestedFix: {
+								label: 'Remove Unused Import',
+								action: 'remove_unused_import',
+								payload: {
+									moduleSpecifier: 'drizzle-orm/sqlite-core'
+								}
+							}
+						});
+					}
+				}
+			}
 		}
 
 		// Cleanup: Ensure all edges point to existing nodes and emit actionable diagnostics for broken references
 		const allNodeIds = new Set(nodes.map(n => n.id));
 		const validEdges: Edge[] = [];
 		for (const edge of edges) {
-			if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
+			const isSynthetic = (edge.data as any)?.isSynthetic || (edge.data as any)?.edgeType === 'synthetic' || edge.label === 'synthetic';
+			const sourceKnown = allNodeIds.has(edge.source) || Boolean(layoutManifest && layoutManifest[edge.source]);
+			const targetKnown = allNodeIds.has(edge.target) || Boolean(layoutManifest && layoutManifest[edge.target]);
+
+			if (isSynthetic ? (sourceKnown && targetKnown) : (allNodeIds.has(edge.source) && allNodeIds.has(edge.target))) {
 				validEdges.push(edge);
-			} else if (!(edge.data as any)?.isSynthetic && (edge.data as any)?.edgeType !== 'synthetic' && edge.label !== 'synthetic') {
+			} else if (!isSynthetic) {
 				const fromNode = edge.source;
 				const colName = (edge.data as any)?.sourceCol || (edge as any).sourceHandle;
 				const isFk = (edge.data as any)?.edgeType === 'fk' || !(edge.data as any)?.isVirtual;
@@ -761,11 +845,12 @@ export function parseSchema(
 				warnings, 
 				auditIssues, 
 				wranglerPath,
+				layoutManifest: layoutManifest || undefined,
 				packageWrapperInfo: packageWrapperInfo || undefined
 			};
 		}
 
-		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath };
+		return { success: true, nodes, edges: validEdges, externalImports, externalPaths, warnings, auditIssues, wranglerPath, layoutManifest: layoutManifest || undefined };
 	} catch (e: any) {
 		console.error("[Strata] Parse critical failure:", e);
 		
@@ -892,15 +977,243 @@ export function extractObjectFields(decl: VariableDeclaration) {
 }
 
 /**
- * Extracts both physical (FK) and logical (relations()) relationships.
+ * Adds a physical Foreign Key edge backed by .references().
  */
-export function extractRelations(tableName: string, decl: VariableDeclaration, edges: Edge[], sfOrFiles: any) {
-	const physicalRelations = new Set<string>();
+export function addPhysicalFkEdge(
+	edges: Edge[],
+	source: string,
+	target: string,
+	sourceCol?: string,
+	targetCol?: string
+) {
+	const id = `e-${source}-${target}-${sourceCol || 'fk'}`;
+	if (edges.some(e => e.id === id)) return;
+	if (source === target && !sourceCol) return;
+
+	const edgeColor = 'var(--color-primary)';
+	edges.push({
+		id,
+		source,
+		target,
+		sourceHandle: sourceCol || 'source',
+		targetHandle: targetCol || 'target',
+		animated: false,
+		label: sourceCol || 'FK',
+		labelStyle: 'font-size: 10px; color: var(--color-base-content); font-weight: bold;',
+		style: `stroke: ${edgeColor}; stroke-width: 2.25; opacity: 1.0;`,
+		type: 'relation',
+		data: {
+			isPhysical: true,
+			isVirtual: false,
+			isSynthetic: false,
+			cardinality: '1:N',
+			edgeType: 'fk',
+			sourceCol,
+			targetCol,
+			fkConstraint: {
+				sourceCol: sourceCol || '',
+				targetCol: targetCol || ''
+			},
+			relationNames: [],
+			drizzleRelations: [],
+			description: `Physical FK: ${source}.${sourceCol || ''} → ${target}.${targetCol || ''}`
+		},
+		markerEnd: {
+			type: MarkerType.ArrowClosed,
+			width: 15,
+			height: 15,
+			color: edgeColor,
+		}
+	});
+}
+
+/**
+ * Updates human-readable relationship pedigree description.
+ */
+function updateEdgeDescription(edge: Edge) {
+	const d = edge.data as any;
+	if (!d) return;
+	const parts: string[] = [];
+	if (d.isPhysical) {
+		const srcCol = d.sourceCol || edge.sourceHandle;
+		const tgtCol = d.targetCol || edge.targetHandle;
+		parts.push(`Physical FK: ${edge.source}.${srcCol} → ${edge.target}.${tgtCol}`);
+	} else if (d.isSynthetic) {
+		parts.push(`Cloudflare Service Topology: ${edge.source} → ${edge.target}`);
+	} else {
+		parts.push(`Virtual Drizzle Relation: ${edge.source} ↔ ${edge.target}`);
+	}
+	if (d.drizzleRelations && d.drizzleRelations.length > 0) {
+		const relStr = d.drizzleRelations
+			.map((r: any) => `${r.fromTable}.${r.relationName} (${r.relationType})`)
+			.join(', ');
+		parts.push(`Drizzle: ${relStr}`);
+	}
+	d.description = parts.join(' | ');
+}
+
+/**
+ * Unifies a Drizzle relation declaration with an existing physical or virtual edge,
+ * or registers a single canonical virtual edge if none exists.
+ */
+function unifyOrAddDrizzleRelation(
+	edges: Edge[],
+	fromTable: string,
+	targetTable: string,
+	relType: string,
+	propName: string,
+	sourceColFromConfig?: string,
+	targetColFromConfig?: string,
+	relationNameConfig?: string,
+	getRelationWrapper?: (from: string, to: string) => string | null
+) {
+	let matchedEdge: Edge | undefined;
+
+	if (relType === 'one') {
+		// fromTable is child, targetTable is parent
+		const candidates = edges.filter(e => e.source === fromTable && e.target === targetTable);
+		if (candidates.length > 0) {
+			if (sourceColFromConfig) {
+				matchedEdge = candidates.find(e => 
+					(e.data as any)?.sourceCol === sourceColFromConfig || 
+					e.sourceHandle === sourceColFromConfig ||
+					(e.data as any)?.fkConstraint?.sourceCol === sourceColFromConfig
+				);
+			}
+			if (!matchedEdge && relationNameConfig) {
+				matchedEdge = candidates.find(e => 
+					e.label === relationNameConfig || 
+					(e.data as any)?.relationNames?.includes(relationNameConfig)
+				);
+			}
+			if (!matchedEdge) {
+				matchedEdge = candidates.find(e => 
+					!(e.data as any)?.drizzleRelations?.some((r: any) => r.fromTable === fromTable && r.relationType === 'one')
+				) || candidates[0];
+			}
+		}
+
+		if (!matchedEdge) {
+			const revCandidates = edges.filter(e => e.source === targetTable && e.target === fromTable);
+			if (revCandidates.length > 0) {
+				matchedEdge = revCandidates[0];
+			}
+		}
+	} else if (relType === 'many') {
+		// fromTable is parent, targetTable is child
+		const candidates = edges.filter(e => e.source === targetTable && e.target === fromTable);
+		if (candidates.length > 0) {
+			if (relationNameConfig) {
+				matchedEdge = candidates.find(e => 
+					e.label === relationNameConfig || 
+					(e.data as any)?.relationNames?.includes(relationNameConfig)
+				);
+			}
+			if (!matchedEdge) {
+				matchedEdge = candidates.find(e => 
+					!(e.data as any)?.drizzleRelations?.some((r: any) => r.fromTable === fromTable && r.relationType === 'many')
+				) || candidates[0];
+			}
+		}
+
+		if (!matchedEdge) {
+			const fwdCandidates = edges.filter(e => e.source === fromTable && e.target === targetTable);
+			if (fwdCandidates.length > 0) {
+				matchedEdge = fwdCandidates[0];
+			}
+		}
+	}
+
+	if (matchedEdge) {
+		const ed = matchedEdge.data as any;
+		if (!ed.relationNames) ed.relationNames = [];
+		if (!ed.relationNames.includes(propName)) ed.relationNames.push(propName);
+
+		if (!ed.drizzleRelations) ed.drizzleRelations = [];
+		ed.drizzleRelations.push({ fromTable, relationName: propName, relationType: relType });
+
+		if (relType === 'many') {
+			ed.cardinality = '1:N';
+		} else if (relType === 'one') {
+			const otherWrapper = getRelationWrapper ? getRelationWrapper(targetTable, fromTable) : null;
+			const hasReverseOne = otherWrapper === 'one' || ed.drizzleRelations.some((r: any) => r.fromTable === targetTable && r.relationType === 'one');
+			const hasReverseMany = otherWrapper === 'many' || ed.drizzleRelations.some((r: any) => r.relationType === 'many');
+
+			if (hasReverseOne) {
+				ed.cardinality = '1:1';
+			} else if (ed.isPhysical || hasReverseMany) {
+				ed.cardinality = '1:N';
+			} else {
+				ed.cardinality = 'N:1';
+			}
+		}
+
+		if (!matchedEdge.label || matchedEdge.label === ed.sourceCol || matchedEdge.label === 'FK') {
+			matchedEdge.label = propName;
+		}
+
+		updateEdgeDescription(matchedEdge);
+	} else {
+		// Create single canonical virtual edge
+		const source = fromTable;
+		const target = targetTable;
+		const otherWrapper = getRelationWrapper ? getRelationWrapper(targetTable, fromTable) : null;
+
+		let cardinality: '1:1' | '1:N' | 'N:1' | 'unknown' = 'unknown';
+		if (relType === 'many') {
+			cardinality = '1:N';
+		} else if (relType === 'one') {
+			cardinality = (otherWrapper === 'one') ? '1:1' : 'N:1';
+		}
+
+		const id = `e-${source}-${target}-${propName}`;
+		const edgeColor = 'var(--color-secondary)';
+		const edge: Edge = {
+			id,
+			source,
+			target,
+			sourceHandle: sourceColFromConfig || 'source',
+			targetHandle: targetColFromConfig || 'target',
+			animated: true,
+			label: propName,
+			labelStyle: 'font-size: 10px; color: var(--color-base-content); font-weight: bold;',
+			style: `stroke: ${edgeColor}; stroke-width: 1.75; stroke-dasharray: 4 4; opacity: 0.85;`,
+			type: 'relation',
+			data: {
+				isVirtual: true,
+				isPhysical: false,
+				isSynthetic: false,
+				cardinality,
+				edgeType: relType,
+				sourceCol: sourceColFromConfig || propName,
+				targetCol: targetColFromConfig,
+				relationNames: [propName],
+				drizzleRelations: [{ fromTable, relationName: propName, relationType: relType }],
+				description: `Virtual Drizzle Relation: ${fromTable}.${propName} (${relType})`
+			},
+			markerEnd: {
+				type: MarkerType.ArrowClosed,
+				width: 15,
+				height: 15,
+				color: edgeColor,
+			}
+		};
+		edges.push(edge);
+	}
+}
+
+/**
+ * Extracts and unifies both physical (FK) and logical (relations()) relationships across all tables and files.
+ */
+export function extractAllSchemaRelations(
+	tableDeclarations: Map<string, VariableDeclaration>,
+	edges: Edge[],
+	sfOrFiles: any
+) {
 	const allFiles: SourceFile[] = Array.isArray(sfOrFiles) 
 		? sfOrFiles 
 		: (sfOrFiles?.getSourceFiles ? sfOrFiles.getSourceFiles() : [sfOrFiles]);
 
-	// Helper to find if a target relation exists and what wrapper it uses (many or one)
 	const getRelationWrapper = (fromTable: string, toTable: string): string | null => {
 		for (const file of allFiles) {
 			if (!file || typeof file.getVariableDeclarations !== 'function') continue;
@@ -917,7 +1230,7 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 								if (prop.isKind(SyntaxKind.PropertyAssignment)) {
 									const relInit = prop.getInitializer();
 									if (relInit?.isKind(SyntaxKind.CallExpression) && relInit.getArguments()[0]?.getText() === toTable) {
-										return relInit.getExpression().getText(); // e.g. "one" or "many"
+										return relInit.getExpression().getText();
 									}
 								}
 							}
@@ -929,34 +1242,38 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 		return null;
 	};
 
-	// 1. Physical Foreign Keys
-	const initializer = decl.getInitializer();
-	if (initializer) {
-		const callExps = initializer.getDescendantsOfKind(SyntaxKind.CallExpression);
-		for (const call of callExps) {
-			if (call.getExpression().getText().endsWith('.references')) {
-				const args = call.getArguments();
-				if (args.length > 0) {
-					const propAccess = args[0].getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)[0];
-					if (propAccess) {
-						const targetTable = propAccess.getExpression().getText();
-						const targetCol = propAccess.getName();
-						if (targetTable) {
-							physicalRelations.add(targetTable);
-							const colName = call.getAncestors().find(a => a.isKind(SyntaxKind.PropertyAssignment))?.asKind(SyntaxKind.PropertyAssignment)?.getName();
-							if (colName && targetCol) {
-								addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', colName, '1:N', colName, targetCol);
-							} else {
-								addEdgeIfUnique(edges, tableName, targetTable, false, 'fk', undefined, '1:N');
+	// ------------------------------------------------------------------------
+	// PHASE 1: Physical Foreign Keys (.references()) across all tables
+	// ------------------------------------------------------------------------
+	for (const [tableName, decl] of tableDeclarations) {
+		if (decl.wasForgotten()) continue;
+		try {
+			const initializer = decl.getInitializer();
+			if (!initializer || !decl.getInitializer()?.getText().includes('sqliteTable')) continue;
+
+			const callExps = initializer.getDescendantsOfKind(SyntaxKind.CallExpression);
+			for (const call of callExps) {
+				if (call.getExpression().getText().endsWith('.references')) {
+					const args = call.getArguments();
+					if (args.length > 0) {
+						const propAccess = args[0].getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)[0];
+						if (propAccess) {
+							const targetTable = propAccess.getExpression().getText();
+							const targetCol = propAccess.getName();
+							if (targetTable) {
+								const colName = call.getAncestors().find(a => a.isKind(SyntaxKind.PropertyAssignment))?.asKind(SyntaxKind.PropertyAssignment)?.getName();
+								addPhysicalFkEdge(edges, tableName, targetTable, colName, targetCol);
 							}
 						}
 					}
 				}
 			}
-		}
+		} catch {}
 	}
 
-	// 2. Logical Drizzle relations() across all files in the project
+	// ------------------------------------------------------------------------
+	// PHASE 2: Logical Drizzle relations() across all files
+	// ------------------------------------------------------------------------
 	for (const file of allFiles) {
 		if (!file || typeof file.getVariableDeclarations !== 'function') continue;
 		const sourceFileDecls = file.getVariableDeclarations();
@@ -964,7 +1281,8 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 			const init = d.getInitializer();
 			if (init?.isKind(SyntaxKind.CallExpression) && init.getExpression().getText() === 'relations') {
 				const args = init.getArguments();
-				if (args.length > 1 && args[0].getText() === tableName) {
+				if (args.length > 1) {
+					const fromTable = args[0].getText();
 					const body = (args[1] as any).getBody();
 					const objLiteral = body.isKind(SyntaxKind.ObjectLiteralExpression) ? body : body.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)[0];
 
@@ -973,26 +1291,45 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 							if (prop.isKind(SyntaxKind.PropertyAssignment)) {
 								const relInit = prop.getInitializer();
 								if (relInit?.isKind(SyntaxKind.CallExpression)) {
-									const relType = relInit.getExpression().getText(); 
-									const targetTable = relInit.getArguments()[0]?.getText();
-									if (targetTable) {
-										const isVirtual = !physicalRelations.has(targetTable);
-										
-										// Determine Cardinality:
-										let cardinality: '1:1' | '1:N' | 'N:1' | 'unknown' = 'unknown';
-										if (relType === 'many') {
-											cardinality = '1:N';
-										} else if (relType === 'one') {
-											const reverseType = getRelationWrapper(targetTable, tableName);
-											if (reverseType === 'one') {
-												cardinality = '1:1';
-											} else {
-												cardinality = 'N:1';
-											}
+									const relType = relInit.getExpression().getText();
+									const relArgs = relInit.getArguments();
+									const targetTable = relArgs[0]?.getText();
+									if (!targetTable) continue;
+
+									let sourceColFromConfig: string | undefined;
+									let targetColFromConfig: string | undefined;
+									let relationNameConfig: string | undefined;
+
+									if (relArgs.length > 1 && relArgs[1].isKind(SyntaxKind.ObjectLiteralExpression)) {
+										const configObj = relArgs[1];
+										const fieldsProp = configObj.getProperty('fields');
+										if (fieldsProp?.isKind(SyntaxKind.PropertyAssignment)) {
+											const pa = fieldsProp.getInitializer()?.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)[0];
+											if (pa) sourceColFromConfig = pa.getName();
 										}
-										
-										addEdgeIfUnique(edges, tableName, targetTable, isVirtual, relType, prop.getName(), cardinality);
+										const refProp = configObj.getProperty('references');
+										if (refProp?.isKind(SyntaxKind.PropertyAssignment)) {
+											const pa = refProp.getInitializer()?.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)[0];
+											if (pa) targetColFromConfig = pa.getName();
+										}
+										const relNameProp = configObj.getProperty('relationName');
+										if (relNameProp?.isKind(SyntaxKind.PropertyAssignment)) {
+											const t = relNameProp.getInitializer()?.getText();
+											if (t) relationNameConfig = t.replace(/['"`]/g, '');
+										}
 									}
+
+									unifyOrAddDrizzleRelation(
+										edges,
+										fromTable,
+										targetTable,
+										relType,
+										prop.getName(),
+										sourceColFromConfig,
+										targetColFromConfig,
+										relationNameConfig,
+										getRelationWrapper
+									);
 								}
 							}
 						}
@@ -1001,6 +1338,15 @@ export function extractRelations(tableName: string, decl: VariableDeclaration, e
 			}
 		}
 	}
+}
+
+/**
+ * Backwards compatibility wrapper for extracting relations on a single table.
+ */
+export function extractRelations(tableName: string, decl: VariableDeclaration, edges: Edge[], sfOrFiles: any) {
+	const tableMap = new Map<string, VariableDeclaration>();
+	tableMap.set(tableName, decl);
+	extractAllSchemaRelations(tableMap, edges, sfOrFiles);
 }
 
 /**
@@ -1018,36 +1364,54 @@ export function addEdgeIfUnique(
 	sourceHandle: string = 'source',
 	targetHandle: string = 'target'
 ) {
-	const id = `e-${source}-${target}-${name || (isVirtual ? 'v' : 'p')}`;
-	if (source === target || edges.some(e => e.id === id)) return;
-	
-	const edgeColor = isVirtual ? 'var(--color-secondary)' : 'var(--color-primary)';
-	
-	edges.push({
-		id,
+	if (source === target && !name) return;
+
+	if (relType === 'synthetic') {
+		const id = `e-${source}-${target}-synthetic`;
+		if (edges.some(e => e.id === id)) return;
+		const edgeColor = 'var(--color-secondary)';
+		edges.push({
+			id,
+			source,
+			target,
+			sourceHandle,
+			targetHandle,
+			animated: true,
+			label: name || 'topology',
+			labelStyle: 'font-size: 10px; color: var(--color-base-content); font-weight: bold;',
+			style: `stroke: ${edgeColor}; stroke-width: 1.75; stroke-dasharray: 4 4; opacity: 0.85;`,
+			type: 'relation',
+			data: { 
+				isVirtual: true, 
+				isPhysical: false,
+				cardinality: 'unknown', 
+				edgeType: 'synthetic', 
+				isSynthetic: true,
+				sourceCol: name || (sourceHandle !== 'source' ? sourceHandle : undefined),
+				description: `Cloudflare Service Topology Link: ${source} → ${target}`
+			},
+			markerEnd: {
+				type: MarkerType.ArrowClosed,
+				width: 15,
+				height: 15,
+				color: edgeColor,
+			}
+		});
+		return;
+	}
+
+	if (relType === 'fk') {
+		addPhysicalFkEdge(edges, source, target, name || (sourceHandle !== 'source' ? sourceHandle : undefined), targetHandle !== 'target' ? targetHandle : undefined);
+		return;
+	}
+
+	unifyOrAddDrizzleRelation(
+		edges,
 		source,
 		target,
-		sourceHandle,
-		targetHandle,
-		animated: isVirtual,
-		label: name || (relType !== 'fk' ? relType : undefined),
-		labelStyle: 'font-size: 10px; color: var(--color-base-content); font-weight: bold;',
-		style: isVirtual 
-			? `stroke: ${edgeColor}; stroke-width: 1.75; stroke-dasharray: 4 4; opacity: 0.85;`
-			: `stroke: ${edgeColor}; stroke-width: 2.25; opacity: 1.0;`,
-		type: 'relation',
-		data: { 
-			isVirtual, 
-			cardinality, 
-			edgeType: relType, 
-			isSynthetic: relType === 'synthetic',
-			sourceCol: name || (sourceHandle !== 'source' ? sourceHandle : undefined)
-		},
-		markerEnd: {
-			type: MarkerType.ArrowClosed,
-			width: 15,
-			height: 15,
-			color: edgeColor,
-		}
-	});
+		relType || 'many',
+		name || 'rel',
+		sourceHandle !== 'source' ? sourceHandle : undefined,
+		targetHandle !== 'target' ? targetHandle : undefined
+	);
 }

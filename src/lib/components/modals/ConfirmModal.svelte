@@ -75,9 +75,26 @@
 
       <!-- Body -->
       <div
-        class="p-6 flex flex-col gap-2 text-xs text-base-content/80 leading-relaxed font-sans"
+        class="p-6 flex flex-col gap-3 text-xs text-base-content/80 leading-relaxed font-sans"
       >
         <p>{schemaState.confirmModalData.message}</p>
+
+        {#if schemaState.confirmModalData.warnings && schemaState.confirmModalData.warnings.length > 0}
+          <div class="p-3 bg-warning/10 border border-warning/30 rounded-box flex flex-col gap-1.5 text-warning text-xs">
+            <div class="flex items-center gap-1.5 font-bold">
+              <TriangleAlert class="w-3.5 h-3.5 shrink-0" />
+              <span>Cross-Module Dependencies Detected:</span>
+            </div>
+            <ul class="list-disc pl-4 space-y-0.5 text-[11px] opacity-90 font-mono text-base-content/80">
+              {#each schemaState.confirmModalData.warnings as warn}
+                <li>{warn}</li>
+              {/each}
+            </ul>
+            <p class="text-[10.5px] opacity-70 mt-0.5 text-base-content/70">
+              Other module files are not automatically rewritten. Remember to update foreign key imports in your external code editor.
+            </p>
+          </div>
+        {/if}
       </div>
 
       <!-- Footer -->

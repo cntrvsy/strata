@@ -168,7 +168,7 @@ export function generatePackageJson(
 
 	const hasD1Tables = nodes.some(n => {
 		const target = (n.data as any)?.target;
-		return !target || target === 'd1';
+		return n.type !== 'identity' && (!target || target === 'd1');
 	}) || rawCode.includes('sqliteTable');
 
 	const d1Binding = 'DB';
@@ -199,7 +199,7 @@ export function generatePackageJson(
 	// 1. Detect Better Auth:
 	const tableNames = new Set(
 		nodes
-			.filter(n => !(n.data as any)?.target || (n.data as any)?.target === 'd1')
+			.filter(n => n.type !== 'identity' && (!(n.data as any)?.target || (n.data as any)?.target === 'd1'))
 			.map(n => n.id.toLowerCase())
 	);
 	// Also extract table names declared in rawCode (sqliteTable("name" or sqliteTable('name')
@@ -311,7 +311,7 @@ export function generateWorkerEntrypoint(projectName: string, nodes: Node[], raw
 	const doNodes = nodes.filter(n => (n.data as any)?.target === 'do');
 	const hasD1 = nodes.some(n => {
 		const target = (n.data as any)?.target;
-		return !target || target === 'd1';
+		return n.type !== 'identity' && (!target || target === 'd1');
 	}) || rawCode.includes('sqliteTable');
 
 	let code = `import { drizzle } from "drizzle-orm/d1";\n`;

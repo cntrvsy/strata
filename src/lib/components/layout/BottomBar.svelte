@@ -13,6 +13,7 @@
     Layers,
     Cpu,
     Zap,
+    HardDrive,
     TriangleAlert,
     CircleAlert,
     Wrench,
@@ -30,10 +31,14 @@
 
     return {
       d1: nodes.filter(
-        (n) => (n.data as any).target === "d1" || !(n.data as any).target,
+        (n) =>
+          n.type !== "identity" &&
+          ((n.data as any).target === "d1" || !(n.data as any).target),
       ).length,
       do: nodes.filter((n) => (n.data as any).target === "do").length,
       kv: nodes.filter((n) => (n.data as any).target === "kv").length,
+      r2: nodes.filter((n) => (n.data as any).target === "r2").length,
+      identity: nodes.filter((n) => n.type === "identity").length,
       columns: nodes.reduce(
         (acc, n) => acc + ((n.data as any).columns?.length || 0),
         0,
@@ -157,11 +162,11 @@
             class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1 font-sans"
           >
             <span
-              >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
+              >• <strong>Disk -> UI:</strong> External saves (e.g. in VS Code) trigger
               the file watcher to instantly parse the AST and refresh the diagram.</span
             >
             <span
-              >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications
+              >• <strong>UI -> Disk:</strong> Canvas drags or visual modifications
               surgically patch the AST and write back in real-time.</span
             >
           </div>
@@ -350,7 +355,7 @@
                   class="btn btn-warning btn-xs rounded-field font-semibold gap-1 text-[10px] shadow-sm w-full mt-1"
                   onclick={() => schemaState.syncMissingWranglerBindings()}
                 >
-                  Fix & Sync to Wrangler Config
+                  Copy Wrangler Binding Recipe
                 </button>
               {/if}
             </div>
@@ -414,6 +419,24 @@
             >
               <Zap class="w-3 h-3" />
               <span>{stats.kv} KV</span>
+            </button>
+          {/if}
+
+          {#if stats.r2 > 0}
+            <span class="opacity-30">•</span>
+            <!-- R2 filter button -->
+            <button
+              onclick={() =>
+                (schemaState.activeFilter =
+                  schemaState.activeFilter === "r2" ? null : "r2")}
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-field transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
+              'r2'
+                ? 'text-info font-bold bg-info/10'
+                : 'text-base-content/75'}"
+              title="Filter R2 Buckets"
+            >
+              <HardDrive class="w-3 h-3" />
+              <span>{stats.r2} R2</span>
             </button>
           {/if}
 
@@ -498,7 +521,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.8</span
+      title="Strata App Version">v3.2.0</span
     >
   </div>
 </div>

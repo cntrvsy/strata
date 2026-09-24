@@ -15,11 +15,22 @@ const elk = new ELK();
  * Computes an organized, overlap-free layout for schema tables using the ELK layered algorithm.
  * Adapts node heights and widths dynamically depending on table names, columns, and Compact Mode.
  */
-export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[]> {
+export async function arrangeLayout<T extends Node>(nodes: T[], edges: Edge[]): Promise<T[]> {
   if (nodes.length === 0) return [];
 
   const isCompact = schemaState.compactMode;
   const children = nodes.map(node => {
+    // 0. Prefer actual measured DOM dimensions if already rendered
+    const measuredW = (node as any).measured?.width || (node as any).width;
+    const measuredH = (node as any).measured?.height || (node as any).height;
+    if (measuredW && measuredH && measuredW > 0 && measuredH > 0) {
+      return {
+        id: node.id,
+        width: Math.round(measuredW),
+        height: Math.round(measuredH)
+      };
+    }
+
     if (node.type === 'identity') {
       return {
         id: node.id,
@@ -28,13 +39,43 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
       };
     }
 
+    if (node.type === 'do') {
+      const methods = (node.data?.methods as any[]) || (node.data?.columns as any[]) || [];
+      const hasPath = Boolean((node.data?.strata as any)?.path);
+      const height = Math.max(140, 44 + 32 + 24 + Math.max(1, methods.length) * 32 + (hasPath ? 30 : 0) + 16);
+      return {
+        id: node.id,
+        width: 270,
+        height
+      };
+    }
+
+    if (node.type === 'kv') {
+      const patterns = (node.data?.patterns as any[]) || (node.data?.columns as any[]) || [];
+      const height = Math.max(130, 44 + 24 + Math.max(1, patterns.length) * 32 + 30 + 16);
+      return {
+        id: node.id,
+        width: 260,
+        height
+      };
+    }
+
+    if (node.type === 'r2') {
+      const folders = (node.data?.folders as any[]) || (node.data?.columns as any[]) || [];
+      const height = Math.max(130, 44 + 32 + 24 + Math.max(1, folders.length) * 32 + 30 + 16);
+      return {
+        id: node.id,
+        width: 260,
+        height
+      };
+    }
+
     const columns = (node.data?.columns as any[]) || [];
     const hasModuleBadge = Boolean(node.data?.moduleInfo && !(node.data?.moduleInfo as any)?.isRootFile);
     
     // 1. Calculate estimated header width:
-    // Base padding/icon/badge width is ~110px. If modular entity, add ~60px for module badge.
     const headerBaseWidth = 110 + (hasModuleBadge ? 60 : 0);
-    const headerTextWidth = node.id.length * 8.5; // Increased to 8.5px per character
+    const headerTextWidth = node.id.length * 8.5;
     let maxEstimatedWidth = headerBaseWidth + headerTextWidth;
 
     // 2. Calculate estimated width for each column row:
@@ -48,8 +89,8 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
         .replace('text', 'txt')
         .replace('integer', 'int');
       
-      const rowBaseWidth = 100; // Increased base row padding width buffer
-      const nameWidth = (col.name?.length || 0) * 8.0; // Increased char width to 8.0px
+      const rowBaseWidth = 100;
+      const nameWidth = (col.name?.length || 0) * 8.0;
       const typeWidth = typeStr.length * 6;
       const rowWidth = rowBaseWidth + nameWidth + typeWidth;
       
@@ -58,10 +99,7 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
       }
     }
     
-    // Base width is 220px. Add a 20px general safety margin.
     const width = Math.max(220, Math.round(maxEstimatedWidth) + 20);
-
-    // Header (approx 44px) + column padding + fields + collapse indicator
     const height = Math.max(100, 44 + columnsToDisplay.length * 38 + (isCompact ? 36 : 0));
     return {
       id: node.id,
@@ -81,12 +119,16 @@ export async function arrangeLayout(nodes: Node[], edges: Edge[]): Promise<Node[
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': 'RIGHT',
-      'org.eclipse.elk.separateConnectedComponents': 'true', // Pack disconnected components separately
-      'elk.spacing.componentSpacing': '80', // Space between separate layout components
-      'elk.spacing.nodeNode': '105', // Vertically space nodes in the same layer
-      'elk.layered.spacing.nodeNodeBetweenLayers': '160', // Horizontally space nodes between layers
+      'org.eclipse.elk.separateConnectedComponents': 'true',
+      'elk.spacing.componentSpacing': '70',
+      'elk.spacing.nodeNode': '60',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '120',
       'elk.padding': '[top=50,left=50,bottom=50,right=50]',
-      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF' // High-quality alignment strategy
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+      'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+      'elk.layered.cycleBreaking.strategy': 'GREEDY',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.thoroughness': '7'
     },
     children,
     edges: elkEdges

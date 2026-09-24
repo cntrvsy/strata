@@ -6,8 +6,11 @@
   Output: Visual card component with draggable connection handles.
 -->
 <script lang="ts">
-  import { Handle, Position } from "@xyflow/svelte";
+  import { Handle, Position, useUpdateNodeInternals } from "@xyflow/svelte";
+  import { tick } from "svelte";
   import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Database,
     Key,
@@ -17,9 +20,12 @@
     HardDrive,
     CircleX,
     TriangleAlert,
+    Folder,
+    ShieldCheck,
   } from "lucide-svelte";
 
-  const { data, selected, dragging } = $props<{
+  const { id, data, selected, dragging } = $props<{
+    id?: string;
     data: {
       label: string;
       columns: Array<{
@@ -39,6 +45,8 @@
     selected?: boolean;
     dragging?: boolean;
   }>();
+
+  const nodeId = $derived(id || data.label);
 
   const isD1 = $derived(data.target === "d1" || !data.target);
   const isMatch = $derived(
@@ -98,27 +106,24 @@
     targetConfig[(data.target as keyof typeof targetConfig) || "d1"],
   );
 
-  const activeNodeId = $derived(
-    schemaState.hoveredNodeId ||
-      schemaState.nodes.find((n) => n.selected)?.id ||
-      null,
-  );
-  const isRelated = $derived(
-    !activeNodeId ||
-      data.label === activeNodeId ||
-      schemaState.edges.some(
-        (e) =>
-          (e.source === data.label && e.target === activeNodeId) ||
-          (e.source === activeNodeId && e.target === data.label),
-      ),
+  const highlightStatus = $derived(
+    schemaState.highlightGraph.getNodeHighlight(nodeId),
   );
 
   const opacityClass = $derived(
     !isMatch
       ? "opacity-30 pointer-events-none"
-      : isRelated
+      : highlightStatus === "normal"
         ? "opacity-100 scale-100"
-        : "opacity-20 scale-98",
+        : highlightStatus === "self"
+          ? "opacity-100 scale-100 z-30 ring-2 ring-primary/60 shadow-2xl"
+          : highlightStatus === "upstream"
+            ? "opacity-100 scale-100 z-20 ring-2 ring-primary/50 shadow-xl"
+            : highlightStatus === "downstream"
+              ? "opacity-100 scale-100 z-20 ring-2 ring-secondary/50 shadow-xl"
+              : highlightStatus === "transitive"
+                ? "opacity-65 scale-[0.99] z-10 border-dashed"
+                : "opacity-20 scale-98 pointer-events-auto",
   );
 
   const columnsToDisplay = $derived(
@@ -140,7 +145,35 @@
   const hasAuditWarning = $derived(
     nodeAuditIssues.some((i) => i.severity === "warning"),
   );
+
+  const hiddenHighlightedCount = $derived(
+    schemaState.compactMode
+      ? data.columns
+          .filter((c: any) => !c.isPk && !c.isReferences)
+          .filter((c: any) => schemaState.highlightGraph.isColumnHighlighted(nodeId, c.name)).length
+      : 0,
+  );
+
+  const updateNodeInternals = useUpdateNodeInternals();
+  $effect(() => {
+    const _c = schemaState.compactMode;
+    const _l = data.columns?.length;
+    tick().then(() => {
+      updateNodeInternals(nodeId);
+    });
+  });
 </script>
+
+<NodeQuickActions
+  {nodeId}
+  nodeType="table"
+  {selected}
+  targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath}
+  line={(data as any).line}
+  onAddField={() => {
+    schemaState.activeInspectorNodeId = nodeId;
+  }}
+/>
 
 <div
   class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
@@ -148,17 +181,24 @@
   data-table-name={data.label}
   role="button"
   tabindex="0"
-  onmouseenter={() => (schemaState.hoveredNodeId = data.label)}
+  onmouseenter={() => {
+    if (!dragging) schemaState.hoveredNodeId = nodeId;
+  }}
   onmouseleave={() => {
-    if (schemaState.hoveredNodeId === data.label)
+    if (schemaState.hoveredNodeId === nodeId)
       schemaState.hoveredNodeId = null;
   }}
   ondblclick={() => {
-    schemaState.activeInspectorNodeId = data.label;
+    schemaState.activeInspectorNodeId = nodeId;
+    const targetFile = data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath;
+    const line = (data as any).line;
+    if (targetFile) {
+      PlatformService.openInEditor(targetFile, line);
+    }
   }}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {
-      schemaState.activeInspectorNodeId = data.label;
+      schemaState.activeInspectorNodeId = nodeId;
     }
   }}
 >
@@ -184,20 +224,32 @@
         <span
           class="font-bold text-xs tracking-wide uppercase">{data.label}</span
         >
+        {#if highlightStatus === "upstream"}
+          <span class="badge badge-xs badge-primary font-mono text-[8px] px-1 py-0 shadow-xs" title="Upstream dependency: referenced by active table">↑ upstream</span>
+        {:else if highlightStatus === "downstream"}
+          <span class="badge badge-xs badge-secondary font-mono text-[8px] px-1 py-0 shadow-xs" title="Downstream dependent: references active table">↓ dependent</span>
+        {:else if highlightStatus === "transitive"}
+          <span class="badge badge-xs badge-ghost border-base-300 font-mono text-[8px] px-1 py-0 opacity-80" title="2-hop transitive connection">2-hop</span>
+        {/if}
+        {#if hiddenHighlightedCount > 0}
+          <span class="badge badge-xs badge-warning/20 border-warning/40 text-warning font-mono text-[8px] px-1 py-0" title="Connected column hidden in compact view">+{hiddenHighlightedCount} rel</span>
+        {/if}
         {#if data.moduleInfo && !data.moduleInfo.isRootFile}
           <span
-            class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded gap-1"
+            class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded flex items-center gap-1"
             title={`Defined in ${data.moduleInfo.sourceFilePath}`}
           >
-            📁 {data.moduleInfo.moduleName}
+            <Folder class="w-3 h-3" />
+            {data.moduleInfo.moduleName}
           </span>
         {/if}
         {#if (data as any).isBetterAuth}
           <span
-            class="badge badge-sm badge-secondary/20 border border-secondary/40 text-secondary font-semibold text-[9px] px-1.5 py-0.5 rounded gap-1"
+            class="badge badge-sm badge-secondary/20 border border-secondary/40 text-secondary font-semibold text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1"
             title="Managed by Better Auth"
           >
-            🛡️ Better Auth
+            <ShieldCheck class="w-3 h-3" />
+            Better Auth
           </span>
         {/if}
       </div>
@@ -219,11 +271,21 @@
             Issue
           </div>
         {/if}
-        <div
-          class="badge badge-outline badge-xs opacity-50 font-mono text-[10px]"
-        >
-          {config.label}
-        </div>
+        {#if !isD1}
+          <div
+            class="badge badge-xs {config.bg} {config.text} border border-current/30 font-mono text-[9px] font-bold"
+            title="Cloudflare Worker Binding (configured in wrangler.jsonc)"
+          >
+            {config.label} • wrangler
+          </div>
+        {:else}
+          <div
+            class="badge badge-outline badge-xs opacity-60 font-mono text-[9px]"
+            title="Drizzle SQLite/D1 Table"
+          >
+            D1 Table
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -232,10 +294,23 @@
       {#each columnsToDisplay as col (col.name)}
         {@const isPk = col.isPk}
         {@const isFk = col.isReferences}
+        {@const isColActive = schemaState.highlightGraph.isColumnHighlighted(nodeId, col.name)}
         <div
           class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk
             ? 'bg-amber-500/5'
-            : ''} {isFk ? 'bg-secondary/5' : ''}"
+            : ''} {isFk ? 'bg-secondary/5' : ''} {isColActive
+            ? 'bg-primary/20 ring-1 ring-primary/60 font-semibold shadow-xs'
+            : ''}"
+          role="group"
+          aria-label="Column {col.name}"
+          onmouseenter={() => {
+            if (!dragging) schemaState.hoveredCol = { nodeId, colName: col.name };
+          }}
+          onmouseleave={() => {
+            if (schemaState.hoveredCol?.nodeId === nodeId && schemaState.hoveredCol?.colName === col.name) {
+              schemaState.hoveredCol = null;
+            }
+          }}
         >
           <!-- Row Handles for Column Targeting -->
           <Handle
@@ -352,3 +427,4 @@
     style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
 </div>
+

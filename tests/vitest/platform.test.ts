@@ -6,7 +6,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async (cmd: string, args: any) => {
     if (cmd === 'read_schema_file') return 'export const test = sqliteTable("test", {});';
     if (cmd === 'write_schema_file') return;
-    if (cmd === 'mutate_wrangler_config') return;
     if (cmd === 'watch_file') return;
     return;
   }),
@@ -20,7 +19,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-  open: vi.fn(async () => '/path/to/schema.ts'),
+  open: vi.fn(async (): Promise<string | null> => '/path/to/schema.ts'),
 }));
 
 vi.mock('@tauri-apps/plugin-opener', () => ({
@@ -41,7 +40,7 @@ vi.mock('@tauri-apps/api/window', () => ({
 
 describe('PlatformService Adapter Unit Tests', () => {
   beforeEach(() => {
-    (PlatformService as any).cachedChannel = null;
+    PlatformService.resetCacheForTesting();
     vi.clearAllMocks();
   });
 
@@ -56,11 +55,6 @@ describe('PlatformService Adapter Unit Tests', () => {
     await expect(PlatformService.writeText('/tmp/schema.ts', 'code')).resolves.not.toThrow();
   });
 
-  it('should call mutateWranglerConfig via Tauri invoke', async () => {
-    await expect(
-      PlatformService.mutateWranglerConfig('/tmp/wrangler.toml', 'add', 'kv', 'MY_KV')
-    ).resolves.not.toThrow();
-  });
 
   it('should call selectFile dialog picker', async () => {
     const path = await PlatformService.selectFile(['ts']);
@@ -89,7 +83,7 @@ describe('PlatformService Adapter Unit Tests', () => {
 
   it('should handle dialog cancellation (returning null)', async () => {
     const dialog = await import('@tauri-apps/plugin-dialog');
-    vi.mocked(dialog.open).mockResolvedValueOnce(null as any);
+    vi.mocked(dialog.open).mockResolvedValueOnce(null);
     const path = await PlatformService.selectFile(['ts']);
     expect(path).toBeNull();
   });
@@ -161,7 +155,6 @@ describe('PlatformService Adapter Unit Tests', () => {
     it('should throw error when calling readText or writeText in web browser', async () => {
       await expect(PlatformService.readText('/tmp/schema.ts')).rejects.toThrow('Tauri API unavailable in web browser');
       await expect(PlatformService.writeText('/tmp/schema.ts', 'code')).rejects.toThrow('Tauri API unavailable in web browser');
-      await expect(PlatformService.mutateWranglerConfig('/tmp/wrangler.toml', 'add', 'kv', 'MY_KV')).rejects.toThrow('Tauri API unavailable in web browser');
     });
 
     it('should return null or no-op functions for window/file operations in web browser', async () => {

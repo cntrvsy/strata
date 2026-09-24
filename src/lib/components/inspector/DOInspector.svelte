@@ -1,18 +1,17 @@
 <!--
   DOInspector.svelte
 
-  Summary: Sub-inspector displaying and mutating Durable Object class bindings, TS source paths, wrangler configuration status, and public RPC methods.
+  Summary: Sub-inspector displaying Durable Object class bindings, TS source paths, wrangler configuration status, and public RPC methods.
   Expects: tableName (string), data (object showing columns), isReadOnly (boolean).
+  Output: Read-only telemetry for Durable Objects.
 -->
 <script lang="ts">
   import {
-    Pencil,
-    Trash2,
-    Check,
     FileCode,
     TriangleAlert,
     Cpu,
     Layers,
+    Code,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
@@ -21,15 +20,6 @@
     data: any;
     isReadOnly: boolean;
   }>();
-
-  let editingColumnName = $state<string | null>(null);
-  let newColumnName = $state("");
-
-  let editingClass = $state(false);
-  let newClassName = $state("");
-
-  let editingPath = $state(false);
-  let newPathName = $state("");
 
   const strataData = $derived(data.strata || {});
   const doClassName = $derived(strataData.class || data.doClass || tableName);
@@ -44,46 +34,21 @@
     ),
   );
 
-  async function submitRenameColumn() {
-    if (!editingColumnName || !newColumnName.trim()) return;
-    await schemaState.renameColumn(
-      tableName,
-      editingColumnName,
-      newColumnName.trim(),
-    );
-    editingColumnName = null;
-  }
-
-  async function deleteColumn(colName: string) {
-    schemaState.promptConfirm({
-      title: "Delete Method",
-      message: `Are you sure you want to delete method "${colName}" from "${tableName}"? This change will be saved to disk.`,
-      confirmLabel: "Delete Method",
-      isDanger: true,
-      onConfirm: () => schemaState.deleteColumn(tableName, colName),
-    });
-  }
-
-  async function saveClassMetadata() {
-    if (!newClassName.trim() || isReadOnly) return;
-    await schemaState.updateTableMetadata(tableName, {
-      class: newClassName.trim(),
-      path: doPathName,
-    });
-    editingClass = false;
-  }
-
-  async function savePathMetadata() {
-    if (isReadOnly) return;
-    await schemaState.updateTableMetadata(tableName, {
-      class: doClassName,
-      path: newPathName.trim(),
-    });
-    editingPath = false;
-  }
+  const columns = $derived(data?.columns || []);
+  const isSqlite = $derived(
+    data.storage === "sqlite" ||
+      (wranglerBinding?.extra as any)?.storage === "sqlite" ||
+      data.isSqlite,
+  );
 </script>
 
 <div class="flex flex-col gap-4">
+  <!-- Cloudflare Worker Binding Read-Only Overlay Banner -->
+  <div class="px-3 py-2 bg-secondary/10 border border-secondary/20 rounded-box flex items-center justify-between text-[11px]">
+    <span class="font-bold text-secondary">Cloudflare Durable Object</span>
+    <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
+  </div>
+
   <!-- Class & Wrangler Binding Configuration Card -->
   <div
     class="bg-base-200/50 p-4 rounded-box border border-base-300/70 flex flex-col gap-3"
@@ -95,118 +60,46 @@
       <div class="flex items-center gap-1.5">
         {#if wranglerBinding}
           <span
-            class="badge badge-xs bg-secondary/10 text-secondary border-secondary/20 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono"
-            title="Bound in wrangler configuration file"
+            class="badge badge-xs bg-success/10 text-success border-success/20 px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono"
           >
-            WRANGLER BOUND
+            Bound: {wranglerBinding.name}
           </span>
-        {:else if schemaState.wranglerConfigFilePath}
-          <button
-            class="badge badge-xs bg-warning/10 text-warning border-warning/20 hover:bg-warning/20 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono transition-all cursor-pointer"
-            onclick={() => schemaState.syncMissingWranglerBindings()}
-            title="Click to sync missing binding(s) to wrangler config"
+        {:else}
+          <span
+            class="badge badge-xs bg-warning/10 text-warning border-warning/20 px-1.5 py-0.5 rounded text-[8.5px] font-bold font-mono"
+            title="Binding not found in wrangler.jsonc"
           >
-            + WRANGLER BINDING
-          </button>
+            Unbound
+          </span>
         {/if}
       </div>
     </div>
 
-    <!-- Class Name Row -->
-    <fieldset class="fieldset gap-1 p-0">
-      <legend
-        class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
-      >
-        TypeScript Class Name
-      </legend>
-      {#if editingClass}
-        <div class="flex items-center gap-1">
-          <input
-            id="do-class-input-{tableName}"
-            bind:value={newClassName}
-            class="input input-xs input-bordered w-full rounded-field bg-base-100 font-mono text-xs focus:input-secondary transition-all"
-            onkeydown={(e) => e.key === "Enter" && saveClassMetadata()}
-          />
-          <button
-            class="btn btn-secondary btn-xs btn-circle shrink-0"
-            onclick={saveClassMetadata}
-          >
-            <Check class="w-3 h-3" />
-          </button>
-        </div>
-      {:else}
-        <div class="flex items-center justify-between group/class-row">
-          <div class="flex items-center gap-2">
-            <Cpu class="w-3.5 h-3.5 text-secondary opacity-80" />
-            <span class="font-mono text-xs font-bold text-base-content/90">
-              {doClassName}
-            </span>
-          </div>
-          {#if !isReadOnly}
-            <button
-              class="opacity-0 group-hover/class-row:opacity-100 btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200 transition-all"
-              onclick={() => {
-                newClassName = doClassName;
-                editingClass = true;
-              }}
-              title="Edit DO Class Name"
-            >
-              <Pencil class="w-2.5 h-2.5 opacity-60" />
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </fieldset>
+    <!-- Class Name Display -->
+    <div class="flex flex-col gap-1">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Class Name</span>
+      <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-xs font-bold text-secondary">
+        {doClassName}
+      </div>
+    </div>
 
-    <!-- File Path Row -->
-    <fieldset class="fieldset gap-1 border-t border-base-300/40 pt-2 p-0">
-      <legend
-        class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
-      >
-        Class Source File Path
-      </legend>
-      {#if editingPath}
-        <div class="flex items-center gap-1">
-          <input
-            id="do-path-input-{tableName}"
-            bind:value={newPathName}
-            placeholder="e.g. ./src/Counter.ts"
-            class="input input-xs input-bordered w-full rounded-field bg-base-100 font-mono text-xs focus:input-secondary transition-all"
-            onkeydown={(e) => e.key === "Enter" && savePathMetadata()}
-          />
-          <button
-            class="btn btn-secondary btn-xs btn-circle shrink-0"
-            onclick={savePathMetadata}
-          >
-            <Check class="w-3 h-3" />
-          </button>
+    <!-- TS Path Display -->
+    {#if doPathName}
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Source File</span>
+        <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/80 break-all">
+          {doPathName}
         </div>
-      {:else}
-        <div class="flex items-center justify-between group/path-row">
-          <div class="flex items-center gap-2 min-w-0">
-            <FileCode class="w-3.5 h-3.5 text-base-content/50 shrink-0" />
-            <span
-              class="font-mono text-[11px] text-base-content/70 truncate"
-              title={doPathName || "No file path defined"}
-            >
-              {doPathName || "(In-memory / JSDoc methods fallback)"}
-            </span>
-          </div>
-          {#if !isReadOnly}
-            <button
-              class="opacity-0 group-hover/path-row:opacity-100 btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200 transition-all shrink-0"
-              onclick={() => {
-                newPathName = doPathName;
-                editingPath = true;
-              }}
-              title="Edit TS File Path"
-            >
-              <Pencil class="w-2.5 h-2.5 opacity-60" />
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </fieldset>
+      </div>
+    {/if}
+
+    <!-- Storage Engine Display -->
+    <div class="flex items-center justify-between p-2 rounded-field bg-base-100 border border-base-300 text-xs">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Storage Engine</span>
+      <span class="badge badge-xs {isSqlite ? 'badge-warning font-bold' : 'badge-ghost'} font-mono text-[9px]">
+        {isSqlite ? "SQLite DO (Embedded DB)" : "Standard Key-Value"}
+      </span>
+    </div>
   </div>
 
   <!-- Missing File Warning Banner -->
@@ -225,13 +118,13 @@
   <!-- Methods Header -->
   <div class="flex items-center justify-between px-1">
     <span class="text-[9px] font-black uppercase tracking-widest opacity-40">
-      Public RPC Methods ({data.columns.length})
+      Public RPC Methods ({columns.length})
     </span>
   </div>
 
   <!-- Methods List -->
   <div class="flex flex-col gap-2">
-    {#if data.columns.length === 0}
+    {#if columns.length === 0}
       <div
         class="p-6 bg-base-200/30 border border-base-300/40 rounded-box flex flex-col items-center justify-center text-center gap-2"
       >
@@ -242,78 +135,29 @@
         <p class="text-[10px] text-base-content/50 max-w-60 leading-relaxed">
           Public class methods in <code class="font-mono text-secondary"
             >{doClassName}</code
-          > are parsed automatically when a valid source file path is provided.
+          > are parsed automatically from TypeScript source.
         </p>
       </div>
     {:else}
-      {#each data.columns as col}
+      {#each columns as col}
         <div
-          class="bg-base-200/50 p-3 rounded-box flex flex-col gap-1.5 border border-base-300 hover:border-secondary/40 transition-all group/field"
+          class="bg-base-200/40 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/50 hover:border-secondary/40 transition-all group/field"
           data-testid="field-row-{col.name}"
         >
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center gap-2 grow min-w-0">
-              {#if editingColumnName === col.name}
-                <div class="flex items-center gap-1 grow">
-                  <input
-                    bind:value={newColumnName}
-                    class="input input-xs input-bordered w-full rounded-field font-mono text-xs h-7 bg-base-100 border-base-300 text-base-content focus:input-secondary transition-all"
-                    onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
-                    data-testid="field-rename-input-{col.name}"
-                  />
-                  <button
-                    class="btn btn-secondary btn-xs btn-circle shrink-0"
-                    onclick={submitRenameColumn}
-                    data-testid="field-rename-submit-{col.name}"
-                  >
-                    <Check class="w-3 h-3" />
-                  </button>
-                </div>
-              {:else}
-                <div
-                  class="flex items-center gap-2 group/col-title min-w-0 grow flex-wrap"
-                >
-                  <span
-                    class="font-mono text-xs font-bold text-secondary break-all leading-tight group-hover/field:text-primary transition-colors"
-                    title={col.name}
-                    data-testid="field-name-{col.name}"
-                  >
-                    {col.name}
-                  </span>
-                  {#if !isReadOnly}
-                    <button
-                      class="opacity-40 group-hover/col-title:opacity-100 transition-all btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200 shrink-0"
-                      onclick={() => {
-                        editingColumnName = col.name;
-                        newColumnName = col.name;
-                      }}
-                      title="Edit Method Signature"
-                      data-testid="field-rename-btn-{col.name}"
-                    >
-                      <Pencil class="w-2.5 h-2.5 text-base-content" />
-                    </button>
-                  {/if}
-                </div>
-              {/if}
-            </div>
+          <div class="flex items-center justify-between gap-2">
+            <span
+              class="font-mono text-xs font-bold text-secondary break-all leading-tight group-hover/field:text-primary transition-colors"
+              title={col.name}
+              data-testid="field-name-{col.name}"
+            >
+              {col.name}
+            </span>
 
-            <div class="flex items-center gap-1.5 shrink-0">
-              <span
-                class="text-[9px] font-mono bg-secondary/10 text-secondary border border-secondary/20 px-1.5 py-0.5 rounded leading-none font-bold"
-              >
-                {col.definition}
-              </span>
-              {#if !isReadOnly}
-                <button
-                  class="opacity-40 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/80 hover:text-error hover:bg-error/10 transition-all"
-                  onclick={() => deleteColumn(col.name)}
-                  title="Delete Method"
-                  data-testid="field-delete-btn-{col.name}"
-                >
-                  <Trash2 class="w-3.5 h-3.5" />
-                </button>
-              {/if}
-            </div>
+            <span
+              class="text-[9px] font-mono bg-secondary/10 text-secondary border border-secondary/20 px-1.5 py-0.5 rounded leading-none font-bold shrink-0"
+            >
+              {col.definition}
+            </span>
           </div>
         </div>
       {/each}

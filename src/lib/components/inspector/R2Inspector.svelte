@@ -1,12 +1,12 @@
 <!--
   R2Inspector.svelte
 
-  Summary: Sub-inspector displaying and mutating directory paths and bucket configurations for Cloudflare R2.
+  Summary: Clean read-only telemetry viewer for Cloudflare R2 bucket configurations and prefixes.
   Expects: tableName (string), data (object showing columns), isReadOnly (boolean).
+  Output: Bucket settings, public access, custom domain, and folder prefixes breakdown.
 -->
 <script lang="ts">
-  import { Pencil, Trash2, Check } from "lucide-svelte";
-  import { schemaState } from "#lib/state";
+  import { HardDrive, Globe, ShieldCheck, Folder } from "lucide-svelte";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -14,42 +14,17 @@
     isReadOnly: boolean;
   }>();
 
-  let editingColumnName = $state<string | null>(null);
-  let newColumnName = $state("");
-
-  // Derived settings from node metadata
   const isPublic = $derived(data.strata?.public || false);
   const customDomain = $derived(data.strata?.customDomain || "");
   const cors = $derived(data.strata?.cors || false);
-
-  async function submitRenameColumn() {
-    if (!editingColumnName || !newColumnName) return;
-    await schemaState.renameColumn(tableName, editingColumnName, newColumnName);
-    editingColumnName = null;
-  }
-
-  async function deleteColumn(colName: string) {
-    schemaState.promptConfirm({
-      title: "Delete Folder Prefix",
-      message: `Are you sure you want to delete folder prefix "${colName}" from "${tableName}"? This change will be saved to disk.`,
-      confirmLabel: "Delete Folder",
-      isDanger: true,
-      onConfirm: () => schemaState.deleteColumn(tableName, colName),
-    });
-  }
-
-  async function updateSettings(overrides: { public?: boolean; customDomain?: string; cors?: boolean }) {
-    if (isReadOnly) return;
-    const p = overrides.public ?? isPublic;
-    const d = overrides.customDomain ?? customDomain;
-    const c = overrides.cors ?? cors;
-    await schemaState.updateTableMetadata(tableName, {
-      public: p,
-      customDomain: p ? d : null,
-      cors: c,
-    });
-  }
+  const columns = $derived(data?.columns || []);
 </script>
+
+<!-- Cloudflare Worker Binding Read-Only Overlay Banner -->
+<div class="px-3 py-2 bg-info/10 border border-info/20 rounded-box flex items-center justify-between text-[11px] mb-4">
+  <span class="font-bold text-info">Cloudflare R2 Bucket</span>
+  <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
+</div>
 
 <!-- R2 Bucket Configurations Card -->
 <div
@@ -60,13 +35,13 @@
       >Bucket Settings</span
     >
     <div class="flex gap-1">
-      {#if data.strata?.public}
+      {#if isPublic}
         <span
           class="badge badge-xs bg-info/10 text-info border-info/20 px-1 py-0.5 rounded text-[8px] font-bold"
           >PUBLIC</span
         >
       {/if}
-      {#if data.strata?.cors}
+      {#if cors}
         <span
           class="badge badge-xs bg-success/10 text-success border-success/20 px-1 py-0.5 rounded text-[8px] font-bold"
           >CORS</span
@@ -75,129 +50,74 @@
     </div>
   </div>
 
-  <div class="flex flex-col gap-3">
+  <div class="flex flex-col gap-2">
     <div class="p-2.5 rounded-box bg-info/10 border border-info/20 text-info flex flex-col gap-0.5 text-[10px]">
       <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare R2 Object Storage Bucket</span>
       <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
     </div>
 
-    <label class="label cursor-pointer flex items-center justify-between p-0">
-      <span class="text-xs font-semibold text-base-content/85"
-        >Public Access</span
-      >
-      <input
-        type="checkbox"
-        class="toggle toggle-primary toggle-sm"
-        disabled={isReadOnly}
-        checked={isPublic}
-        onchange={(e) => updateSettings({ public: e.currentTarget.checked })}
-      />
-    </label>
-
-    {#if isPublic}
-      <fieldset
-        class="fieldset gap-1 mt-1 p-0 animate-in fade-in slide-in-from-top-1 duration-200"
-      >
-        <legend class="fieldset-legend text-[9px] font-bold uppercase opacity-60"
-          >Custom Domain</legend
-        >
-        <input
-          type="text"
-          placeholder="e.g. assets.my-app.com"
-          disabled={isReadOnly}
-          class="input input-xs input-bordered w-full rounded-field bg-base-100 border-base-300/60 focus:input-primary transition-all text-xs"
-          value={customDomain}
-          onblur={(e) => updateSettings({ customDomain: e.currentTarget.value })}
-          onkeydown={(e) => e.key === "Enter" && updateSettings({ customDomain: e.currentTarget.value })}
-        />
-      </fieldset>
+    {#if data.strata?.bucket_name}
+      <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
+        <span class="text-xs font-semibold text-base-content/85">Bucket Name</span>
+        <span class="font-mono text-[11px] text-info font-bold">{data.strata.bucket_name}</span>
+      </div>
     {/if}
 
-    <label
-      class="label cursor-pointer flex items-center justify-between p-0 border-t border-base-300/40 pt-2"
-    >
-      <span class="text-xs font-semibold text-base-content/85"
-        >CORS Rules Enabled</span
-      >
-      <input
-        type="checkbox"
-        class="toggle toggle-primary toggle-sm"
-        disabled={isReadOnly}
-        checked={cors}
-        onchange={(e) => updateSettings({ cors: e.currentTarget.checked })}
-      />
-    </label>
+    <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
+      <span class="text-xs font-semibold text-base-content/85">Access Mode</span>
+      <span class="badge badge-sm {isPublic ? 'badge-info' : 'badge-ghost'} font-mono text-[10px] font-bold">
+        {isPublic ? "Public Bucket" : "Private (Worker Only)"}
+      </span>
+    </div>
+
+    {#if isPublic && customDomain}
+      <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
+        <span class="text-xs font-semibold text-base-content/85">Custom Domain</span>
+        <span class="font-mono text-[11px] text-info font-bold">{customDomain}</span>
+      </div>
+    {/if}
+
+    <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
+      <span class="text-xs font-semibold text-base-content/85">CORS Rules</span>
+      <span class="badge badge-xs {cors ? 'badge-success' : 'badge-ghost'} font-mono text-[9px]">
+        {cors ? "Enabled" : "Disabled"}
+      </span>
+    </div>
   </div>
 </div>
 
 <!-- Folders / Directory list -->
 <div class="flex flex-col gap-2">
   <span class="text-[9px] font-black uppercase tracking-widest opacity-40 px-1"
-    >Configured Folders</span
+    >Configured Folder Prefixes ({columns.length})</span
   >
-  {#each data.columns as col}
-    <div
-      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
-      data-testid="field-row-{col.name}"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 grow">
-          {#if editingColumnName === col.name}
-            <div class="flex items-center gap-1 grow">
-              <input
-                bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all font-mono"
-                onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
-                data-testid="field-rename-input-{col.name}"
-              />
-              <button
-                class="btn btn-primary btn-xs btn-circle"
-                onclick={submitRenameColumn}
-                data-testid="field-rename-submit-{col.name}"
-              >
-                <Check class="w-3 h-3" />
-              </button>
-            </div>
-          {:else}
-            <div class="flex items-center gap-2 group/col-title">
-              <span
-                class="font-mono text-xs font-bold group-hover/field:text-primary transition-colors text-base-content/85"
-                data-testid="field-name-{col.name}"
-              >
-                {col.name}
-              </span>
-              {#if !isReadOnly}
-                <button
-                  class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200"
-                  onclick={() => {
-                    editingColumnName = col.name;
-                    newColumnName = col.name;
-                  }}
-                  data-testid="field-rename-btn-{col.name}"
-                >
-                  <Pencil class="w-2.5 h-2.5 opacity-60" />
-                </button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-        <div class="flex items-center gap-2">
-          <span
-            class="text-[9px] font-mono opacity-90 uppercase bg-info/10 text-info px-1.5 py-0.5 rounded leading-none shrink-0 border border-info/20 font-bold"
-          >
-            {col.definition}
-          </span>
-          {#if !isReadOnly}
-            <button
-              class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-              onclick={() => deleteColumn(col.name)}
-              data-testid="field-delete-btn-{col.name}"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
-          {/if}
-        </div>
-      </div>
+  {#if columns.length === 0}
+    <div class="p-4 text-center text-xs text-base-content/60 font-mono">
+      No folder prefixes configured for {tableName}
     </div>
-  {/each}
+  {:else}
+    {#each columns as col}
+      <div
+        class="bg-base-200/30 p-3 rounded-box flex items-center justify-between border border-base-300/30 hover:border-base-300/60 transition-all group/field"
+        data-testid="field-row-{col.name}"
+      >
+        <div class="flex items-center gap-2 min-w-0">
+          <Folder class="w-3.5 h-3.5 text-info opacity-70 shrink-0" />
+          <span
+            class="font-mono text-xs font-bold group-hover/field:text-primary transition-colors text-base-content/85 truncate"
+            data-testid="field-name-{col.name}"
+          >
+            {col.name}
+          </span>
+        </div>
+
+        <span
+          class="text-[9px] font-mono opacity-90 uppercase bg-info/10 text-info px-1.5 py-0.5 rounded leading-none shrink-0 border border-info/20 font-bold"
+        >
+          {col.definition || "prefix"}
+        </span>
+      </div>
+    {/each}
+  {/if}
 </div>
+

@@ -15,7 +15,8 @@ import {
   updateProjectConfigInSchema,
   updateTableMetadataInSchema,
   resolveRelativePath,
-  resolvePathAlias
+  resolvePathAlias,
+  extractStrataLayoutManifest
 } from '#lib/parser';
 import { PlatformService } from '#lib/services/platform';
 
@@ -45,7 +46,7 @@ describe('Parser Core', () => {
     const result = parseSchema(code);
     expect(result.success).toBe(true);
     expect(result.nodes).toHaveLength(1);
-    expect((result.nodes[0].data as any).target).toBe('kv');
+    expect(result.nodes[0].data.target).toBe('kv');
     expect(result.nodes[0].position).toEqual({ x: 10, y: 20 });
   });
 
@@ -61,8 +62,8 @@ describe('Parser Core', () => {
     const result = parseSchema(code);
     expect(result.success).toBe(true);
     expect(result.nodes).toHaveLength(1);
-    expect((result.nodes[0].data as any).strata.relations).toHaveLength(1);
-    expect((result.nodes[0].data as any).strata.relations[0].to).toBe('activeSessions');
+    expect(result.nodes[0].data.strata?.relations).toHaveLength(1);
+    expect(result.nodes[0].data.strata?.relations?.[0].to).toBe('activeSessions');
   });
 
   it('should handle multi-line @strata JSDoc', () => {
@@ -79,7 +80,7 @@ describe('Parser Core', () => {
     `;
     const result = parseSchema(code);
     expect(result.success).toBe(true);
-    expect((result.nodes[0].data as any).target).toBe('do');
+    expect(result.nodes[0].data.target).toBe('do');
     expect(result.nodes[0].position.x).toBe(100);
   });
 
@@ -220,7 +221,7 @@ describe('Mutation Logic', () => {
     expect(newCode).toContain('export const t = sqliteTable');
   });
 
-  it('should update multiple node positions in a single pass', () => {
+  it('should update multiple node positions into consolidated @strata-layout and strip inline coordinates', () => {
     const code = `
       /** @strata {"x":0,"y":0} */
       export const users = sqliteTable("users", { id: integer("id") });
@@ -231,8 +232,11 @@ describe('Mutation Logic', () => {
       { id: 'users', position: { x: 100, y: 150 } },
       { id: 'posts', position: { x: 200, y: 250 } }
     ] as any);
-    expect(newCode).toContain('"x":100,"y":150');
-    expect(newCode).toContain('"x":200,"y":250');
+    expect(newCode).toContain('@strata-layout');
+    expect(newCode).not.toContain('@strata {"x":');
+    const extracted = extractStrataLayoutManifest(newCode);
+    expect(extracted?.users).toEqual({ x: 100, y: 150 });
+    expect(extracted?.posts).toEqual({ x: 200, y: 250 });
   });
 
   it('should add synthetic relations to existing @strata tags', () => {
@@ -476,11 +480,12 @@ describe('Mutation Logic', () => {
   });
 
   describe('Cloudflare Storage Targets & Schema Pointers', () => {
-    it('should parse R2 target with folders mapping', () => {
+    it('should parse R2 target with JSDoc folder prefix mappings', () => {
       const code = `
         /**
          * @strata {
          *   "target": "r2",
+         *   "bucket_name": "my-cool-bucket",
          *   "folders": {
          *     "avatars": "image/*",
          *     "backups": "application/zip"
@@ -493,15 +498,18 @@ describe('Mutation Logic', () => {
       expect(result.success).toBe(true);
       expect(result.nodes).toHaveLength(1);
       const node = result.nodes[0];
-      const data = node.data as any;
+      expect(node.type).toBe('r2');
+      const data = node.data;
       expect(data.target).toBe('r2');
-      expect(data.columns).toHaveLength(2);
-      expect(data.columns[0]).toEqual({
+      expect(data.folders).toHaveLength(2);
+      expect(data.folders?.[0]).toEqual({
         name: 'avatars/',
         definition: 'image/*',
         isPk: false,
         isReferences: false
       });
+      // Backwards-compatible columns
+      expect(data.columns).toHaveLength(2);
     });
 
     it('should parse KV target with JSDoc schema field mappings', () => {
@@ -522,11 +530,14 @@ describe('Mutation Logic', () => {
       expect(result.success).toBe(true);
       expect(result.nodes).toHaveLength(1);
       const node = result.nodes[0];
-      const data = node.data as any;
+      expect(node.type).toBe('kv');
+      const data = node.data;
       expect(data.target).toBe('kv');
+      expect(data.patterns).toHaveLength(3);
+      expect(data.patterns?.[0].name).toBe('sessionToken');
+      expect(data.patterns?.[0].definition).toBe('string');
+      // Backwards-compatible columns
       expect(data.columns).toHaveLength(3);
-      expect(data.columns[0].name).toBe('sessionToken');
-      expect(data.columns[0].definition).toBe('string');
     });
 
     it('should parse DO target and load class methods from external file contents', () => {
@@ -552,14 +563,17 @@ describe('Mutation Logic', () => {
       expect(result.success).toBe(true);
       expect(result.nodes).toHaveLength(1);
       const node = result.nodes[0];
-      const data = node.data as any;
+      expect(node.type).toBe('do');
+      const data = node.data;
       expect(data.target).toBe('do');
       // Should extract public methods increment and getValue, but not private internalHelper
+      expect(data.methods).toHaveLength(2);
+      expect(data.methods?.[0].name).toBe('increment(amount: number)');
+      expect(data.methods?.[0].definition).toBe('Promise<void>');
+      expect(data.methods?.[1].name).toBe('getValue()');
+      expect(data.methods?.[1].definition).toBe('Promise<number>');
+      // Backwards-compatible columns
       expect(data.columns).toHaveLength(2);
-      expect(data.columns[0].name).toBe('increment(amount: number)');
-      expect(data.columns[0].definition).toBe('Promise<void>');
-      expect(data.columns[1].name).toBe('getValue()');
-      expect(data.columns[1].definition).toBe('Promise<number>');
     });
 
     it('should collect schema pointers in externalPaths during first pass', () => {
@@ -656,15 +670,19 @@ describe('Mutation Logic', () => {
       expect(result.wranglerPath).toBe('../wrangler.toml');
     });
 
-    it('should write and update project configuration JSDoc metadata', () => {
+    it('should write and update project configuration JSDoc metadata in @strata-layout manifest', () => {
       const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
       let mutated = updateProjectConfigInSchema(baseCode, { wranglerPath: '../../wrangler.toml' });
-      expect(mutated).toContain('"target":"project"');
-      expect(mutated).toContain('"wranglerPath":"../../wrangler.toml"');
+      expect(mutated).toContain('@strata-layout');
+      expect(mutated).toContain('"wranglerPath": "../../wrangler.toml"');
+      const parsed1 = parseSchema(mutated);
+      expect(parsed1.wranglerPath).toBe('../../wrangler.toml');
 
       // Update existing config
       mutated = updateProjectConfigInSchema(mutated, { wranglerPath: './wrangler.toml' });
-      expect(mutated).toContain('"wranglerPath":"./wrangler.toml"');
+      expect(mutated).toContain('"wranglerPath": "./wrangler.toml"');
+      const parsed2 = parseSchema(mutated);
+      expect(parsed2.wranglerPath).toBe('./wrangler.toml');
     });
 
     it('should correctly mutate DO methods using JSDoc fallbacks', async () => {
@@ -936,6 +954,153 @@ describe('Mutation Logic', () => {
       expect(result.nodes.map(n => n.id)).toContain('posts');
       // comments was not in named export of posts
       expect(result.nodes.map(n => n.id)).not.toContain('comments');
+    });
+
+    describe('Unified 2-Primitive Relationship Model', () => {
+      it('should unify physical FK and bidirectional Drizzle relations into exactly ONE edge', () => {
+        const code = `
+          import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+          import { relations } from "drizzle-orm";
+
+          export const users = sqliteTable("users", {
+            id: integer("id").primaryKey(),
+            name: text("name")
+          });
+
+          export const orders = sqliteTable("orders", {
+            id: integer("id").primaryKey(),
+            userId: integer("user_id").notNull().references(() => users.id)
+          });
+
+          export const usersRelations = relations(users, ({ many }) => ({
+            orders: many(orders)
+          }));
+
+          export const ordersRelations = relations(orders, ({ one }) => ({
+            user: one(users, {
+              fields: [orders.userId],
+              references: [users.id]
+            })
+          }));
+        `;
+
+        const result = parseSchema(code);
+        expect(result.success).toBe(true);
+
+        // Exactly 1 edge between users and orders (instead of 3 duplicates)
+        const edgesBetweenUsersAndOrders = result.edges.filter(
+          e => (e.source === 'orders' && e.target === 'users') || (e.source === 'users' && e.target === 'orders')
+        );
+        expect(edgesBetweenUsersAndOrders).toHaveLength(1);
+
+        const edge = edgesBetweenUsersAndOrders[0];
+        expect(edge.source).toBe('orders');
+        expect(edge.target).toBe('users');
+        expect(edge.data?.isPhysical).toBe(true);
+        expect(edge.data?.isVirtual).toBe(false);
+        expect(edge.data?.cardinality).toBe('1:N');
+        expect(edge.data?.relationNames).toContain('orders');
+        expect(edge.data?.relationNames).toContain('user');
+        expect(edge.data?.drizzleRelations).toHaveLength(2);
+        expect(edge.style).toContain('stroke-width: 2.25'); // solid line
+      });
+
+      it('should preserve distinct edges for legitimate multiple foreign keys between same tables', () => {
+        const code = `
+          import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+          import { relations } from "drizzle-orm";
+
+          export const users = sqliteTable("users", {
+            id: integer("id").primaryKey(),
+          });
+
+          export const messages = sqliteTable("messages", {
+            id: integer("id").primaryKey(),
+            senderId: integer("sender_id").notNull().references(() => users.id),
+            receiverId: integer("receiver_id").notNull().references(() => users.id)
+          });
+
+          export const messagesRelations = relations(messages, ({ one }) => ({
+            sender: one(users, { fields: [messages.senderId], references: [users.id] }),
+            receiver: one(users, { fields: [messages.receiverId], references: [users.id] })
+          }));
+        `;
+
+        const result = parseSchema(code);
+        expect(result.success).toBe(true);
+
+        const edges = result.edges.filter(e => e.source === 'messages' && e.target === 'users');
+        // Must preserve 2 distinct lines for senderId and receiverId!
+        expect(edges).toHaveLength(2);
+
+        const senderEdge = edges.find(e => e.data?.sourceCol === 'senderId');
+        const receiverEdge = edges.find(e => e.data?.sourceCol === 'receiverId');
+
+        expect(senderEdge).toBeDefined();
+        expect(receiverEdge).toBeDefined();
+        expect(senderEdge?.sourceHandle).toBe('senderId');
+        expect(receiverEdge?.sourceHandle).toBe('receiverId');
+        expect(senderEdge?.data?.relationNames).toContain('sender');
+        expect(receiverEdge?.data?.relationNames).toContain('receiver');
+      });
+
+      it('should unify the complete E-Commerce Edge schema into exactly 3 table-to-table lines', async () => {
+        const { SAMPLE_TEMPLATES } = await import('#lib/mock');
+        const ecommerceCode = SAMPLE_TEMPLATES['ecommerce-edge'].code;
+
+        const result = parseSchema(ecommerceCode);
+        expect(result.success).toBe(true);
+
+        // In ecommerce schema, tables are: customers, orders, orderItems, products
+        // Connected pairs:
+        // 1. orders -> customers
+        // 2. orderItems -> orders
+        // 3. orderItems -> products
+        // Previously this produced 9 overlapping edges. With unification, exactly 3!
+        const tableEdges = result.edges.filter(e => 
+          !e.source.startsWith('__') && !e.target.startsWith('__') && !e.data?.isSynthetic
+        );
+        expect(tableEdges).toHaveLength(3);
+
+        const ordersToCustomers = tableEdges.find(e => e.source === 'orders' && e.target === 'customers');
+        const itemsToOrders = tableEdges.find(e => e.source === 'orderItems' && e.target === 'orders');
+        const itemsToProducts = tableEdges.find(e => e.source === 'orderItems' && e.target === 'products');
+
+        expect(ordersToCustomers).toBeDefined();
+        expect(itemsToOrders).toBeDefined();
+        expect(itemsToProducts).toBeDefined();
+
+        expect(ordersToCustomers?.data?.isPhysical).toBe(true);
+        expect(ordersToCustomers?.data?.relationNames).toContain('orders');
+        expect(ordersToCustomers?.data?.relationNames).toContain('customer');
+      });
+
+      it('should style Cloudflare Service Topology links with curved Bezier and synthetic flags', () => {
+        const code = `
+          import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
+
+          /**
+           * @strata { "target": "d1", "relations": [{ "to": "userKv" }] }
+           */
+          export const users = sqliteTable("users", {
+            id: integer("id").primaryKey()
+          });
+
+          /**
+           * @strata { "target": "kv", "binding": "USER_KV" }
+           */
+          export const userKv = {};
+        `;
+
+        const result = parseSchema(code);
+        expect(result.success).toBe(true);
+
+        const topoEdge = result.edges.find(e => e.source === 'users' && e.target === 'userKv');
+        expect(topoEdge).toBeDefined();
+        expect(topoEdge?.data?.isSynthetic).toBe(true);
+        expect(topoEdge?.data?.isVirtual).toBe(true);
+        expect(topoEdge?.data?.description).toContain('Cloudflare Service Topology Link');
+      });
     });
   });
 });

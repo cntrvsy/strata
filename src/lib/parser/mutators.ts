@@ -58,65 +58,64 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 }
 
 /**
- * Batches updates to node positions inside @strata JSDoc metadata in a single AST pass.
+ * Batches updates to node positions inside the consolidated @strata-layout manifest.
+ * Ensures domain code (and table declarations in monoliths) remain 100% clean of Git diffs.
+ * Strips legacy inline @strata coordinate comments if present.
  */
 export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	const positionsMap: Record<string, { x: number; y: number }> = {};
 	for (const node of nodes) {
-		const decl = sf.getVariableDeclaration(node.id);
-		if (decl) {
-			const statement = decl.getVariableStatement();
-			if (statement) {
-				const jsDocs = statement.getJsDocs();
-				let strataFound = false;
+		positionsMap[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
+	}
 
-				for (const doc of jsDocs) {
+	// If there are legacy inline @strata comments on variables, strip their coordinate properties
+	let cleanCode = code;
+	if (/@strata\s+{/.test(code)) {
+		try {
+			const { sourceFile: sf } = createIsolatedProject('cleanup_schema.ts', code);
+			let modified = false;
+
+			for (const decl of sf.getVariableDeclarations()) {
+				const statement = decl.getVariableStatement();
+				if (!statement) continue;
+
+				for (const doc of statement.getJsDocs()) {
 					const text = doc.getText();
 					const extracted = extractStrataMetadata(text);
-					
-					if (extracted) {
-						const metadata = extracted.data || {};
-						metadata.x = Math.round(node.position.x);
-						metadata.y = Math.round(node.position.y);
-						doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
-						strataFound = true;
-						break;
+					if (extracted && extracted.data) {
+						const meta = { ...extracted.data };
+						const hadX = 'x' in meta;
+						const hadY = 'y' in meta;
+						delete meta.x;
+						delete meta.y;
+
+						if (Object.keys(meta).length === 0) {
+							// Check if the JSDoc only contained @strata
+							const docWithoutStrata = text.replace(extracted.rawMatch, '').trim();
+							const innerClean = docWithoutStrata.replace(/^\/\*\*|\*\/$/g, '').replace(/^\s*\*\s?/gm, '').trim();
+							if (innerClean.length === 0) {
+								doc.remove();
+							} else {
+								doc.replaceWithText(text.replace(extracted.rawMatch, ''));
+							}
+							modified = true;
+						} else if (hadX || hadY) {
+							doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(meta)}`));
+							modified = true;
+						}
 					}
 				}
-
-				if (!strataFound) {
-					statement.addJsDoc({ description: `\n * @strata { "x": ${Math.round(node.position.x)}, "y": ${Math.round(node.position.y)} }\n ` });
-				}
 			}
-		} else if (node.data && (node.data as any).target && (node.data as any).target !== 'd1') {
-			const target = (node.data as any).target;
-			const strata = (node.data as any).strata;
-			const strataObj: any = {
-				target,
-				x: Math.round(node.position.x),
-				y: Math.round(node.position.y)
-			};
-			if (strata?.binding) strataObj.binding = strata.binding;
-			if (strata?.class) strataObj.class = strata.class;
-			if (strata?.path) strataObj.path = strata.path;
-			if (strata?.folders) strataObj.folders = strata.folders;
-			if (strata?.schema) strataObj.schema = strata.schema;
-			if (strata?.relations) strataObj.relations = strata.relations;
 
-			const content = `\n/** \n * @strata ${JSON.stringify(strataObj)} \n */\nexport const ${node.id} = {};\n`;
-			sf.insertText(sf.getFullWidth(), content);
+			if (modified) {
+				cleanCode = sf.getFullText();
+			}
+		} catch (err) {
+			console.warn('[Strata] Failed to strip legacy inline @strata comments:', err);
 		}
 	}
-	let result = sf.getFullText();
-	const virtualNodes = nodes.filter(n => n.type === 'identity');
-	if (virtualNodes.length > 0) {
-		const positionsMap: Record<string, { x: number; y: number }> = {};
-		for (const vn of virtualNodes) {
-			positionsMap[vn.id] = { x: Math.round(vn.position.x), y: Math.round(vn.position.y) };
-		}
-		result = updateLayoutManifestInSchema(result, positionsMap);
-	}
-	return result;
+
+	return updateLayoutManifestInSchema(cleanCode, positionsMap);
 }
 
 export function sanitizeIdentifier(name: string): string {
@@ -186,23 +185,19 @@ export function addTableToSchema(
 	if (target === 'd1') {
 		const { code: columnsCode, imports } = generateD1TableColumns(finalName, extra?.presets);
 		ensureImports(sf, "drizzle-orm/sqlite-core", imports);
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}} \n */\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
+		const content = `\nexport const ${finalName} = sqliteTable("${finalName}", {\n${columnsCode}\n});\n`;
 		sf.insertText(sf.getFullWidth(), content);
-	} else if (target === 'do') {
-		const className = extra?.class || "MyClass";
-		const classPath = extra?.path || `./src/${className}.ts`;
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "do", "class": "${className}", "path": "${classPath}"} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
-	} else if (target === 'r2') {
-		const bucketName = extra?.bucket_name ? `, "bucket": "${extra.bucket_name}"` : '';
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "r2", "folders": {}${bucketName}} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		return updateLayoutManifestInSchema(sf.getFullText(), {
+			[finalName]: { x: Math.round(Math.random() * 400), y: Math.round(Math.random() * 400) }
+		});
 	} else {
-		const kvId = extra?.id ? `, "id": "${extra.id}"` : '';
-		const content = `\n/** \n * @strata {"x": ${Math.round(Math.random() * 400)}, "y": ${Math.round(Math.random() * 400)}, "target": "kv", "schema": {}${kvId}} \n */\nexport const ${finalName} = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		// External Cloudflare worker bindings (KV, DO, R2) are declared in wrangler.jsonc,
+		// never as dummy empty JS objects in the Drizzle schema.
+		// Always store the node's visual position in @strata-layout.
+		return updateLayoutManifestInSchema(code, {
+			[finalName]: { x: Math.round(Math.random() * 400), y: Math.round(Math.random() * 400) }
+		});
 	}
-	return sf.getFullText();
 }
 
 
@@ -221,7 +216,31 @@ export async function addColumnToSchema(
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			if (manifest[tableName]) {
+				const entry = { ...manifest[tableName] };
+				if (entry.target === 'kv' || entry.schema) {
+					entry.schema = { ...(entry.schema || {}), [columnName]: type === 'text' ? 'string' : type };
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.target === 'r2' || entry.folders) {
+					entry.folders = { ...(entry.folders || {}), [columnName]: type || '*/*' };
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.target === 'do' || entry.methods) {
+					entry.methods = Array.from(new Set([...(entry.methods || []), columnName.trim()]));
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				}
+			}
+		}
+		return code;
+	}
 
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -425,23 +444,41 @@ export function addEdgeToSchema(
 	code: string, 
 	source: string, 
 	target: string,
-	targetImportPath?: string
+	targetImportPath?: string,
+	type?: 'fk' | 'relations' | 'synthetic'
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	const targetDecl = sf.getVariableDeclaration(target);
-	if (!sourceDecl) return code;
 
-	if (targetImportPath && !targetDecl) {
-		ensureImports(sf, targetImportPath, [target]);
-	}
+	const isSourceTable = sourceDecl ? sourceDecl.getInitializer()?.getText().includes('sqliteTable') : false;
+	const isTargetTable = targetDecl ? targetDecl.getInitializer()?.getText().includes('sqliteTable') : false;
 
-	const isSourceTable = sourceDecl.getInitializer()?.getText().includes('sqliteTable');
-	const isTargetTable = targetDecl ? targetDecl.getInitializer()?.getText().includes('sqliteTable') : true;
+	const isSynthetic = type === 'synthetic' || !sourceDecl || (!targetDecl && !targetImportPath) || !isSourceTable || (!isTargetTable && !targetImportPath);
 
-	// --- Synthetic Relations (KV/DO) ---
-	if (targetDecl && (!isSourceTable || !isTargetTable)) {
-		const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
+	// --- Synthetic Relations (KV/DO/R2 or explicit synthetic links) ---
+	if (isSynthetic) {
+		// 1. If @strata-layout exists, store synthetic relations in the manifest
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+					manifest = JSON.parse(cleanJson);
+				} catch {}
+			}
+			if (!manifest[source]) manifest[source] = { x: 100, y: 100 };
+			if (!manifest[source].relations) manifest[source].relations = [];
+			if (!manifest[source].relations.some((r: any) => r.to === target)) {
+				manifest[source].relations.push({ to: target });
+				return updateLayoutManifestInSchema(code, { [source]: manifest[source] });
+			}
+			return code;
+		}
+
+		// 2. If source declaration has an existing inline @strata tag and no manifest exists, update it
+		const jsDoc = sourceDecl?.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
 			const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
@@ -453,10 +490,20 @@ export function addEdgeToSchema(
 						strata.relations.push({ to: target });
 						jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
 					}
+					return sf.getFullText();
 				} catch (e) { console.error(e); }
 			}
 		}
-		return sf.getFullText();
+
+		// 3. Fallback: prepend @strata-layout manifest (Universal Manifest Default)
+		const initialPos = { x: 100, y: 100, relations: [{ to: target }] };
+		return updateLayoutManifestInSchema(code, { [source]: initialPos });
+	}
+
+	if (!sourceDecl) return code;
+
+	if (targetImportPath && !targetDecl) {
+		ensureImports(sf, targetImportPath, [target]);
 	}
 
 	// --- Drizzle Relations (D1) ---
@@ -470,9 +517,7 @@ export function addEdgeToSchema(
 			isExported: true,
 			declarations: [{
 				name: relationName,
-				initializer: `relations(${source}, ({ many }) => ({
-  ${relPropName}: many(${target})
-}))`
+				initializer: `relations(${source}, ({ many }) => ({\n  ${relPropName}: many(${target})\n}))`
 			}]
 		});
 	} else {
@@ -579,12 +624,39 @@ export function removeTableFromSchema(code: string, tableName: string): string {
  * Removes an edge/relationship from the schema.
  */
 export function removeEdgeFromSchema(code: string, source: string, target: string, name?: string): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	let workingCode = code;
+
+	// Check if this relation exists in @strata-layout manifest
+	if (/@strata-layout\s+{/.test(workingCode)) {
+		const match = workingCode.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+		if (match) {
+			try {
+				const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+				const manifest = JSON.parse(cleanJson);
+				if (manifest[source]?.relations && Array.isArray(manifest[source].relations)) {
+					const beforeLen = manifest[source].relations.length;
+					manifest[source].relations = manifest[source].relations.filter((r: any) => r.to !== target);
+					if (manifest[source].relations.length !== beforeLen) {
+						if (manifest[source].relations.length === 0) {
+							delete manifest[source].relations;
+							workingCode = updateLayoutManifestInSchema(workingCode, { [source]: { ...manifest[source], relations: undefined } });
+						} else {
+							workingCode = updateLayoutManifestInSchema(workingCode, { [source]: manifest[source] });
+						}
+					}
+				}
+			} catch (err) {
+				console.warn('[Strata] Failed to remove relation from @strata-layout:', err);
+			}
+		}
+	}
+
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', workingCode);
 	const sourceDecl = sf.getVariableDeclaration(source);
 	const relName = `${source}Relations`;
 	const relDecl = sf.getVariableDeclaration(relName);
 
-	if (!sourceDecl && !relDecl) return code;
+	if (!sourceDecl && !relDecl) return workingCode;
 
 	// --- Synthetic Relations ---
 	if (sourceDecl) {
@@ -683,7 +755,35 @@ export async function removeColumnFromSchema(
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			if (manifest[tableName]) {
+				const entry = { ...manifest[tableName] };
+				if (entry.schema && entry.schema[columnName]) {
+					delete entry.schema[columnName];
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.folders) {
+					const cleanKey = columnName.endsWith('/') ? columnName.slice(0, -1) : columnName;
+					if (entry.folders[cleanKey]) {
+						delete entry.folders[cleanKey];
+						return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+					}
+				} else if (entry.methods) {
+					const cleanMethod = columnName.replace(/\(.*$/, '').trim();
+					entry.methods = entry.methods.filter((m: string) => m !== cleanMethod && m !== columnName);
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				}
+			}
+		}
+		return code;
+	}
 	
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -1065,16 +1165,102 @@ export function updateColumnModifiersInSchema(
 }
 
 /**
+ * Converts a non-SQLite column type (e.g. timestamp(), boolean()) to D1 SQLite compatible integer(..., { mode: "..." }).
+ */
+export function fixD1ColumnTypeInSchema(
+	code: string,
+	tableName: string,
+	columnName: string,
+	targetMode: 'timestamp' | 'boolean'
+): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	const decl = sf.getVariableDeclaration(tableName);
+	if (!decl) return code;
+
+	const initializer = decl.getInitializer();
+	if (!initializer) return code;
+
+	const tableCall = findSqliteTableCall(initializer);
+	if (!tableCall) return code;
+
+	const args = tableCall.getArguments();
+	if (args.length < 2 || !args[1].isKind(SyntaxKind.ObjectLiteralExpression)) return code;
+
+	const prop = args[1].asKindOrThrow(SyntaxKind.ObjectLiteralExpression).getProperty(columnName);
+	if (!prop?.isKind(SyntaxKind.PropertyAssignment)) return code;
+
+	const colInit = prop.getInitializer();
+	if (!colInit) return code;
+
+	const { baseCallText, modifiers: chainMods } = parseColumnChain(colInit);
+
+	// Extract the SQL column name from the base call argument, e.g. timestamp("created_at") -> "created_at"
+	let sqlColName = `"${columnName}"`;
+	const callMatch = baseCallText.match(/^[a-zA-Z0-9_]+\s*\(\s*(['"][^'"]+['"])/);
+	if (callMatch) {
+		sqlColName = callMatch[1];
+	}
+
+	const newBaseCall = `integer(${sqlColName}, { mode: "${targetMode}" })`;
+	const newColDef = buildColumnChain(newBaseCall, chainMods);
+	colInit.replaceWithText(newColDef);
+
+	ensureImports(sf, 'drizzle-orm/sqlite-core', ['integer']);
+
+	// If timestamp or boolean are no longer used anywhere in the source file, clean up their imports
+	const fullText = sf.getFullText();
+	if (!/\btimestamp\s*\(/.test(fullText)) {
+		cleanUnusedImports(sf, ['timestamp']);
+	}
+	if (!/\bboolean\s*\(/.test(fullText)) {
+		cleanUnusedImports(sf, ['boolean']);
+	}
+
+	return sf.getFullText();
+}
+
+/**
  * Updates bucket-level configuration (e.g. public access, custom domain, CORS) in R2 JSDoc metadata.
  */
 export function updateTableMetadataInSchema(
 	code: string,
 	tableName: string,
-	metadata: { public?: boolean; customDomain?: string | null; cors?: boolean; class?: string; path?: string }
+	metadata: {
+		public?: boolean;
+		customDomain?: string | null;
+		cors?: boolean;
+		class?: string;
+		path?: string;
+		methods?: string[];
+		schema?: Record<string, any>;
+		folders?: Record<string, string>;
+		[key: string]: any;
+	}
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			const existingEntry = manifest[tableName] || { x: 100, y: 100 };
+			const updatedEntry = { ...existingEntry };
+			for (const [key, val] of Object.entries(metadata)) {
+				if (val === undefined || val === null || val === '') {
+					delete updatedEntry[key];
+				} else {
+					updatedEntry[key] = val;
+				}
+			}
+			return updateLayoutManifestInSchema(code, { [tableName]: updatedEntry }, false);
+		}
+		return code;
+	}
 
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -1120,6 +1306,15 @@ export function updateTableMetadataInSchema(
 						} else {
 							delete strata.path;
 						}
+					}
+					if (metadata.methods !== undefined) {
+						strata.methods = metadata.methods;
+					}
+					if (metadata.schema !== undefined) {
+						strata.schema = metadata.schema;
+					}
+					if (metadata.folders !== undefined) {
+						strata.folders = metadata.folders;
 					}
 
 					doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
@@ -1169,138 +1364,13 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 			}
 		}
 	} else {
-		const content = `\n/**\n * @strata ${JSON.stringify(strataVal)}\n */\nexport const strataConfig = {};\n`;
-		sf.insertText(sf.getFullWidth(), content);
+		// Store in @strata-layout manifest under __config__ without creating dummy JS variable!
+		return updateLayoutManifestInSchema(code, {
+			__config__: {
+				wranglerPath: config.wranglerPath
+			}
+		} as any);
 	}
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds the standard Better Auth Drizzle D1 table cluster (user, session, account, verification).
- */
-export function scaffoldBetterAuthClusterInSchema(code: string): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	const tablesToScaffold = [
-		{
-			name: 'user',
-			code: `export const user = sqliteTable("user", {
-	id: text("id").primaryKey(),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	emailVerified: integer("email_verified", { mode: "boolean" }).notNull(),
-	image: text("image"),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
-});\n`
-		},
-		{
-			name: 'session',
-			code: `export const session = sqliteTable("session", {
-	id: text("id").primaryKey(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	token: text("token").notNull().unique(),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-	ipAddress: text("ip_address"),
-	userAgent: text("user_agent"),
-	userId: text("user_id").notNull().references(() => user.id)
-});\n`
-		},
-		{
-			name: 'account',
-			code: `export const account = sqliteTable("account", {
-	id: text("id").primaryKey(),
-	accountId: text("account_id").notNull(),
-	providerId: text("provider_id").notNull(),
-	userId: text("user_id").notNull().references(() => user.id),
-	accessToken: text("access_token"),
-	refreshToken: text("refresh_token"),
-	idToken: text("id_token"),
-	accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
-	refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
-	scope: text("scope"),
-	password: text("password"),
-	createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-	updatedAt: integer("updated_at", { mode: "timestamp" }).notNull()
-});\n`
-		},
-		{
-			name: 'verification',
-			code: `export const verification = sqliteTable("verification", {
-	id: text("id").primaryKey(),
-	identifier: text("identifier").notNull(),
-	value: text("value").notNull(),
-	expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`
-		}
-	];
-
-	for (const tbl of tablesToScaffold) {
-		if (!sf.getVariableDeclaration(tbl.name)) {
-			sf.insertText(sf.getFullWidth(), `\n${tbl.code}`);
-		}
-	}
-
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds a local D1 mirror table for Clerk webhooks.
- */
-export function scaffoldClerkMirrorTableInSchema(code: string, tableName = 'users'): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	let targetName = tableName;
-	let counter = 1;
-	while (sf.getVariableDeclaration(targetName)) {
-		targetName = `${tableName}${counter++}`;
-	}
-
-	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
-	id: text("id").primaryKey(),
-	clerkUserId: text("clerk_user_id").notNull().unique(),
-	email: text("email").notNull(),
-	firstName: text("first_name"),
-	lastName: text("last_name"),
-	imageUrl: text("image_url"),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`;
-
-	sf.insertText(sf.getFullWidth(), snippet);
-	return sf.getFullText();
-}
-
-/**
- * Scaffolds a local D1 mirror table for WorkOS Directory Sync / SSO.
- */
-export function scaffoldWorkOSMirrorTableInSchema(code: string, tableName = 'workosUsers'): string {
-	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	ensureImports(sf, 'drizzle-orm/sqlite-core', ['sqliteTable', 'text', 'integer']);
-
-	let targetName = tableName;
-	let counter = 1;
-	while (sf.getVariableDeclaration(targetName)) {
-		targetName = `${tableName}${counter++}`;
-	}
-
-	const snippet = `\nexport const ${targetName} = sqliteTable("${targetName}", {
-	id: text("id").primaryKey(),
-	workosUserId: text("workos_user_id").notNull().unique(),
-	workosOrgId: text("workos_org_id"),
-	email: text("email").notNull(),
-	firstName: text("first_name"),
-	lastName: text("last_name"),
-	createdAt: integer("created_at", { mode: "timestamp" }),
-	updatedAt: integer("updated_at", { mode: "timestamp" })
-});\n`;
-
-	sf.insertText(sf.getFullWidth(), snippet);
 	return sf.getFullText();
 }
 
@@ -1322,7 +1392,24 @@ export function updateLayoutManifestInSchema(
 			currentManifest = JSON.parse(cleanJson);
 		} catch {}
 
-		const merged = pruneMissing ? { ...positions } : { ...currentManifest, ...positions };
+		let merged: Record<string, any>;
+		if (pruneMissing) {
+			merged = {};
+			for (const [key, val] of Object.entries(positions)) {
+				merged[key] = { ...(currentManifest[key] || {}), ...val };
+				if (val && 'relations' in val && (val as any).relations === undefined) {
+					delete merged[key].relations;
+				}
+			}
+		} else {
+			merged = { ...currentManifest };
+			for (const [key, val] of Object.entries(positions)) {
+				merged[key] = { ...(currentManifest[key] || {}), ...val };
+				if (val && 'relations' in val && (val as any).relations === undefined) {
+					delete merged[key].relations;
+				}
+			}
+		}
 		const formattedJson = JSON.stringify(merged, null, 2)
 			.split('\n')
 			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
@@ -1330,13 +1417,28 @@ export function updateLayoutManifestInSchema(
 
 		return code.replace(match[0], `@strata-layout ${formattedJson}`);
 	} else {
-		// Prepend manifest at the top of the root file
+		// Prepend manifest at the top of the root file, safely preserving shebangs or directives
 		const formattedJson = JSON.stringify(positions, null, 2)
 			.split('\n')
 			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
 			.join('\n');
 
 		const manifestComment = `/**\n * @strata-layout ${formattedJson}\n */\n\n`;
+
+		const shebangMatch = code.match(/^(#!.*?\n)/);
+		const directiveMatch = code.match(/^(?:#!.*?\n)?((?:["'][^"']+["'];?\s*\n)+)/);
+
+		if (shebangMatch && directiveMatch) {
+			const prefix = shebangMatch[1] + directiveMatch[1];
+			return prefix + manifestComment + code.slice(prefix.length);
+		} else if (shebangMatch) {
+			const prefix = shebangMatch[1];
+			return prefix + manifestComment + code.slice(prefix.length);
+		} else if (directiveMatch) {
+			const prefix = directiveMatch[1];
+			return prefix + manifestComment + code.slice(prefix.length);
+		}
+
 		return manifestComment + code;
 	}
 }
@@ -1472,5 +1574,98 @@ export function parseDrizzleConfigSchemaPath(configCode: string, configFilePath:
 
 	return rawPath;
 }
+
+/**
+ * Migrates dummy Cloudflare binding declarations (export const BUCKET = {}; with @strata)
+ * from a schema barrel file into the root @strata-layout manifest, and strips unused Drizzle imports.
+ */
+export function consolidateDummyBindingsIntoManifest(code: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	let manifest: Record<string, any> = {};
+	if (match) {
+		try {
+			manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+		} catch {}
+	}
+
+	let modified = false;
+
+	const statementsToRemove: any[] = [];
+	for (const statement of sf.getVariableStatements()) {
+		let isDummy = false;
+		for (const decl of statement.getDeclarations()) {
+			const init = decl.getInitializer();
+			const isEmptyObj = init?.isKind(SyntaxKind.ObjectLiteralExpression) && init.getProperties().length === 0;
+			const jsDocs = statement.getJsDocs();
+			let strataData: any = null;
+
+			for (const doc of jsDocs) {
+				const text = doc.getText();
+				const m = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (m) {
+					try {
+						strataData = JSON.parse(m[1].replace(/^\s*\*\s?/gm, ''));
+					} catch {}
+				}
+			}
+
+			if (isEmptyObj) {
+				const name = decl.getName();
+				const current = manifest[name] || { x: 100, y: 100 };
+				manifest[name] = {
+					...current,
+					...(strataData || {})
+				};
+				isDummy = true;
+			}
+		}
+		if (isDummy) {
+			statementsToRemove.push(statement);
+		}
+	}
+
+	for (const stmt of statementsToRemove) {
+		stmt.remove();
+		modified = true;
+	}
+
+	// Remove unused drizzle-orm/sqlite-core imports if no sqliteTable calls remain
+	for (const imp of sf.getImportDeclarations()) {
+		if (imp.getModuleSpecifierValue() === 'drizzle-orm/sqlite-core') {
+			const anyTableCall = sf.getDescendantsOfKind(SyntaxKind.CallExpression).some(c => c.getExpression().getText() === 'sqliteTable');
+			if (!anyTableCall) {
+				imp.remove();
+				modified = true;
+			}
+		}
+	}
+
+	let workingText = sf.getFullText();
+	// Clean up comment block headers if left hanging
+	workingText = workingText.replace(/\/\*\*[\s\S]*?Cloudflare Storage Targets & Non-SQL Bindings[\s\S]*?\*\/\s*/g, '');
+
+	if (modified || Object.keys(manifest).length > 0) {
+		return updateLayoutManifestInSchema(workingText, manifest, false);
+	}
+
+	return workingText;
+}
+
+/**
+ * Removes an unused import declaration from a schema file.
+ */
+export function removeUnusedImportFromSchema(code: string, moduleSpecifier: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	for (const imp of sf.getImportDeclarations()) {
+		if (imp.getModuleSpecifierValue() === moduleSpecifier) {
+			imp.remove();
+			return sf.getFullText();
+		}
+	}
+	return code;
+}
+
 
 

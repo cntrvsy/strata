@@ -6,7 +6,11 @@ import {
   removeTableFromLayoutManifest,
   renameTableInLayoutManifest,
   updateAllNodePositionsInSchema,
-  parseDrizzleConfigSchemaPath
+  parseDrizzleConfigSchemaPath,
+  consolidateDummyBindingsIntoManifest,
+  removeUnusedImportFromSchema,
+  addEdgeToSchema,
+  removeEdgeFromSchema
 } from '../../src/lib/parser/mutators';
 import { schemaState } from '../../src/lib/state';
 import { invoke } from '@tauri-apps/api/core';
@@ -320,4 +324,306 @@ export const posts = sqliteTable("posts", {
     const manifest = extractStrataLayoutManifest(updated);
     expect(manifest?.__clerk_identity__).toEqual({ x: 50, y: 250 });
   });
+
+  it('should apply @strata-layout manifest coordinates to external wrangler bindings on cold parse', async () => {
+    const rootWithManifest = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 150 },
+       *   "RATE_LIMITER_DO": { "x": 620, "y": 280 }
+       * }
+       */
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", {
+        id: integer("id").primaryKey()
+      });
+    `;
+
+    const wranglerJson = JSON.stringify({
+      name: "my-worker",
+      main: "src/index.ts",
+      durable_objects: {
+        bindings: [
+          { name: "RATE_LIMITER_DO", class_name: "RateLimiterDO" }
+        ]
+      }
+    });
+
+    const mockFiles: Record<string, string> = {
+      '/app/schema/index.ts': rootWithManifest,
+      '/app/wrangler.jsonc': wranglerJson
+    };
+
+    const { PlatformService } = await import('../../src/lib/services/platform');
+    vi.spyOn(PlatformService, 'readText').mockImplementation(async (path: string) => {
+      const norm = path.replace(/\\/g, '/');
+      if (mockFiles[norm]) return mockFiles[norm];
+      throw new Error(`File not found: ${path}`);
+    });
+
+    schemaState.filePath = '/app/schema/index.ts';
+    await schemaState.syncWithFile();
+
+    const doNode = schemaState.nodes.find(n => n.id === 'RATE_LIMITER_DO');
+    expect(doNode).toBeDefined();
+    expect(doNode?.position.x).toBe(620);
+    expect(doNode?.position.y).toBe(280);
+  });
+
+  it('should follow Worker main entrypoint to resolve DO class and extract RPC methods (Option 1)', async () => {
+    const rootSchema = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 150 },
+       *   "SESSION_DO": { "x": 550, "y": 150 }
+       * }
+       */
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", {
+        id: integer("id").primaryKey()
+      });
+    `;
+
+    const wranglerConfig = JSON.stringify({
+      name: "worker-app",
+      main: "src/index.ts",
+      durable_objects: {
+        bindings: [
+          { name: "SESSION_DO", class_name: "SessionDO" }
+        ]
+      }
+    });
+
+    const workerIndex = `
+      import { DurableObject } from "cloudflare:workers";
+      export { SessionDO } from "./durable-objects/SessionDO";
+
+      export default {
+        async fetch(request, env) { return new Response("OK"); }
+      };
+    `;
+
+    const sessionDoClass = `
+      import { DurableObject } from "cloudflare:workers";
+
+      export class SessionDO extends DurableObject {
+        async getSession(token: string): Promise<any> { return {}; }
+        async invalidate(token: string): Promise<void> {}
+      }
+    `;
+
+    const mockFiles: Record<string, string> = {
+      '/project/src/schema/index.ts': rootSchema,
+      '/project/wrangler.jsonc': wranglerConfig,
+      '/project/src/index.ts': workerIndex,
+      '/project/src/durable-objects/SessionDO.ts': sessionDoClass
+    };
+
+    const { PlatformService } = await import('../../src/lib/services/platform');
+    vi.spyOn(PlatformService, 'readText').mockImplementation(async (path: string) => {
+      const norm = path.replace(/\\/g, '/');
+      if (mockFiles[norm]) return mockFiles[norm];
+      throw new Error(`File not found: ${path}`);
+    });
+
+    schemaState.filePath = '/project/src/schema/index.ts';
+    await schemaState.syncWithFile();
+
+    const doNode = schemaState.nodes.find(n => n.id === 'SESSION_DO');
+    expect(doNode).toBeDefined();
+    expect(doNode?.position).toEqual({ x: 550, y: 150 });
+    
+    // Check RPC methods extracted via Option 1
+    const methodNames = (doNode?.data as any)?.columns.map((c: any) => c.name);
+    expect(methodNames).toContain('getSession(token: string)');
+    expect(methodNames).toContain('invalidate(token: string)');
+  });
+
+  it('should insert @strata-layout safely below shebangs and directives', () => {
+    const codeWithDirective = `"use server";\n\nimport { sqliteTable, integer } from "drizzle-orm/sqlite-core";\nexport const users = sqliteTable("users", { id: integer("id") });`;
+    const updated = updateLayoutManifestInSchema(codeWithDirective, { users: { x: 100, y: 200 } });
+    
+    expect(updated.startsWith('"use server";\n\n/**\n * @strata-layout')).toBe(true);
+    expect(updated).toContain('"users"');
+  });
+
+  it('should save monolith schema positions to @strata-layout and keep table declarations pure Drizzle code', () => {
+    const monolith = `
+      import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+      export const posts = sqliteTable("posts", { id: integer("id").primaryKey() });
+    `;
+
+    const nodes = [
+      { id: 'users', position: { x: 120, y: 180 } },
+      { id: 'posts', position: { x: 450, y: 180 } }
+    ] as any;
+
+    const saved = updateAllNodePositionsInSchema(monolith, nodes);
+    expect(saved).toContain('@strata-layout');
+    expect(saved).not.toContain('@strata {');
+    
+    // Declarations remain pure Drizzle code
+    expect(saved).toContain('export const users = sqliteTable("users"');
+    expect(saved).toContain('export const posts = sqliteTable("posts"');
+
+    const manifest = extractStrataLayoutManifest(saved);
+    expect(manifest?.users).toEqual({ x: 120, y: 180 });
+    expect(manifest?.posts).toEqual({ x: 450, y: 180 });
+  });
+
+  it('should cleanly consolidate dummy binding declarations and strip unused imports from modular barrels', () => {
+    const dirtyBarrel = `import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+/**
+ * @strata-layout {
+ *   "user": { "x": 3698, "y": 1196 },
+ *   "session": { "x": 3307, "y": 50 },
+ *   "account": { "x": 3297, "y": 474 },
+ *   "verification": { "x": 996, "y": 50 },
+ *   "organizations": { "x": 3268, "y": 1225 },
+ *   "organizationMemberships": { "x": 2755, "y": 949 },
+ *   "organizationInvites": { "x": 2796, "y": 1262 },
+ *   "profile": { "x": 3321, "y": 1958 },
+ *   "projects": { "x": 2784, "y": 1612 },
+ *   "projectAccessKeys": { "x": 2266, "y": 1335 },
+ *   "projectQuotas": { "x": 2298, "y": 1757 },
+ *   "gameBuilds": { "x": 2290, "y": 948 },
+ *   "telemetrySessions": { "x": 1776, "y": 1355 },
+ *   "payments": { "x": 2339, "y": 2178 },
+ *   "processedWebhooks": { "x": 600, "y": 50 },
+ *   "GAMES_BUCKET": { 
+ *     "x": 1825, 
+ *     "y": 950,
+ *     "relations": [{ "to": "gameBuilds" }]
+ *   },
+ *   "TELEMETRY_BUFFER": { 
+ *     "x": 1320, 
+ *     "y": 1443,
+ *     "relations": [{ "to": "telemetrySessions" }, { "to": "GAMES_BUCKET" }]
+ *   },
+ *   "ISITFUN_KV": { "x": 50, "y": 50 },
+ *   "DRIFTER_CONTROL": { "x": 310, "y": 50 }
+ * }
+ */
+
+export const GAMES_BUCKET = {};
+export const TELEMETRY_BUFFER = {};
+export const ISITFUN_KV = {};
+export const DRIFTER_CONTROL = {};
+
+export * from './utils';
+export * from './auth';
+export * from './orgs';
+export * from './projects';
+export * from './builds';
+export * from './telemetry';
+export * from './payments';
+`;
+
+    // 1. Audit detects dummy bindings & unused imports
+    const auditParsed = parseSchema(dirtyBarrel, new Map(), undefined, undefined, '/project/schema/index.ts');
+    const dummyWarnings = (auditParsed.auditIssues || []).filter(i => i.code === 'BARREL_DUMMY_BINDING');
+    const unusedImportWarnings = (auditParsed.auditIssues || []).filter(i => i.code === 'UNUSED_BARREL_IMPORT');
+
+    expect(dummyWarnings.length).toBe(4);
+    expect(dummyWarnings[0].suggestedFix?.action).toBe('migrate_dummy_to_manifest');
+    expect(unusedImportWarnings.length).toBe(1);
+    expect(unusedImportWarnings[0].suggestedFix?.action).toBe('remove_unused_import');
+
+    // 2. Consolidate into clean manifest
+    const cleaned = consolidateDummyBindingsIntoManifest(dirtyBarrel);
+
+    // Dummy declarations must be gone
+    expect(cleaned).not.toContain('export const GAMES_BUCKET = {};');
+    expect(cleaned).not.toContain('export const TELEMETRY_BUFFER = {};');
+    expect(cleaned).not.toContain('export const ISITFUN_KV = {};');
+    expect(cleaned).not.toContain('export const DRIFTER_CONTROL = {};');
+
+    // Unused drizzle-orm import must be gone
+    expect(cleaned).not.toContain('drizzle-orm/sqlite-core');
+
+    // Re-exports must be preserved
+    expect(cleaned).toContain("export * from './utils';");
+    expect(cleaned).toContain("export * from './auth';");
+    expect(cleaned).toContain("export * from './orgs';");
+    expect(cleaned).toContain("export * from './projects';");
+    expect(cleaned).toContain("export * from './builds';");
+    expect(cleaned).toContain("export * from './telemetry';");
+    expect(cleaned).toContain("export * from './payments';");
+
+    // Manifest retains coordinates and synthetic relations
+    const manifest = extractStrataLayoutManifest(cleaned);
+    expect(manifest?.GAMES_BUCKET.x).toBe(1825);
+    expect(manifest?.GAMES_BUCKET.y).toBe(950);
+    expect(manifest?.GAMES_BUCKET.relations).toEqual([{ to: 'gameBuilds' }]);
+
+    expect(manifest?.TELEMETRY_BUFFER.x).toBe(1320);
+    expect(manifest?.TELEMETRY_BUFFER.y).toBe(1443);
+    expect(manifest?.TELEMETRY_BUFFER.relations).toEqual([
+      { to: 'telemetrySessions' },
+      { to: 'GAMES_BUCKET' }
+    ]);
+
+    expect(manifest?.ISITFUN_KV.x).toBe(50);
+    expect(manifest?.DRIFTER_CONTROL.x).toBe(310);
+
+    // 3. Re-auditing the cleaned barrel yields zero dummy or unused import warnings!
+    const cleanAudit = parseSchema(cleaned, new Map(), undefined, undefined, '/project/schema/index.ts');
+    expect((cleanAudit.auditIssues || []).filter(i => i.code === 'BARREL_DUMMY_BINDING')).toHaveLength(0);
+    expect((cleanAudit.auditIssues || []).filter(i => i.code === 'UNUSED_BARREL_IMPORT')).toHaveLength(0);
+  });
+
+  it('should preserve synthetic relations during node drag position updates', () => {
+    const cleanBarrel = `/**
+ * @strata-layout {
+ *   "GAMES_BUCKET": {
+ *     "x": 1825,
+ *     "y": 950,
+ *     "relations": [{ "to": "gameBuilds" }]
+ *   }
+ * }
+ */
+export * from './builds';`;
+
+    const updated = updateLayoutManifestInSchema(
+      cleanBarrel,
+      { GAMES_BUCKET: { x: 2000, y: 1100 } },
+      true // pruneMissing
+    );
+
+    const manifest = extractStrataLayoutManifest(updated);
+    expect(manifest?.GAMES_BUCKET.x).toBe(2000);
+    expect(manifest?.GAMES_BUCKET.y).toBe(1100);
+    expect(manifest?.GAMES_BUCKET.relations).toEqual([{ to: 'gameBuilds' }]);
+  });
+
+  it('should add and remove synthetic relations in @strata-layout without dummy code', () => {
+    const barrel = `/**
+ * @strata-layout {
+ *   "TELEMETRY_BUFFER": {
+ *     "x": 1320,
+ *     "y": 1443,
+ *     "relations": [{ "to": "telemetrySessions" }, { "to": "GAMES_BUCKET" }]
+ *   },
+ *   "ISITFUN_KV": { "x": 50, "y": 50 }
+ * }
+ */
+export * from './telemetry';`;
+
+    // Remove edge between TELEMETRY_BUFFER and GAMES_BUCKET
+    const afterRemoval = removeEdgeFromSchema(barrel, 'TELEMETRY_BUFFER', 'GAMES_BUCKET');
+    const manifestAfterRemoval = extractStrataLayoutManifest(afterRemoval);
+    expect(manifestAfterRemoval?.TELEMETRY_BUFFER.relations).toEqual([{ to: 'telemetrySessions' }]);
+
+    // Add synthetic edge from ISITFUN_KV to TELEMETRY_BUFFER
+    const afterAdd = addEdgeToSchema(barrel, 'ISITFUN_KV', 'TELEMETRY_BUFFER', undefined, 'synthetic');
+    const manifestAfterAdd = extractStrataLayoutManifest(afterAdd);
+    expect(manifestAfterAdd?.ISITFUN_KV.relations).toEqual([{ to: 'TELEMETRY_BUFFER' }]);
+
+    // Ensure no dummy code was added
+    expect(afterAdd).not.toContain('export const ISITFUN_KV');
+    expect(afterAdd).not.toContain('sqliteTable');
+  });
 });
+

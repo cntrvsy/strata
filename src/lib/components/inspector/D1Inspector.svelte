@@ -1,12 +1,12 @@
 <!--
   D1Inspector.svelte
 
-  Summary: Sub-inspector displaying and mutating columns for D1 database tables.
+  Summary: High-clarity read-only architectural telemetry viewer for D1 SQLite table columns.
   Expects: tableName (string), data (object showing columns), isReadOnly (boolean).
+  Output: Clean visual column breakdown with types, keys, and constraint badges.
 -->
 <script lang="ts">
-  import { Key, Pencil, Trash2, Check } from "lucide-svelte";
-  import { schemaState } from "#lib/state";
+  import { Key, Link } from "lucide-svelte";
 
   let { tableName, data, isReadOnly } = $props<{
     tableName: string;
@@ -14,154 +14,76 @@
     isReadOnly: boolean;
   }>();
 
-  let editingColumnName = $state<string | null>(null);
-  let newColumnName = $state("");
-
-  async function submitRenameColumn() {
-    if (!editingColumnName || !newColumnName) return;
-    await schemaState.renameColumn(tableName, editingColumnName, newColumnName);
-    editingColumnName = null;
-  }
-
-  async function deleteColumn(colName: string) {
-    schemaState.promptConfirm({
-      title: "Delete Column",
-      message: `Are you sure you want to delete column "${colName}" from table "${tableName}"? This change will be saved to disk.`,
-      confirmLabel: "Delete Column",
-      isDanger: true,
-      onConfirm: () => schemaState.deleteColumn(tableName, colName),
-    });
-  }
+  const columns = $derived(data?.columns || []);
 </script>
 
 <div class="flex flex-col gap-2">
-  {#each data.columns as col}
-    <div
-      class="bg-base-200/30 p-3 rounded-box flex flex-col gap-1.5 border border-base-300/30 hover:border-base-300/60 transition-all group/field"
-      data-testid="field-row-{col.name}"
-    >
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2 grow">
-          {#if col.isPk}
-            <Key class="w-3 h-3 text-amber-500" />
-          {/if}
-          {#if editingColumnName === col.name}
-            <div class="flex items-center gap-1 grow">
-              <input
-                bind:value={newColumnName}
-                class="input input-xs input-bordered w-full rounded-field font-semibold text-xs h-7 bg-base-100 focus:input-primary transition-all"
-                onkeydown={(e) => e.key === "Enter" && submitRenameColumn()}
-                data-testid="field-rename-input-{col.name}"
-              />
-              <button
-                class="btn btn-primary btn-xs btn-circle"
-                onclick={submitRenameColumn}
-                data-testid="field-rename-submit-{col.name}"
-              >
-                <Check class="w-3 h-3" />
-              </button>
-            </div>
-          {:else}
-            <div class="flex items-center gap-2 group/col-title">
-              <span
-                class="font-bold text-xs group-hover/field:text-primary transition-colors text-base-content/85"
-                data-testid="field-name-{col.name}"
-              >
-                {col.name}
-              </span>
-              {#if !isReadOnly}
-                <button
-                  class="opacity-0 group-hover/col-title:opacity-30 hover:opacity-100! transition-all btn btn-ghost btn-xs btn-circle h-4.5 w-4.5 hover:bg-base-200"
-                  onclick={() => {
-                    editingColumnName = col.name;
-                    newColumnName = col.name;
-                  }}
-                  data-testid="field-rename-btn-{col.name}"
-                >
-                  <Pencil class="w-2.5 h-2.5 opacity-60" />
-                </button>
-              {/if}
-            </div>
-          {/if}
-        </div>
-        <div class="flex items-center gap-2">
-          <span
-            class="text-[9px] font-mono opacity-75 text-base-content/80 uppercase bg-base-300/50 px-1.5 py-0.5 rounded border border-base-300/30 font-semibold"
-          >
-            {col.definition.split("(")[0]}
-          </span>
-          {#if !isReadOnly}
-            <button
-              class="opacity-0 group-hover/field:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-              onclick={() => deleteColumn(col.name)}
-              data-testid="field-delete-btn-{col.name}"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      {#if col.isReferences}
-        <div class="flex items-center gap-1.5 mt-0.5">
-          <div class="w-1 h-1 rounded-full bg-secondary"></div>
-          <span
-            class="text-[9px] text-secondary font-semibold uppercase tracking-tighter"
-          >
-            Foreign Key Reference
-          </span>
-        </div>
-      {/if}
-
-      <div
-        class="flex items-center gap-4 mt-2 pt-2 border-t border-base-300/40 text-[10px]"
-      >
-        <label class="flex items-center gap-1.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={col.isPk}
-            disabled={isReadOnly}
-            class="checkbox checkbox-xs checkbox-primary rounded-field disabled:opacity-50"
-            onchange={(e) =>
-              schemaState.updateColumnModifiers(tableName, col.name, {
-                isPk: e.currentTarget.checked,
-              })}
-          />
-          <span class="font-semibold opacity-70">PK</span>
-        </label>
-
-        <label class="flex items-center gap-1.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={col.notNull}
-            disabled={isReadOnly}
-            class="checkbox checkbox-xs checkbox-primary rounded-field disabled:opacity-50"
-            onchange={(e) =>
-              schemaState.updateColumnModifiers(tableName, col.name, {
-                notNull: e.currentTarget.checked,
-              })}
-          />
-          <span class="font-semibold opacity-70">Not Null</span>
-        </label>
-      </div>
-
-      <div class="flex items-center gap-2 mt-2 pt-1">
-        <span class="text-[9px] font-bold uppercase tracking-wider opacity-70 text-base-content/75">
-          Default
-        </span>
-        <input
-          type="text"
-          placeholder="None"
-          value={col.defaultVal || ""}
-          disabled={isReadOnly}
-          class="input input-xs input-bordered w-full rounded-field font-mono text-[10px] bg-base-100/50 border-base-300/60 focus:input-primary transition-all disabled:opacity-50"
-          onchange={(e) => {
-            schemaState.updateColumnModifiers(tableName, col.name, {
-              defaultVal: e.currentTarget.value,
-            });
-          }}
-        />
-      </div>
+  {#if columns.length === 0}
+    <div class="p-4 text-center text-xs text-base-content/60 font-mono">
+      No columns defined for {tableName}
     </div>
-  {/each}
+  {:else}
+    {#each columns as col}
+      {@const typeName = col.definition ? col.definition.split("(")[0] : "text"}
+      <div
+        class="bg-base-200/40 p-3 rounded-box flex flex-col gap-2 border border-base-300/40 hover:border-base-300/80 transition-all group/field"
+        data-testid="field-row-{col.name}"
+      >
+        <!-- Top Row: Column Name & Data Type -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            {#if col.isPk}
+              <div class="p-1 rounded bg-warning/15 text-warning shrink-0" title="Primary Key">
+                <Key class="w-3 h-3" />
+              </div>
+            {/if}
+            <span
+              class="font-mono font-bold text-xs text-base-content group-hover/field:text-primary transition-colors truncate"
+              data-testid="field-name-{col.name}"
+            >
+              {col.name}
+            </span>
+          </div>
+
+          <span
+            class="badge badge-sm badge-ghost font-mono text-[9px] uppercase px-2 py-0.5 rounded border border-base-300/60 font-bold shrink-0 text-base-content/80"
+          >
+            {typeName}
+          </span>
+        </div>
+
+        <!-- Badges / Metadata Row -->
+        <div class="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
+          {#if col.isPk}
+            <span class="badge badge-warning badge-xs font-mono font-bold text-[9px] gap-1 px-1.5 py-0.5">
+              PK
+            </span>
+          {/if}
+
+          {#if col.notNull}
+            <span class="badge badge-neutral badge-xs font-mono text-[9px] opacity-75 px-1.5 py-0.5" title="NOT NULL constraint">
+              Not Null
+            </span>
+          {:else}
+            <span class="badge badge-ghost badge-xs font-mono text-[9px] opacity-50 px-1.5 py-0.5" title="Nullable column">
+              Nullable
+            </span>
+          {/if}
+
+          {#if col.isReferences}
+            <span class="badge badge-secondary badge-xs font-mono text-[9px] font-semibold gap-1 px-1.5 py-0.5" title="Foreign Key Reference">
+              <Link class="w-2.5 h-2.5" />
+              FK
+            </span>
+          {/if}
+
+          {#if col.defaultVal !== undefined && col.defaultVal !== null && col.defaultVal !== ""}
+            <span class="px-1.5 py-0.5 rounded bg-base-300/40 text-[9px] font-mono text-base-content/70 border border-base-300/50 truncate max-w-full">
+              default: <span class="text-primary font-semibold">{col.defaultVal}</span>
+            </span>
+          {/if}
+        </div>
+      </div>
+    {/each}
+  {/if}
 </div>

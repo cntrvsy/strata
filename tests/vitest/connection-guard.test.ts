@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addForeignKeyToColumnInSchema, parseSchema } from '#lib/parser';
+import { addForeignKeyToColumnInSchema, parseSchema, addEdgeToSchema, removeEdgeFromSchema } from '#lib/parser';
 
 describe('Connection Safety Guard', () => {
 	it('should append .references() to an existing column definition without creating duplicates', () => {
@@ -88,5 +88,54 @@ describe('Connection Safety Guard', () => {
 
 		const result = addForeignKeyToColumnInSchema(code, 'non_existent_table', 'user_id', 'users', 'id');
 		expect(result).toBe(code);
+	});
+
+	it('should add synthetic edge to external wrangler binding in @strata-layout without AST declaration', () => {
+		const code = `
+			import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+			export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+		`;
+
+		// Target is external binding SESSIONS_KV not declared in code
+		const result = addEdgeToSchema(code, 'users', 'SESSIONS_KV');
+		expect(result).toContain('@strata-layout');
+		expect(result).toContain('"to": "SESSIONS_KV"');
+		// Table definition must remain 100% clean
+		expect(result).toContain('export const users = sqliteTable("users", { id: integer("id").primaryKey() });');
+	});
+
+	it('should add explicit synthetic relationship between D1 tables in @strata-layout leaving tables clean', () => {
+		const code = `
+			import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+			export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+			export const auditLogs = sqliteTable("auditLogs", { id: integer("id").primaryKey() });
+		`;
+
+		const result = addEdgeToSchema(code, 'auditLogs', 'users', undefined, 'synthetic');
+		expect(result).toContain('@strata-layout');
+		expect(result).toContain('"to": "users"');
+		expect(result).not.toContain('relations(');
+		expect(result).toContain('export const auditLogs = sqliteTable("auditLogs", { id: integer("id").primaryKey() });');
+	});
+
+	it('should remove synthetic relationship from @strata-layout', () => {
+		const code = `/**
+ * @strata-layout {
+ *   "auditLogs": {
+ *     "x": 100,
+ *     "y": 100,
+ *     "relations": [
+ *       {
+ *         "to": "users"
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+export const auditLogs = sqliteTable("auditLogs", { id: integer("id").primaryKey() });`;
+
+		const result = removeEdgeFromSchema(code, 'auditLogs', 'users');
+		expect(result).not.toContain('"to": "users"');
 	});
 });

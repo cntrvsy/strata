@@ -15,6 +15,16 @@ export class UIState {
 	/** ID of currently hovered node on canvas */
 	hoveredNodeId = $state<string | null>(null);
 
+	/** Hovered column coordinates { nodeId, colName } */
+	hoveredCol = $state<{ nodeId: string; colName: string } | null>(null);
+
+	/** Subgraph Focus Lock */
+	isFocusLocked = $state(false);
+	focusLockedNodeId = $state<string | null>(null);
+
+	/** Highlight exploration mode: direct (1 hop) vs transitive (2 hops) */
+	highlightMode = $state<'direct' | 'transitive'>('direct');
+
 	/** Compact mode toggle (keys only) */
 	compactMode = $state(false);
 
@@ -23,7 +33,18 @@ export class UIState {
 
 	/** Modal visibility flags */
 	showNewTableModal = $state(false);
-	showScaffoldAuthModal = $state(false);
+	/** Legacy alias: forwarding to Help Center Auth Blueprints */
+	get showScaffoldAuthModal() {
+		return this.showHelpModal && this.activeHelpTab === 'identity-auth';
+	}
+	set showScaffoldAuthModal(val: boolean) {
+		if (val) {
+			this.activeHelpTab = 'identity-auth';
+			this.showHelpModal = true;
+		} else if (this.activeHelpTab === 'identity-auth') {
+			this.showHelpModal = false;
+		}
+	}
 	get showScaffoldModal() {
 		return this.showScaffoldAuthModal;
 	}
@@ -32,12 +53,8 @@ export class UIState {
 	}
 	showProjectSettingsModal = $state(false);
 	showHelpModal = $state(false);
+	activeHelpTab = $state<string>("all");
 	showExportToast = $state(false);
-	showCodeViewerModal = $state(false);
-
-	/** Rename Entity Modal State */
-	showRenameModal = $state(false);
-	renameEntityTargetId = $state<string | null>(null);
 
 	/** Confirmation Dialog Modal State */
 	showConfirmModal = $state(false);
@@ -46,7 +63,17 @@ export class UIState {
 		message: string;
 		confirmLabel: string;
 		isDanger?: boolean;
+		warnings?: string[];
 		onConfirm: () => void;
+	} | null>(null);
+
+	/** Connection Modeler Modal State */
+	showConnectionModelerModal = $state(false);
+	connectionModelerData = $state<{
+		source: string;
+		sourceHandle?: string | null;
+		target: string;
+		targetHandle?: string | null;
 	} | null>(null);
 
 	/** Sandbox / Playground Mode State */
@@ -58,6 +85,26 @@ export class UIState {
 		this.activeInspectorNodeId = null;
 		this.activeCoordinates = null;
 		this.hoveredNodeId = null;
+		this.hoveredCol = null;
+	}
+
+	/** Toggle subgraph focus lock */
+	toggleFocusLock(targetNodeId?: string) {
+		if (this.isFocusLocked) {
+			this.clearFocusLock();
+		} else {
+			const node = targetNodeId || this.hoveredNodeId || this.activeInspectorNodeId;
+			if (node) {
+				this.isFocusLocked = true;
+				this.focusLockedNodeId = node;
+			}
+		}
+	}
+
+	/** Clear subgraph focus lock */
+	clearFocusLock() {
+		this.isFocusLocked = false;
+		this.focusLockedNodeId = null;
 	}
 }
 
