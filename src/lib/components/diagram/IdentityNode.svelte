@@ -8,6 +8,7 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     FingerprintPattern,
     Building2,
@@ -101,6 +102,12 @@ export const workosUsers = sqliteTable("workosUsers", {
     }
   }
 </script>
+
+<NodeQuickActions
+  nodeId={data.label}
+  nodeType="identity"
+  {selected}
+/>
 
 <div
   class="relative group/identity min-w-64 max-w-72 transition-all duration-300"

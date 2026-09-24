@@ -157,11 +157,11 @@
             class="text-[11px] leading-relaxed text-base-content/70 pl-2 border-l-2 border-primary/30 flex flex-col gap-1 font-sans"
           >
             <span
-              >• <strong>Disk ➔ UI:</strong> External saves (e.g. in VS Code) trigger
+              >• <strong>Disk -> UI:</strong> External saves (e.g. in VS Code) trigger
               the file watcher to instantly parse the AST and refresh the diagram.</span
             >
             <span
-              >• <strong>UI ➔ Disk:</strong> Canvas drags or visual modifications
+              >• <strong>UI -> Disk:</strong> Canvas drags or visual modifications
               surgically patch the AST and write back in real-time.</span
             >
           </div>

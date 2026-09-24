@@ -15,7 +15,8 @@ import {
   updateProjectConfigInSchema,
   updateTableMetadataInSchema,
   resolveRelativePath,
-  resolvePathAlias
+  resolvePathAlias,
+  extractStrataLayoutManifest
 } from '#lib/parser';
 import { PlatformService } from '#lib/services/platform';
 
@@ -220,7 +221,7 @@ describe('Mutation Logic', () => {
     expect(newCode).toContain('export const t = sqliteTable');
   });
 
-  it('should update multiple node positions in a single pass', () => {
+  it('should update multiple node positions into consolidated @strata-layout and strip inline coordinates', () => {
     const code = `
       /** @strata {"x":0,"y":0} */
       export const users = sqliteTable("users", { id: integer("id") });
@@ -231,8 +232,11 @@ describe('Mutation Logic', () => {
       { id: 'users', position: { x: 100, y: 150 } },
       { id: 'posts', position: { x: 200, y: 250 } }
     ] as any);
-    expect(newCode).toContain('"x":100,"y":150');
-    expect(newCode).toContain('"x":200,"y":250');
+    expect(newCode).toContain('@strata-layout');
+    expect(newCode).not.toContain('@strata {"x":');
+    const extracted = extractStrataLayoutManifest(newCode);
+    expect(extracted?.users).toEqual({ x: 100, y: 150 });
+    expect(extracted?.posts).toEqual({ x: 200, y: 250 });
   });
 
   it('should add synthetic relations to existing @strata tags', () => {

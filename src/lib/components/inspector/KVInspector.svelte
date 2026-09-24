@@ -26,6 +26,15 @@
     <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
   </div>
 
+  {#if data.strata?.id}
+    <div class="bg-base-200/50 p-3 rounded-box border border-base-300/70 flex flex-col gap-1">
+      <span class="text-[9px] font-black uppercase tracking-widest opacity-40">Namespace ID</span>
+      <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/85 break-all select-all">
+        {data.strata.id}
+      </div>
+    </div>
+  {/if}
+
   {#if columns.length === 0}
     <div class="p-4 text-center text-xs text-base-content/60 font-mono">
       No key patterns mapped for {tableName}

@@ -54,17 +54,20 @@
 
     if (isCrossStorage) {
       // Connect as an architectural edge in @strata-layout (preserves Git-clean domain files)
-      await schemaState.addRelation(connection.source, connection.target);
+      await schemaState.addSyntheticRelation(connection.source, connection.target);
       const { toast } = await import("svelte-sonner");
       toast.success("Architectural Binding Linked", {
         description: `Connected "${connection.source}" to "${connection.target}" in Strata layout.`
       });
     } else {
-      // D1 to D1: Inform the developer that relationships are code-driven
-      const { toast } = await import("svelte-sonner");
-      toast.info("Relationships Are Code-Driven", {
-        description: `Define foreign keys via .references() or relations() in your schema. Strata will visualize them live.`
-      });
+      // D1 to D1: Open interactive AST-driven Connection Modeler dialog
+      schemaState.connectionModelerData = {
+        source: connection.source,
+        sourceHandle: connection.sourceHandle,
+        target: connection.target,
+        targetHandle: connection.targetHandle,
+      };
+      schemaState.showConnectionModelerModal = true;
     }
   }
 

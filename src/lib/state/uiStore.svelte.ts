@@ -57,6 +57,15 @@ export class UIState {
 		onConfirm: () => void;
 	} | null>(null);
 
+	/** Connection Modeler Modal State */
+	showConnectionModelerModal = $state(false);
+	connectionModelerData = $state<{
+		source: string;
+		sourceHandle?: string | null;
+		target: string;
+		targetHandle?: string | null;
+	} | null>(null);
+
 	/** Sandbox / Playground Mode State */
 	isSandboxMode = $state(false);
 	sandboxTemplateKey = $state<string>('fullstack');

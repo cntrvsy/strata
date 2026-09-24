@@ -434,5 +434,38 @@ export const posts = sqliteTable("posts", {
     expect(methodNames).toContain('getSession(token: string)');
     expect(methodNames).toContain('invalidate(token: string)');
   });
+
+  it('should insert @strata-layout safely below shebangs and directives', () => {
+    const codeWithDirective = `"use server";\n\nimport { sqliteTable, integer } from "drizzle-orm/sqlite-core";\nexport const users = sqliteTable("users", { id: integer("id") });`;
+    const updated = updateLayoutManifestInSchema(codeWithDirective, { users: { x: 100, y: 200 } });
+    
+    expect(updated.startsWith('"use server";\n\n/**\n * @strata-layout')).toBe(true);
+    expect(updated).toContain('"users"');
+  });
+
+  it('should save monolith schema positions to @strata-layout and keep table declarations pure Drizzle code', () => {
+    const monolith = `
+      import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+      export const posts = sqliteTable("posts", { id: integer("id").primaryKey() });
+    `;
+
+    const nodes = [
+      { id: 'users', position: { x: 120, y: 180 } },
+      { id: 'posts', position: { x: 450, y: 180 } }
+    ] as any;
+
+    const saved = updateAllNodePositionsInSchema(monolith, nodes);
+    expect(saved).toContain('@strata-layout');
+    expect(saved).not.toContain('@strata {');
+    
+    // Declarations remain pure Drizzle code
+    expect(saved).toContain('export const users = sqliteTable("users"');
+    expect(saved).toContain('export const posts = sqliteTable("posts"');
+
+    const manifest = extractStrataLayoutManifest(saved);
+    expect(manifest?.users).toEqual({ x: 120, y: 180 });
+    expect(manifest?.posts).toEqual({ x: 450, y: 180 });
+  });
 });
 

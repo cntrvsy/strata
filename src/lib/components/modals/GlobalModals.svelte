@@ -12,6 +12,7 @@
   import ConfirmModal from "./ConfirmModal.svelte";
   import HelpModal from "./HelpModal.svelte";
   import NewEntityModal from "#lib/components/forms/entity/NewEntityModal.svelte";
+  import ConnectionModelerModal from "./ConnectionModelerModal.svelte";
 
   // Watch for critical errors
   $effect(() => {
@@ -75,3 +76,4 @@
 <HelpModal bind:show={schemaState.showHelpModal} />
 <ProjectSettingsModal />
 <ConfirmModal />
+<ConnectionModelerModal />

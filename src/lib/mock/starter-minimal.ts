@@ -1,3 +1,10 @@
+/**
+ * @strata-layout {
+ *   "users": { "x": 100, "y": 140 },
+ *   "posts": { "x": 560, "y": 140 },
+ *   "comments": { "x": 560, "y": 520 }
+ * }
+ */
 import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
@@ -22,7 +29,6 @@ import { relations } from "drizzle-orm";
 
 /**
  * User Accounts
- * @strata { "target": "d1", "x": 100, "y": 140 }
  */
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -34,7 +40,6 @@ export const users = sqliteTable("users", {
 
 /**
  * Published Blog Posts
- * @strata { "target": "d1", "x": 560, "y": 140 }
  */
 export const posts = sqliteTable("posts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -48,7 +53,6 @@ export const posts = sqliteTable("posts", {
 
 /**
  * Post Reader Comments
- * @strata { "target": "d1", "x": 560, "y": 520 }
  */
 export const comments = sqliteTable("comments", {
   id: integer("id").primaryKey({ autoIncrement: true }),

@@ -34,6 +34,7 @@ export {
 	updateProjectConfigInSchema,
 	updateTableMetadataInSchema,
 	addForeignKeyToColumnInSchema,
+	fixD1ColumnTypeInSchema,
 	extractStrataLayoutManifest,
 	updateLayoutManifestInSchema,
 	removeTableFromLayoutManifest,
@@ -43,6 +44,10 @@ export {
 	addReExportToBarrel,
 	type TablePresets
 } from './mutators';
+
+export {
+	extractStrataLayoutManifestDetails
+} from './helpers';
 
 
 export type { 

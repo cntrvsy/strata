@@ -242,7 +242,7 @@ export const organizations = sqliteTable("organizations", {
                   >
                     column: <span class="text-primary font-semibold"
                       >{bound.colName}</span
-                    > → IdP
+                    > &bull; IdP Bridge
                   </span>
                 </div>
               </div>
@@ -318,10 +318,11 @@ export const organizations = sqliteTable("organizations", {
             onclick={handleOpenBlueprintGuide}
           >
             <Sparkles class="w-3 h-3" />
-            <span>View Full Identity Blueprint Guide →</span>
+            <span>View Full Identity Blueprint Guide</span>
+            <ArrowRight class="w-3 h-3" />
           </button>
           <p class="text-[10px] text-base-content/60 leading-tight">
-            💡 Paste into your editor (e.g. <code class="text-primary font-mono font-semibold">src/schema/{config.mirrorTableName}.ts</code> or <code class="text-primary font-mono font-semibold">src/schema.ts</code>) and save. Strata's native file watcher will automatically render the mirror table!
+            <span class="font-bold text-primary">Note:</span> Paste into your editor (e.g. <code class="text-primary font-mono font-semibold">src/schema/{config.mirrorTableName}.ts</code> or <code class="text-primary font-mono font-semibold">src/schema.ts</code>) and save. Strata's native file watcher will automatically render the mirror table!
           </p>
         </div>
       {/if}

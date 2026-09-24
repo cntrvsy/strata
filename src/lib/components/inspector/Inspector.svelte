@@ -19,6 +19,8 @@
     Check,
     Code,
     ExternalLink,
+    ArrowRight,
+    ArrowLeft,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
@@ -92,17 +94,17 @@
     }, 2000);
   }
 
-  function getTableSnippet(node: any, rawCode: string): string {
+  function getTableSnippet(node: any, fileCode: string): string {
     if (!node) return "";
     const name = node.id;
     const target = (node.data as any)?.target || "d1";
 
-    if (target === "d1" && rawCode) {
+    if (target === "d1" && fileCode) {
       const pattern = new RegExp(
         `(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
         "m",
       );
-      const match = rawCode.match(pattern);
+      const match = fileCode.match(pattern);
       if (match) {
         return match[0].trim();
       }
@@ -111,13 +113,15 @@
     if (target === "d1") {
       const cols = ((node.data as any)?.columns || [])
         .map((col: any) => {
-          let def = col.definition || "text";
-          let chain = `${def}("${col.name}")`;
-          if (col.isPk) chain += ".primaryKey()";
-          if (col.isNotNull) chain += ".notNull()";
-          if (col.isUnique) chain += ".unique()";
-          if (col.default !== undefined)
-            chain += `.default(${JSON.stringify(col.default)})`;
+          let chain = col.definition || `text("${col.name}")`;
+          if (!chain.includes("(")) {
+            chain = `${chain}("${col.name}")`;
+          }
+          if (col.isPk && !chain.includes(".primaryKey(")) chain += ".primaryKey()";
+          if (col.notNull && !chain.includes(".notNull(")) chain += ".notNull()";
+          if (col.defaultVal !== undefined && col.defaultVal !== null && !chain.includes(".default(") && !chain.includes(".$defaultFn(")) {
+            chain += `.default(${col.defaultVal})`;
+          }
           return `  ${col.name}: ${chain},`;
         })
         .join("\n");
@@ -143,7 +147,14 @@
 
   const drizzleSnippet = $derived.by(() => {
     if (!selectedNode) return "";
-    return getTableSnippet(selectedNode, schemaState.rawCode);
+    const targetFile =
+      (selectedNode.data as any)?.moduleInfo?.sourceFilePath ||
+      schemaState.getTargetFilePath(selectedNode.id) ||
+      schemaState.filePath;
+    const fileCode =
+      (targetFile && schemaState.externalFilesMap.get(targetFile)) ||
+      schemaState.rawCode;
+    return getTableSnippet(selectedNode, fileCode);
   });
 </script>
 
@@ -350,13 +361,11 @@
                     >
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                          <span
-                            class="text-xs font-mono font-bold {isSource
-                              ? 'text-primary'
-                              : 'text-secondary'}"
-                          >
-                            {isSource ? "→" : "←"}
-                          </span>
+                          {#if isSource}
+                            <ArrowRight class="w-3.5 h-3.5 text-primary shrink-0" />
+                          {:else}
+                            <ArrowLeft class="w-3.5 h-3.5 text-secondary shrink-0" />
+                          {/if}
                           <span
                             class="font-bold text-xs text-base-content font-mono"
                             >{otherNode}</span
@@ -408,7 +417,7 @@
                           >
                             <span class="opacity-50 text-[9px]">SQL:</span>
                             <span class="truncate"
-                              >{edge.source}.{edge.data.sourceCol} → {edge.target}.{edge
+                              >{edge.source}.{edge.data.sourceCol} -> {edge.target}.{edge
                                 .data?.targetCol || "id"}</span
                             >
                           </div>

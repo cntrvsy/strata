@@ -260,4 +260,27 @@ describe('Sandbox Playground Mode CRUD Operations', () => {
     const remainingFolders = finalR2Node?.data.folders || [];
     expect(remainingFolders.some(f => f.name === 'documents/')).toBe(false);
   });
+
+  it('17. should safely persist layout updates in-memory in sandbox mode without touching disk', async () => {
+    const { PlatformService } = await import('#lib/services/platform');
+    const writeSpy = vi.spyOn(PlatformService, 'writeText');
+
+    await schemaState.loadSandboxDemo('ai-agent-rag');
+    const usersNode = schemaState.nodes.find(n => n.id === 'users');
+    expect(usersNode).toBeDefined();
+    if (usersNode) {
+      usersNode.position = { x: 333, y: 444 };
+    }
+
+    await schemaState.saveToFile();
+
+    expect(writeSpy).not.toHaveBeenCalled();
+    expect(schemaState.rawCode).toContain('"users"');
+    expect(schemaState.rawCode).toContain('"x": 333');
+    expect(schemaState.rawCode).toContain('"y": 444');
+    expect(schemaState.isRecentlySaved).toBe(true);
+    expect(schemaState.hasUnsavedChanges).toBe(false);
+
+    writeSpy.mockRestore();
+  });
 });

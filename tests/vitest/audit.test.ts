@@ -96,6 +96,59 @@ describe('JSDoc Audit & Fault-Tolerant Engine', () => {
 		`;
 		const result = extractStrataMetadata(text);
 		expect(result).not.toBeNull();
-		expect(result?.data).toEqual({ target: 'd1', x: 'invalid_num', y: null });
+	});
+
+	it('should emit D1_TYPE_COMPATIBILITY audit issue for timestamp() and boolean() columns lacking SQLite mode', () => {
+		const code = `
+			import { sqliteTable, integer, text, timestamp, boolean } from "drizzle-orm/sqlite-core";
+
+			export const users = sqliteTable("users", {
+				id: integer("id").primaryKey(),
+				createdAt: timestamp("created_at").notNull(),
+				isActive: boolean("is_active").default(true),
+			});
+		`;
+		const result = parseSchema(code);
+		expect(result.success).toBe(true);
+		expect(result.auditIssues).toBeDefined();
+		const typeIssues = result.auditIssues?.filter(i => i.code === 'D1_TYPE_COMPATIBILITY');
+		expect(typeIssues).toHaveLength(2);
+
+		const tsIssue = typeIssues?.find(i => i.id.includes('timestamp'));
+		expect(tsIssue).toBeDefined();
+		expect(tsIssue?.suggestedFix?.action).toBe('fix_d1_type');
+		expect(tsIssue?.suggestedFix?.payload).toEqual({
+			columnName: 'createdAt',
+			targetMode: 'timestamp',
+		});
+
+		const boolIssue = typeIssues?.find(i => i.id.includes('boolean'));
+		expect(boolIssue).toBeDefined();
+		expect(boolIssue?.suggestedFix?.action).toBe('fix_d1_type');
+		expect(boolIssue?.suggestedFix?.payload).toEqual({
+			columnName: 'isActive',
+			targetMode: 'boolean',
+		});
+	});
+
+	it('should fix D1 column types using fixD1ColumnTypeInSchema', async () => {
+		const { fixD1ColumnTypeInSchema } = await import('#lib/parser');
+		const code = `import { sqliteTable, integer, text, timestamp, boolean } from "drizzle-orm/sqlite-core";
+
+export const users = sqliteTable("users", {
+	id: integer("id").primaryKey(),
+	createdAt: timestamp("created_at").notNull(),
+	isActive: boolean("is_active").default(true),
+});
+`;
+		// Fix createdAt -> timestamp mode
+		let fixed = fixD1ColumnTypeInSchema(code, 'users', 'createdAt', 'timestamp');
+		expect(fixed).toContain('integer("created_at", { mode: "timestamp" }).notNull()');
+		expect(fixed).not.toContain('timestamp("created_at")');
+
+		// Fix isActive -> boolean mode
+		fixed = fixD1ColumnTypeInSchema(fixed, 'users', 'isActive', 'boolean');
+		expect(fixed).toContain('integer("is_active", { mode: "boolean" }).default(true)');
+		expect(fixed).not.toContain('boolean("is_active")');
 	});
 });

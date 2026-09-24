@@ -6,9 +6,11 @@
   Output: Visual Actor card with RPC method signatures, capability indicators, and boundary handles.
 -->
 <script lang="ts">
-  import { Handle, Position } from "@xyflow/svelte";
+  import { Handle, Position, useUpdateNodeInternals } from "@xyflow/svelte";
+  import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Cpu,
     Database,
@@ -119,7 +121,23 @@
       PlatformService.openInEditor(targetFile, line);
     }
   }
+
+  const updateNodeInternals = useUpdateNodeInternals();
+  $effect(() => {
+    const _m = methodsToDisplay.length;
+    tick().then(() => {
+      updateNodeInternals(data.label);
+    });
+  });
 </script>
+
+<NodeQuickActions
+  nodeId={data.label}
+  nodeType="do"
+  {selected}
+  targetFile={data.strata?.path || data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath}
+  line={data.line}
+/>
 
 <div
   class="relative group/node min-w-64 max-w-84 transition-all duration-300 {opacityClass}"
@@ -193,6 +211,16 @@
         </div>
       </div>
     </div>
+
+    <!-- Class Name Sub-bar if different from binding name -->
+    {#if data.strata?.class && data.strata.class !== data.label}
+      <div
+        class="px-3 py-1 bg-base-200/40 border-b border-base-300/60 flex items-center justify-between text-[10px] font-mono text-base-content/70"
+      >
+        <span class="opacity-50 text-[9px] uppercase font-bold tracking-wider">Class</span>
+        <span class="truncate max-w-42 text-[9.5px] font-bold text-secondary">{data.strata.class}</span>
+      </div>
+    {/if}
 
     <!-- Capabilities Bar -->
     <div

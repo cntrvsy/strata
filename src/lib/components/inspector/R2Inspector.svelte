@@ -56,6 +56,13 @@
       <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
     </div>
 
+    {#if data.strata?.bucket_name}
+      <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
+        <span class="text-xs font-semibold text-base-content/85">Bucket Name</span>
+        <span class="font-mono text-[11px] text-info font-bold">{data.strata.bucket_name}</span>
+      </div>
+    {/if}
+
     <div class="flex items-center justify-between p-2 rounded-field bg-base-100/50 border border-base-300/60 text-xs">
       <span class="text-xs font-semibold text-base-content/85">Access Mode</span>
       <span class="badge badge-sm {isPublic ? 'badge-info' : 'badge-ghost'} font-mono text-[10px] font-bold">

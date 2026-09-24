@@ -10,6 +10,7 @@ import {
 	generateBootstrapBundle,
 	generateWorkerEntrypoint
 } from '#lib/services/projectBootstrap';
+import { schemaState } from '#lib/state';
 
 describe('Project Bootstrap Service', () => {
 	describe('Sanitization Helpers', () => {
@@ -167,8 +168,7 @@ describe('Project Bootstrap Service', () => {
 	});
 
 	describe('Dynamic Project Naming', () => {
-		it('should derive project name from sandbox template key', async () => {
-			const { schemaState } = await import('#lib/state');
+		it('should derive project name from sandbox template key', () => {
 			schemaState.isSandboxMode = true;
 			schemaState.sandboxTemplateKey = 'b2b-saas';
 			expect(schemaState.suggestedProjectName).toBe('b2b-saas-starter');
@@ -177,8 +177,7 @@ describe('Project Bootstrap Service', () => {
 			expect(schemaState.suggestedProjectName).toBe('ai-agent-rag-starter');
 		});
 
-		it('should derive project name from open file path in disk mode', async () => {
-			const { schemaState } = await import('#lib/state');
+		it('should derive project name from open file path in disk mode', () => {
 			schemaState.isSandboxMode = false;
 			schemaState.filePath = '/home/user/projects/my-saas-platform/src/schema.ts';
 			expect(schemaState.suggestedProjectName).toBe('my-saas-platform');

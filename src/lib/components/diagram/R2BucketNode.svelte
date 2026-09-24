@@ -6,9 +6,11 @@
   Output: Visual Object Storage card with folder prefix mappings, access policies, and boundary handles.
 -->
 <script lang="ts">
-  import { Handle, Position } from "@xyflow/svelte";
+  import { Handle, Position, useUpdateNodeInternals } from "@xyflow/svelte";
+  import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     HardDrive,
     FolderTree,
@@ -113,7 +115,23 @@
       PlatformService.openInEditor(targetFile, line);
     }
   }
+
+  const updateNodeInternals = useUpdateNodeInternals();
+  $effect(() => {
+    const _f = foldersToDisplay.length;
+    tick().then(() => {
+      updateNodeInternals(data.label);
+    });
+  });
 </script>
+
+<NodeQuickActions
+  nodeId={data.label}
+  nodeType="r2"
+  {selected}
+  targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath}
+  line={data.line}
+/>
 
 <div
   class="relative group/node min-w-60 max-w-80 transition-all duration-300 {opacityClass}"
@@ -188,6 +206,16 @@
       </div>
     </div>
 
+    <!-- Real Cloudflare Bucket Name Badge from Wrangler -->
+    {#if data.strata?.bucket_name}
+      <div
+        class="px-3 py-1 bg-base-200/40 border-b border-base-300/60 flex items-center justify-between text-[10px] font-mono text-base-content/70"
+      >
+        <span class="opacity-50 text-[9px] uppercase font-bold tracking-wider">Bucket</span>
+        <span class="truncate max-w-42 text-[9.5px]" title={data.strata.bucket_name}>{data.strata.bucket_name}</span>
+      </div>
+    {/if}
+
     <!-- Access & Policy Bar -->
     <div
       class="px-3 py-1.5 bg-base-200/50 border-b border-base-300/60 flex items-center gap-1.5 flex-wrap"
@@ -241,9 +269,10 @@
 
       {#if foldersToDisplay.length === 0}
         <div
-          class="px-3 py-2 text-[11px] font-mono text-base-content/40 italic text-center bg-base-200/20 rounded-field"
+          class="px-3 py-2.5 text-center bg-base-200/20 rounded-field flex flex-col gap-0.5"
         >
-          Root Object Store
+          <span class="text-[11px] font-mono text-base-content/65 font-medium">env.{data.label}.put(key, file)</span>
+          <span class="text-[9.5px] text-base-content/40">Direct Object Storage</span>
         </div>
       {:else}
         {#each foldersToDisplay as folder (folder.name)}

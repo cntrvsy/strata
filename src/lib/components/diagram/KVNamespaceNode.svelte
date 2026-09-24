@@ -6,9 +6,11 @@
   Output: Visual Cache card with key prefixes/patterns, value types, TTL badges, and boundary handles.
 -->
 <script lang="ts">
-  import { Handle, Position } from "@xyflow/svelte";
+  import { Handle, Position, useUpdateNodeInternals } from "@xyflow/svelte";
+  import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Zap,
     KeyRound,
@@ -113,7 +115,23 @@
       PlatformService.openInEditor(targetFile, line);
     }
   }
+
+  const updateNodeInternals = useUpdateNodeInternals();
+  $effect(() => {
+    const _p = patternsToDisplay.length;
+    tick().then(() => {
+      updateNodeInternals(data.label);
+    });
+  });
 </script>
+
+<NodeQuickActions
+  nodeId={data.label}
+  nodeType="kv"
+  {selected}
+  targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath}
+  line={data.line}
+/>
 
 <div
   class="relative group/node min-w-60 max-w-80 transition-all duration-300 {opacityClass}"
@@ -188,6 +206,16 @@
       </div>
     </div>
 
+    <!-- Real Cloudflare Namespace ID Badge if present from Wrangler -->
+    {#if data.strata?.id}
+      <div
+        class="px-3 py-1 bg-base-200/40 border-b border-base-300/60 flex items-center justify-between text-[10px] font-mono text-base-content/70"
+      >
+        <span class="opacity-50 text-[9px] uppercase font-bold tracking-wider">ID</span>
+        <span class="truncate max-w-42 text-[9.5px]" title={data.strata.id}>{data.strata.id}</span>
+      </div>
+    {/if}
+
     <!-- Key Patterns Section -->
     <div class="p-1.5 flex flex-col gap-0.5 bg-base-100">
       <div
@@ -199,9 +227,10 @@
 
       {#if patternsToDisplay.length === 0}
         <div
-          class="px-3 py-2 text-[11px] font-mono text-base-content/40 italic text-center bg-base-200/20 rounded-field"
+          class="px-3 py-2.5 text-center bg-base-200/20 rounded-field flex flex-col gap-0.5"
         >
-          Dynamic Key-Value Storage
+          <span class="text-[11px] font-mono text-base-content/65 font-medium">env.{data.label}.get(key)</span>
+          <span class="text-[9.5px] text-base-content/40">Dynamic Key-Value Storage</span>
         </div>
       {:else}
         {#each patternsToDisplay as pattern (pattern.name)}

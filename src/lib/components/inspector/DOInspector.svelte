@@ -35,6 +35,11 @@
   );
 
   const columns = $derived(data?.columns || []);
+  const isSqlite = $derived(
+    data.storage === "sqlite" ||
+      (wranglerBinding?.extra as any)?.storage === "sqlite" ||
+      data.isSqlite,
+  );
 </script>
 
 <div class="flex flex-col gap-4">
@@ -87,6 +92,14 @@
         </div>
       </div>
     {/if}
+
+    <!-- Storage Engine Display -->
+    <div class="flex items-center justify-between p-2 rounded-field bg-base-100 border border-base-300 text-xs">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Storage Engine</span>
+      <span class="badge badge-xs {isSqlite ? 'badge-warning font-bold' : 'badge-ghost'} font-mono text-[9px]">
+        {isSqlite ? "SQLite DO (Embedded DB)" : "Standard Key-Value"}
+      </span>
+    </div>
   </div>
 
   <!-- Missing File Warning Banner -->

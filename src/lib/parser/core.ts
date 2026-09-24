@@ -216,7 +216,11 @@ export function parseSchema(
 									rawMatch: col.definition,
 									suggestedFix: {
 										label: 'Convert to integer({ mode: "timestamp" })',
-										action: 'fix_d1_type'
+										action: 'fix_d1_type',
+										payload: {
+											columnName: col.name,
+											targetMode: 'timestamp'
+										}
 									}
 								});
 							} else if (col.definition && /\bboolean\s*\(/.test(col.definition) && !col.definition.includes('mode:')) {
@@ -230,7 +234,11 @@ export function parseSchema(
 									rawMatch: col.definition,
 									suggestedFix: {
 										label: 'Convert to integer({ mode: "boolean" })',
-										action: 'fix_d1_type'
+										action: 'fix_d1_type',
+										payload: {
+											columnName: col.name,
+											targetMode: 'boolean'
+										}
 									}
 								});
 							}

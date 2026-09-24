@@ -230,15 +230,19 @@ function parseWranglerBindings(tomlContent: string): { bindings: { type: 'kv' | 
 		
 		if (headerLine.startsWith('kv_namespaces')) {
 			let name = '';
+			let id = '';
 			for (const line of lines) {
 				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
 				if (match) {
 					name = match[1];
-					break;
+				}
+				const idMatch = line.match(/^\s*id\s*=\s*["']([^"']+)["']/);
+				if (idMatch) {
+					id = idMatch[1];
 				}
 			}
 			if (name) {
-				bindings.push({ type: 'kv', name, extra: {} });
+				bindings.push({ type: 'kv', name, extra: { id: id || undefined } });
 			}
 		} else if (headerLine.startsWith('durable_objects.bindings')) {
 			let name = '';
@@ -264,21 +268,25 @@ function parseWranglerBindings(tomlContent: string): { bindings: { type: 'kv' | 
 					name,
 					extra: {
 						class: className,
-						...(scriptName ? { script_name: scriptName } : {})
+						...(scriptName ? { script: scriptName } : {})
 					}
 				});
 			}
 		} else if (headerLine.startsWith('r2_buckets')) {
 			let name = '';
+			let bucketName = '';
 			for (const line of lines) {
 				const match = line.match(/^\s*binding\s*=\s*["']([^"']+)["']/);
 				if (match) {
 					name = match[1];
-					break;
+				}
+				const bMatch = line.match(/^\s*bucket_name\s*=\s*["']([^"']+)["']/);
+				if (bMatch) {
+					bucketName = bMatch[1];
 				}
 			}
 			if (name) {
-				bindings.push({ type: 'r2', name, extra: {} });
+				bindings.push({ type: 'r2', name, extra: { bucket_name: bucketName || undefined } });
 			}
 		}
 	}
@@ -298,18 +306,42 @@ function parseJsonBindings(jsonContent: string): { bindings: { type: 'kv' | 'do'
 		if (Array.isArray(data.kv_namespaces)) {
 			for (const kv of data.kv_namespaces) {
 				if (kv && kv.binding) {
-					bindings.push({ type: 'kv', name: kv.binding, extra: {} });
+					bindings.push({
+						type: 'kv',
+						name: kv.binding,
+						extra: {
+							id: kv.id || undefined,
+							binding: kv.binding
+						}
+					});
 				}
 			}
 		}
+
+		// Detect SQLite DO storage from migrations (e.g. new_sqlite_classes: ["TelemetrySessionDO"])
+		const sqliteDoClasses = new Set<string>();
+		if (Array.isArray(data.migrations)) {
+			for (const mig of data.migrations) {
+				if (Array.isArray(mig?.new_sqlite_classes)) {
+					for (const cls of mig.new_sqlite_classes) {
+						if (typeof cls === 'string') sqliteDoClasses.add(cls);
+					}
+				}
+			}
+		}
+
 		if (data.durable_objects && Array.isArray(data.durable_objects.bindings)) {
 			for (const dobj of data.durable_objects.bindings) {
 				if (dobj && dobj.name) {
+					const className = dobj.class_name || undefined;
+					const isSqlite = className ? sqliteDoClasses.has(className) : false;
 					bindings.push({
 						type: 'do',
 						name: dobj.name,
 						extra: {
-							class: dobj.class_name,
+							class: className,
+							storage: isSqlite ? 'sqlite' : 'kv',
+							binding: dobj.name,
 							...(dobj.script_name ? { script_name: dobj.script_name } : {})
 						}
 					});
@@ -319,7 +351,14 @@ function parseJsonBindings(jsonContent: string): { bindings: { type: 'kv' | 'do'
 		if (Array.isArray(data.r2_buckets)) {
 			for (const r2 of data.r2_buckets) {
 				if (r2 && r2.binding) {
-					bindings.push({ type: 'r2', name: r2.binding, extra: {} });
+					bindings.push({
+						type: 'r2',
+						name: r2.binding,
+						extra: {
+							bucket_name: r2.bucket_name || undefined,
+							binding: r2.binding
+						}
+					});
 				}
 			}
 		}
@@ -684,6 +723,13 @@ export class SchemaState {
 	
 	/** True momentarily after a successful save operation */
 	isRecentlySaved = $state(false);
+
+	/** Signal counter to request diagram canvas fitView from external components */
+	fitViewTrigger = $state(0);
+	requestFitView() { this.fitViewTrigger++; }
+
+	/** True while auto-layout is animating node positions */
+	isArrangingLayout = $state(false);
 	
 	/** Whether the 'Export Successful' toast is visible */
 	get showExportToast() { return uiState.showExportToast; }
@@ -738,6 +784,12 @@ export class SchemaState {
 		uiState.confirmModalData = data;
 		uiState.showConfirmModal = true;
 	}
+
+	/** Connection Modeler Modal State */
+	get showConnectionModelerModal() { return uiState.showConnectionModelerModal; }
+	set showConnectionModelerModal(val: boolean) { uiState.showConnectionModelerModal = val; }
+	get connectionModelerData() { return uiState.connectionModelerData; }
+	set connectionModelerData(val: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null } | null) { uiState.connectionModelerData = val; }
 
 	/** Whether the 'New Table' modal is currently visible */
 	get showNewTableModal() { return uiState.showNewTableModal; }
@@ -868,50 +920,25 @@ export class SchemaState {
 	}
 
 	/**
-	 * Auto-repairs malformed or missing @strata JSDoc for a given node symbol.
+	 * Auto-repairs malformed or missing @strata-layout coordinates for a given node symbol.
 	 */
 	async repairNodeJsdoc(symbolName: string) {
 		const node = this.nodes.find(n => n.id === symbolName);
 		if (!node) return;
-		const x = node.position.x || 100;
-		const y = node.position.y || 100;
-		const targetFilePath = this.getTargetFilePath(symbolName);
-		const isTargetExternal = Boolean(targetFilePath && this.filePath && targetFilePath !== this.filePath);
+		const x = Math.round(node.position.x || 100);
+		const y = Math.round(node.position.y || 100);
 		
-		const { updateNodePositionInSchema } = await import("../parser");
-		let currentCode = this.rawCode;
-		if (isTargetExternal && targetFilePath) {
-			currentCode = this.externalFilesMap.get(targetFilePath) || await PlatformService.readText(targetFilePath);
-		}
-		const updatedCode = updateNodePositionInSchema(currentCode, symbolName, x, y);
-		if (targetFilePath && !this.isSandboxMode) {
-			await this.queue.enqueue(async () => {
-				this.lastWriteTime = Date.now();
-				await PlatformService.writeText(targetFilePath, updatedCode);
-				if (isTargetExternal) {
-					this.externalFilesMap.set(targetFilePath, updatedCode);
-					await this.parseAndApply(this.rawCode);
-				} else {
-					this.rawCode = updatedCode;
-					await this.parseAndApply(updatedCode);
-				}
-			});
-		} else {
-			if (isTargetExternal && targetFilePath) {
-				this.externalFilesMap.set(targetFilePath, updatedCode);
-				await this.parseAndApply(this.rawCode);
-			} else {
-				this.rawCode = updatedCode;
-				await this.parseAndApply(updatedCode);
-			}
-		}
-		toast.success("JSDoc Repaired", {
-			description: `Cleaned and formatted @strata metadata for "${symbolName}".`
+		const { updateLayoutManifestInSchema } = await import("../parser");
+		await this.executeSchemaMutation("Repair JSDoc layout", (rootCode) =>
+			updateLayoutManifestInSchema(rootCode, { [symbolName]: { x, y } }, false)
+		);
+		toast.success("Layout Position Saved", {
+			description: `Consolidated position for "${symbolName}" in @strata-layout.`
 		});
 	}
 
 	/**
-	 * Applies a recommended audit quick-fix on disk (e.g. repairing a miscalculated path depth).
+	 * Applies a recommended audit quick-fix on disk (e.g. repairing a miscalculated path depth, D1 type mode, or layout manifest).
 	 */
 	async applyAuditFix(issue: AuditIssue) {
 		if (issue.suggestedFix?.action === 'fix_path' && issue.symbolName && issue.suggestedFix.payload?.correctedPath) {
@@ -921,8 +948,31 @@ export class SchemaState {
 			toast.success("Path Depth Corrected", {
 				description: `Updated @strata path for "${issue.symbolName}" to ${issue.suggestedFix.payload.correctedPath}.`
 			});
-		} else if (issue.suggestedFix?.action === 'auto_repair_jsdoc' && issue.symbolName) {
-			await this.repairNodeJsdoc(issue.symbolName);
+		} else if (issue.suggestedFix?.action === 'fix_d1_type' && issue.symbolName && issue.suggestedFix.payload?.columnName && issue.suggestedFix.payload?.targetMode) {
+			const { fixD1ColumnTypeInSchema } = await import("../parser");
+			const targetFile = this.getTargetFilePath(issue.symbolName);
+			await this.executeSchemaMutation("Fix D1 column type", (code) =>
+				fixD1ColumnTypeInSchema(code, issue.symbolName!, issue.suggestedFix!.payload!.columnName, issue.suggestedFix!.payload!.targetMode),
+				targetFile
+			);
+			toast.success("Column Type Updated", {
+				description: `Converted "${issue.suggestedFix.payload.columnName}" to integer({ mode: "${issue.suggestedFix.payload.targetMode}" }).`
+			});
+		} else if (issue.suggestedFix?.action === 'auto_repair_jsdoc') {
+			if (issue.code === 'MALFORMED_LAYOUT_MANIFEST' || !issue.symbolName) {
+				const { extractStrataLayoutManifestDetails, updateLayoutManifestInSchema } = await import("../parser");
+				const details = extractStrataLayoutManifestDetails(this.rawCode);
+				if (details.manifest) {
+					await this.executeSchemaMutation("Repair layout manifest", (rootCode) =>
+						updateLayoutManifestInSchema(rootCode, details.manifest!)
+					);
+					toast.success("Layout Manifest Repaired", {
+						description: "Formatted and restored @strata-layout manifest."
+					});
+				}
+			} else {
+				await this.repairNodeJsdoc(issue.symbolName);
+			}
 		}
 	}
 
@@ -1005,7 +1055,7 @@ export class SchemaState {
 									isReferences: false
 								};
 							})
-							: [{ name: 'id', definition: 'string', isPk: false, notNull: false, isReferences: false }];
+							: [];
 					} else if (binding.type === 'do') {
 						cols = binding.extra?.methods 
 							? binding.extra.methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m)
@@ -1569,10 +1619,14 @@ export class SchemaState {
 			(name ? (e.label === name || e.sourceHandle === name || (e.data as any)?.sourceCol === name || (e.data as any)?.relationNames?.includes(name)) : true)
 		);
 		const isVirtual = matchingEdge?.data?.isVirtual ?? false;
+		const isSynthetic = matchingEdge?.data?.isSynthetic || matchingEdge?.data?.isIdentityBoundary || (matchingEdge?.data as any)?.edgeType === 'synthetic' || matchingEdge?.label === 'synthetic';
 
 		let targetFile: string | undefined;
 
-		if (this.externalFilesMap.size > 0 && this.filePath) {
+		if (isSynthetic) {
+			// Synthetic architectural links always live in @strata-layout in the root file
+			targetFile = this.filePath || undefined;
+		} else if (this.externalFilesMap.size > 0 && this.filePath) {
 			if (isVirtual) {
 				// For logical relations, find the file containing ${source}Relations
 				for (const [filePath, content] of this.externalFilesMap.entries()) {
@@ -1608,12 +1662,32 @@ export class SchemaState {
 
 	/**
 	 * Persists the current rawCode to disk, including any pending node position updates.
+	 * In sandbox mode, updates the in-memory rawCode with layout positions and marks state clean.
 	 */
 	async saveToFile() {
 		if (this.isSandboxMode) {
-			toast.info("Playground Sandbox Active", {
-				description: "Playground edits run in-memory. Click 'Open Schema' to edit a real file on disk."
+			const { updateAllNodePositionsInSchema, updateLayoutManifestInSchema } = await import("../parser");
+			const isModular = this.externalFilesMap.size > 0 || this.nodes.some(n => {
+				const info = (n.data as any)?.moduleInfo;
+				return info && !info.isRootFile;
 			});
+
+			if (isModular || this.rawCode.includes('@strata-layout')) {
+				const positionsMap: Record<string, { x: number; y: number }> = {};
+				for (const node of this.nodes) {
+					positionsMap[node.id] = {
+						x: Math.round(node.position.x),
+						y: Math.round(node.position.y)
+					};
+				}
+				this.rawCode = updateLayoutManifestInSchema(this.rawCode, positionsMap, true);
+			} else {
+				this.rawCode = updateAllNodePositionsInSchema(this.rawCode, this.nodes);
+			}
+
+			this.machine.send("SUCCESS");
+			this.isRecentlySaved = true;
+			setTimeout(() => (this.isRecentlySaved = false), 1500);
 			return;
 		}
 
@@ -1628,7 +1702,7 @@ export class SchemaState {
 				return info && !info.isRootFile;
 			});
 
-			if (isModular) {
+			if (isModular || currentCode.includes('@strata-layout')) {
 				const positionsMap: Record<string, { x: number; y: number }> = {};
 				for (const node of this.nodes) {
 					positionsMap[node.id] = {
@@ -1943,6 +2017,17 @@ export class SchemaState {
 		await this.executeSchemaMutation("Relation add", (code) => 
 			addEdgeToSchema(code, source, target, targetImportPath),
 			sourceFile
+		);
+	}
+
+	/**
+	 * Adds an explicit synthetic link in @strata-layout (e.g. D1 to non-SQL or architectural reference).
+	 */
+	async addSyntheticRelation(source: string, target: string) {
+		const { addEdgeToSchema } = await import("../parser");
+		await this.executeSchemaMutation("Synthetic Relation add", (code) =>
+			addEdgeToSchema(code, source, target, undefined, 'synthetic'),
+			this.filePath || undefined
 		);
 	}
 

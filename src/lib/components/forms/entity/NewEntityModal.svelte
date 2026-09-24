@@ -8,7 +8,7 @@
 <script lang="ts">
   import { fade, scale } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { Database, Cpu, Zap, HardDrive, X, Sparkles } from "lucide-svelte";
+  import { Database, Cpu, Zap, HardDrive, X, Sparkles, ArrowRight } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import NewD1TableForm from "./NewD1TableForm.svelte";
   import NewDOBindingForm from "./NewDOBindingForm.svelte";
@@ -142,7 +142,8 @@
           onclick={openAuthBlueprints}
         >
           <Sparkles class="w-3 h-3" />
-          <span>View Auth & Identity Blueprints →</span>
+          <span>View Auth & Identity Blueprints</span>
+          <ArrowRight class="w-3 h-3" />
         </button>
       </div>
     </div>

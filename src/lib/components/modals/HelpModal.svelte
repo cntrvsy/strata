@@ -30,6 +30,7 @@
     Building2,
     ExternalLink,
     FileCode,
+    ArrowRight,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { fade } from "svelte/transition";
@@ -1290,7 +1291,8 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                         class="btn btn-secondary btn-xs rounded-xl font-bold px-3 shadow-xs gap-1 ml-2"
                         onclick={() => loadStarterTemplate(tpl.key)}
                       >
-                        Load Template ➔
+                        <span>Load Template</span>
+                        <ArrowRight class="w-3 h-3" />
                       </button>
                     </div>
                     <p
@@ -1863,7 +1865,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                         <code class="px-1.5 py-0.5 bg-base-200 rounded text-[10.5px]">{currentBp.barrelExport}</code>
                       </div>
                       <div class="text-[10px] text-base-content/60 font-sans mt-1">
-                        💡 Saving triggers Strata's native file watcher to auto-render the nodes without any merge conflicts in your barrel!
+                        <strong class="text-secondary">Note:</strong> Saving triggers Strata's native file watcher to auto-render the nodes without any merge conflicts in your barrel!
                       </div>
                     </div>
                   {:else}
@@ -1876,7 +1878,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                         <span>2. Paste the schema blueprint snippet below at the end of the file.</span>
                       </div>
                       <div class="text-[10px] text-base-content/60 font-sans mt-1">
-                        💡 Saving in your editor immediately renders the schema nodes on the canvas.
+                        <strong class="text-primary">Note:</strong> Saving in your editor immediately renders the schema nodes on the canvas.
                       </div>
                     </div>
                   {/if}

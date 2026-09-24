@@ -6,12 +6,11 @@
   Output: Visual card component with draggable connection handles.
 -->
 <script lang="ts">
-  import { Handle, Position } from "@xyflow/svelte";
+  import { Handle, Position, useUpdateNodeInternals } from "@xyflow/svelte";
+  import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
-  import DurableObjectNode from "#lib/components/diagram/DurableObjectNode.svelte";
-  import KVNamespaceNode from "#lib/components/diagram/KVNamespaceNode.svelte";
-  import R2BucketNode from "#lib/components/diagram/R2BucketNode.svelte";
+  import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Database,
     Key,
@@ -146,15 +145,28 @@
   const hasAuditWarning = $derived(
     nodeAuditIssues.some((i) => i.severity === "warning"),
   );
+
+  const updateNodeInternals = useUpdateNodeInternals();
+  $effect(() => {
+    const _c = schemaState.compactMode;
+    const _l = data.columns?.length;
+    tick().then(() => {
+      updateNodeInternals(data.label);
+    });
+  });
 </script>
 
-{#if data.target === "do"}
-  <DurableObjectNode {data} {selected} {dragging} />
-{:else if data.target === "kv"}
-  <KVNamespaceNode {data} {selected} {dragging} />
-{:else if data.target === "r2"}
-  <R2BucketNode {data} {selected} {dragging} />
-{:else}
+<NodeQuickActions
+  nodeId={data.label}
+  nodeType="table"
+  {selected}
+  targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath}
+  line={(data as any).line}
+  onAddField={() => {
+    schemaState.activeInspectorNodeId = data.label;
+  }}
+/>
+
 <div
   class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
   data-testid="table-node"
@@ -382,5 +394,4 @@
     style="width: 12px; height: 12px; background: var(--color-{config.color}); border: 2px solid var(--color-base-100);"
   />
 </div>
-{/if}
 

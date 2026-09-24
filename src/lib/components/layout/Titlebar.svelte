@@ -78,6 +78,7 @@
   async function onAutoLayout() {
     if (schemaState.nodes.length === 0) return;
 
+    schemaState.isArrangingLayout = true;
     schemaState.machine.send("EDIT");
     try {
       const arranged = await arrangeLayout(
@@ -85,9 +86,15 @@
         schemaState.edges,
       );
       schemaState.nodes = arranged;
+      schemaState.requestFitView();
+      await schemaState.saveToFile();
     } catch (err) {
       console.error("[Strata] Auto-layout failed:", err);
       schemaState.machine.send("FAIL");
+    } finally {
+      setTimeout(() => {
+        schemaState.isArrangingLayout = false;
+      }, 400);
     }
   }
 
@@ -271,19 +278,16 @@
             tabindex="0"
             role="button"
             class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer"
+            title={schemaState.filePath}
             data-tauri-drag-region="false"
           >
             <div
               class="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-base-content/85 max-w-44 sm:max-w-60 truncate"
             >
               <FolderOpen class="w-3 h-3 text-primary shrink-0" />
-
-              {#if schemaState.hasUnsavedChanges}
-                <span
-                  class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"
-                  title="Unsaved Changes"
-                ></span>
-              {/if}
+              <span class="truncate"
+                >{schemaState.filePath.split(/[/\\]/).pop()}</span
+              >
               <ChevronDown class="w-2.5 h-2.5 opacity-60 shrink-0 ml-0.5" />
             </div>
           </div>
@@ -332,6 +336,25 @@
           <FolderOpen class="w-3 h-3 text-primary" />
           <span>Open Schema...</span>
         </button>
+      {/if}
+
+      <!-- Unified Save & Layout Status (Left Side) -->
+      {#if schemaState.hasUnsavedChanges}
+        <div
+          class="flex items-center gap-1.5 px-2 py-0.5 rounded-field bg-warning/10 text-warning text-[10px] font-semibold animate-in fade-in duration-150 shrink-0 select-none"
+          title="Unsaved changes pending auto-save"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse"></span>
+          <span>Unsaved</span>
+        </div>
+      {:else if schemaState.isRecentlySaved}
+        <div
+          class="flex items-center gap-1.5 px-2 py-0.5 rounded-field bg-success/10 text-success text-[10px] font-semibold animate-in fade-in duration-150 shrink-0 select-none"
+          title="Layout saved to schema"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+          <span>Layout Saved</span>
+        </div>
       {/if}
     </div>
 
@@ -415,15 +438,6 @@
             >
               <Camera class="w-3.5 h-3.5" />
             </button>
-          </div>
-        {/if}
-
-        {#if schemaState.isRecentlySaved}
-          <div
-            class="flex items-center gap-1.5 px-2 py-0.5 rounded-field bg-success/10 text-success text-[10.5px] font-semibold animate-in fade-in duration-150"
-          >
-            <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
-            <span>Layout Saved</span>
           </div>
         {/if}
       {/if}
