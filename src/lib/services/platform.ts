@@ -221,6 +221,36 @@ export class PlatformService {
 		return (await this.getDistributionChannel()) === "store";
 	}
 
+	static async writeClipboard(text: string): Promise<boolean> {
+		if (!text) return false;
+		if (typeof navigator !== "undefined" && navigator?.clipboard?.writeText) {
+			try {
+				await navigator.clipboard.writeText(text);
+				return true;
+			} catch (err) {
+				console.warn("[Strata] navigator.clipboard.writeText failed, falling back to document.execCommand:", err);
+			}
+		}
+		if (typeof document !== "undefined") {
+			try {
+				const textArea = document.createElement("textarea");
+				textArea.value = text;
+				textArea.style.position = "fixed";
+				textArea.style.opacity = "0";
+				document.body.appendChild(textArea);
+				textArea.focus();
+				textArea.select();
+				const success = document.execCommand("copy");
+				document.body.removeChild(textArea);
+				return success;
+			} catch (e) {
+				console.error("[Strata] document.execCommand copy fallback failed:", e);
+				return false;
+			}
+		}
+		return false;
+	}
+
 	static async openExternal(url: string): Promise<void> {
 		if (!this.isTauri()) {
 			if (typeof window !== "undefined") {

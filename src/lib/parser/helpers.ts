@@ -392,7 +392,7 @@ function trySoftRepairJson(jsonStr: string): any | null {
 }
 
 export interface StrataLayoutManifestResult {
-	manifest: Record<string, { x: number; y: number }> | null;
+	manifest: Record<string, { x: number; y: number; [key: string]: any }> | null;
 	error?: string;
 	rawMatch?: string;
 }
@@ -423,7 +423,7 @@ export function extractStrataLayoutManifestDetails(code: string): StrataLayoutMa
 /**
  * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file.
  */
-export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number }> | null {
+export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number; [key: string]: any }> | null {
 	return extractStrataLayoutManifestDetails(code).manifest;
 }
 

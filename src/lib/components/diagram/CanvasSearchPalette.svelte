@@ -12,6 +12,7 @@
     Cpu,
     Zap,
     HardDrive,
+    ShieldCheck,
     CornerDownLeft,
   } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
@@ -31,17 +32,26 @@
     do: Cpu,
     kv: Zap,
     r2: HardDrive,
+    identity: ShieldCheck,
   };
 
   const searchResults = $derived.by(() => {
     if (!query.trim()) {
-      return schemaState.nodes.map((n) => ({
-        id: n.id,
-        name: n.id,
-        target: (n.data as any)?.target || "d1",
-        fieldMatch: null,
-        node: n,
-      }));
+      return schemaState.nodes.map((n) => {
+        const isIdentity = n.type === "identity";
+        const data = n.data as any;
+        const displayName = isIdentity
+          ? data?.title || data?.label || (data?.provider === "clerk" ? "Clerk Auth" : "WorkOS SSO")
+          : data?.label || n.id;
+        const target = isIdentity ? "identity" : data?.target || "d1";
+        return {
+          id: n.id,
+          name: displayName,
+          target,
+          fieldMatch: null,
+          node: n,
+        };
+      });
     }
 
     const q = query.toLowerCase();
@@ -55,13 +65,17 @@
 
     for (const n of schemaState.nodes) {
       const data = n.data as any;
-      const target = data?.target || "d1";
+      const isIdentity = n.type === "identity";
+      const displayName = isIdentity
+        ? data?.title || data?.label || (data?.provider === "clerk" ? "Clerk Auth" : "WorkOS SSO")
+        : data?.label || n.id;
+      const target = isIdentity ? "identity" : data?.target || "d1";
       const columns = data?.columns || [];
 
-      if (n.id.toLowerCase().includes(q)) {
+      if (n.id.toLowerCase().includes(q) || displayName.toLowerCase().includes(q)) {
         results.push({
           id: n.id,
-          name: n.id,
+          name: displayName,
           target,
           fieldMatch: null,
           node: n,
@@ -73,7 +87,7 @@
         if (matchingCol) {
           results.push({
             id: n.id,
-            name: n.id,
+            name: displayName,
             target,
             fieldMatch: matchingCol.name,
             node: n,

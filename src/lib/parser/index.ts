@@ -42,6 +42,8 @@ export {
 	parseDrizzleConfigSchemaPath,
 	createD1ModuleCode,
 	addReExportToBarrel,
+	consolidateDummyBindingsIntoManifest,
+	removeUnusedImportFromSchema,
 	type TablePresets
 } from './mutators';
 

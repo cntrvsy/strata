@@ -253,6 +253,8 @@ ${plainContent.trim()}
 
   // Barrel Mode (Pattern A: @strata-layout)
   let barrelEntities = $state("users, posts, comments, profiles");
+  let barrelWorkerBindings = $state("MEDIA_BUCKET:r2 -> posts, SESSIONS_KV:kv -> users");
+  let includeReExports = $state(true);
   let includeClerkBoundary = $state(true);
   let includeWorkosBoundary = $state(false);
   let barrelColumns = $state(2);
@@ -292,16 +294,22 @@ ${plainContent.trim()}
   function loadBarrelPreset(type: "blog" | "ecommerce" | "saas") {
     if (type === "blog") {
       barrelEntities = "users, posts, comments, categories, tags";
+      barrelWorkerBindings = "MEDIA_BUCKET:r2 -> posts, SESSIONS_KV:kv -> users";
+      includeReExports = true;
       includeClerkBoundary = true;
       includeWorkosBoundary = false;
       barrelColumns = 2;
     } else if (type === "ecommerce") {
       barrelEntities = "customers, orders, orderItems, products, inventory";
+      barrelWorkerBindings = "INVENTORY_KV:kv -> products, INVOICES_BUCKET:r2 -> orders";
+      includeReExports = true;
       includeClerkBoundary = false;
       includeWorkosBoundary = true;
       barrelColumns = 2;
     } else if (type === "saas") {
       barrelEntities = "organizations, members, workspaces, projects, auditLogs";
+      barrelWorkerBindings = "TENANT_CACHE_KV:kv -> organizations, WORKSPACE_DO:do -> workspaces, ASSETS_BUCKET:r2 -> projects";
+      includeReExports = true;
       includeClerkBoundary = true;
       includeWorkosBoundary = true;
       barrelColumns = 3;
@@ -425,7 +433,39 @@ ${plainContent.trim()}
       };
     });
 
-    return `/**\n * @strata-layout ${JSON.stringify(layout, null, 2).split("\n").join("\n * ")}\n */`;
+    // Parse worker bindings: e.g. "MEDIA_BUCKET:r2 -> posts, SESSIONS_KV:kv -> users"
+    if (barrelWorkerBindings.trim()) {
+      const bindingItems = barrelWorkerBindings.split(",").map(b => b.trim()).filter(Boolean);
+      const bindingRow = Math.ceil(names.length / cols);
+      bindingItems.forEach((item, bIdx) => {
+        const [left, targetRel] = item.split("->").map(s => s.trim());
+        const [bName, bType] = (left || "").split(":").map(s => s.trim());
+        if (bName && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(bName)) {
+          const col = bIdx % cols;
+          const row = bindingRow + Math.floor(bIdx / cols);
+          const entry: any = {
+            x: startX + col * gapX,
+            y: startY + row * gapY,
+          };
+          if (bType && ["kv", "r2", "do"].includes(bType.toLowerCase())) {
+            entry.target = bType.toLowerCase();
+          }
+          if (targetRel && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(targetRel)) {
+            entry.relations = [{ to: targetRel }];
+          }
+          layout[bName] = entry;
+        }
+      });
+    }
+
+    const manifestComment = `/**\n * @strata-layout ${JSON.stringify(layout, null, 2).split("\n").join("\n * ")}\n */`;
+
+    if (includeReExports && names.length > 0) {
+      const reExports = names.map(n => `export * from './${n}';`).join("\n");
+      return `${manifestComment}\n\n${reExports}\n`;
+    }
+
+    return manifestComment;
   });
 
   const generatedJSDoc = $derived.by(() => {
@@ -1017,7 +1057,8 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
         *   "__clerk_identity__": { "x": -250, "y": 150 }
         * }
         */
-     - Non-SQL storage entities (KV, DO, R2) must be declared directly in index.ts (Strata only imports Drizzle tables from external re-exports).
+     - Non-SQL storage bindings (KV, DO, R2) are configured in wrangler.jsonc; their visual coordinates, custom metadata (folders, schema, methods), and synthetic relations live purely in the @strata-layout manifest in index.ts.
+     - CRITICAL: NEVER declare dummy empty JavaScript constants (e.g. export const MY_KV = {};) or unused Drizzle imports in index.ts. In modular barrel mode, index.ts must contain ONLY the @strata-layout manifest comment and domain re-exports (export * from "./users";).
 
    - Single-File Monolith (schema.ts):
      - Place entity JSDoc metadata directly above declarations:
@@ -1048,12 +1089,13 @@ You MUST follow these design & layout rules when writing or modifying Drizzle sc
 5. CLOUDFLARE STORAGE TARGETS & WRANGLER BINDINGS (KV, DO, R2):
    - External Cloudflare bindings (KV, Durable Objects, R2) are configured in wrangler.jsonc, NEVER as dummy empty JavaScript constants (export const MY_KV = {};) in the Drizzle schema.
    - Keep domain files (users.ts, posts.ts) 100% pure Drizzle SQL tables.
-   - In the root @strata-layout manifest, non-SQL entities and their coordinates can be visually mapped alongside D1 tables:
+   - In the root @strata-layout manifest, non-SQL entities, their coordinates, configurations, and synthetic relations are visually mapped alongside D1 tables:
      /**
       * @strata-layout {
       *   "users": { "x": 100, "y": 120 },
       *   "SESSIONS_KV": { "x": 100, "y": 480, "relations": [{ "to": "users" }] },
-      *   "UserDO": { "x": 560, "y": 480 }
+      *   "GAMES_BUCKET": { "x": 560, "y": 120, "folders": { "builds": "application/zip" }, "relations": [{ "to": "gameBuilds" }] },
+      *   "UserDO": { "x": 560, "y": 480, "path": "../../../../apps/api/src/do/UserDO.ts", "class": "UserDO" }
       * }
       */
 
@@ -1397,15 +1439,37 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                     {/if}
                   </label>
 
-                  <!-- Virtual Identity Boundary Options -->
-                  <div class="flex items-center gap-6 py-1 border-t border-base-300/40 pt-2.5">
+                  <label class="flex flex-col gap-1 cursor-pointer">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-[10px] uppercase text-base-content/65">Cloudflare Worker Bindings & Links (Optional)</span>
+                      <span class="text-[9px] opacity-50">BINDING:target -&gt; tableName</span>
+                    </div>
+                    <input
+                      type="text"
+                      bind:value={barrelWorkerBindings}
+                      placeholder="e.g. GAMES_BUCKET:r2 -> gameBuilds, SESSIONS_KV:kv -> users"
+                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                    />
+                    <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Configured in wrangler.jsonc; coordinates & synthetic links are stored in @strata-layout without dummy code.</span>
+                  </label>
+
+                  <!-- Virtual Identity Boundary & Export Options -->
+                  <div class="flex flex-wrap items-center gap-5 py-1 border-t border-base-300/40 pt-2.5">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                      <input
+                        type="checkbox"
+                        bind:checked={includeReExports}
+                        class="checkbox checkbox-xs checkbox-primary rounded"
+                      />
+                      <span>Include Re-Exports (export * from './...')</span>
+                    </label>
                     <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
                       <input
                         type="checkbox"
                         bind:checked={includeClerkBoundary}
                         class="checkbox checkbox-xs checkbox-primary rounded"
                       />
-                      <span>Include Clerk Node (__clerk_identity__)</span>
+                      <span>Include Clerk (__clerk_identity__)</span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
                       <input
@@ -1413,7 +1477,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                         bind:checked={includeWorkosBoundary}
                         class="checkbox checkbox-xs checkbox-primary rounded"
                       />
-                      <span>Include WorkOS Node (__workos_identity__)</span>
+                      <span>Include WorkOS (__workos_identity__)</span>
                     </label>
                   </div>
 
@@ -1460,10 +1524,16 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                 </div>
 
               {:else}
-                <p class="text-base-content/75 leading-relaxed">
-                  Use this interactive tool to build inline <code>@strata</code> comments for single-file schemas (<code>schema.ts</code>).
-                  Paste the generated block directly above your table, object, or connection declarations.
-                </p>
+                <div class="flex flex-col gap-2">
+                  <p class="text-base-content/75 leading-relaxed">
+                    Use this interactive tool to build inline <code>@strata</code> comments for single-file schemas (<code>schema.ts</code>).
+                    Paste the generated block directly above your table, object, or connection declarations.
+                  </p>
+                  <div class="px-3 py-2 bg-info/10 border border-info/20 rounded-xl text-[11px] text-info flex items-center gap-2">
+                    <Info class="w-4 h-4 shrink-0" />
+                    <span>In modular barrel schemas (<code>schema/index.ts</code>), worker bindings live in <code>wrangler.jsonc</code> with layout saved in <code>@strata-layout</code>. Use the <strong>Modular Barrel</strong> tab for barrel manifests.</span>
+                  </div>
+                </div>
 
                 <!-- Basic Fields -->
                 <div

@@ -24,6 +24,7 @@
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import { toast } from "svelte-sonner";
   import D1Inspector from "./D1Inspector.svelte";
   import KVInspector from "./KVInspector.svelte";
   import DOInspector from "./DOInspector.svelte";
@@ -73,9 +74,7 @@
     }
   });
 
-  const selectedNode = $derived(
-    schemaState.nodes.find((n) => n.id === schemaState.activeInspectorNodeId),
-  );
+  const selectedNode = $derived(schemaState.activeInspectorNode);
   const isReadOnly = $derived(
     !!selectedNode &&
       ((selectedNode.data as any)?.target === "do" ||
@@ -85,83 +84,28 @@
 
   let copied = $state(false);
 
-  function copySnippet() {
+  async function copySnippet() {
     if (!drizzleSnippet) return;
-    navigator.clipboard.writeText(drizzleSnippet);
-    copied = true;
-    setTimeout(() => {
-      copied = false;
-    }, 2000);
-  }
-
-  function getTableSnippet(node: any, fileCode: string): string {
-    if (!node) return "";
-    const name = node.id;
-    const target = (node.data as any)?.target || "d1";
-
-    if (target === "d1" && fileCode) {
-      const pattern = new RegExp(
-        `(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
-        "m",
-      );
-      const match = fileCode.match(pattern);
-      if (match) {
-        return match[0].trim();
-      }
+    const ok = await PlatformService.writeClipboard(drizzleSnippet);
+    if (ok) {
+      copied = true;
+      toast.success(`Copied "${selectedNode?.id || ''}" snippet`);
+      setTimeout(() => {
+        copied = false;
+      }, 2000);
+    } else {
+      toast.error("Failed to copy snippet to clipboard");
     }
-
-    if (target === "d1") {
-      const cols = ((node.data as any)?.columns || [])
-        .map((col: any) => {
-          let chain = col.definition || `text("${col.name}")`;
-          if (!chain.includes("(")) {
-            chain = `${chain}("${col.name}")`;
-          }
-          if (col.isPk && !chain.includes(".primaryKey(")) chain += ".primaryKey()";
-          if (col.notNull && !chain.includes(".notNull(")) chain += ".notNull()";
-          if (col.defaultVal !== undefined && col.defaultVal !== null && !chain.includes(".default(") && !chain.includes(".$defaultFn(")) {
-            chain += `.default(${col.defaultVal})`;
-          }
-          return `  ${col.name}: ${chain},`;
-        })
-        .join("\n");
-      return `export const ${name} = sqliteTable("${name}", {\n${cols}\n});`;
-    } else if (target === "kv") {
-      const fields = ((node.data as any)?.columns || [])
-        .map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
-        .join("\n");
-      return `export interface ${name}Schema {\n${fields}\n}`;
-    } else if (target === "r2") {
-      const fields = ((node.data as any)?.columns || [])
-        .map((c: any) => `  "${c.name}": string;`)
-        .join("\n");
-      return `export interface ${name}Bucket {\n${fields}\n}`;
-    } else if (target === "do") {
-      const methods = ((node.data as any)?.columns || [])
-        .map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
-        .join("\n");
-      return `export class ${name} {\n${methods}\n}`;
-    }
-    return "";
   }
 
   const drizzleSnippet = $derived.by(() => {
     if (!selectedNode) return "";
-    const targetFile =
-      (selectedNode.data as any)?.moduleInfo?.sourceFilePath ||
-      schemaState.getTargetFilePath(selectedNode.id) ||
-      schemaState.filePath;
-    const fileCode =
-      (targetFile && schemaState.externalFilesMap.get(targetFile)) ||
-      schemaState.rawCode;
-    return getTableSnippet(selectedNode, fileCode);
+    return schemaState.getTableDefinitionSnippet(selectedNode.id);
   });
 </script>
 
 {#if schemaState.activeInspectorNodeId}
-  {@const selectedNode = schemaState.nodes.find(
-    (n) => n.id === schemaState.activeInspectorNodeId,
-  )}
+  {@const selectedNode = schemaState.activeInspectorNode}
   {#if selectedNode}
     {#if selectedNode.type === "identity"}
       <IdentityInspector node={selectedNode} onDismiss={dismiss} />

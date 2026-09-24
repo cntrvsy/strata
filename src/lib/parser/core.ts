@@ -121,6 +121,8 @@ export function parseSchema(
 			}
 		}
 
+		const isModularBarrel = exportDecls.some(exp => Boolean(exp.getModuleSpecifierValue()));
+
 		// Find all exported declarations in main schema file
 		const variableStatements = sf.getVariableStatements();
 		const tableDeclarations = new Map<string, VariableDeclaration>();
@@ -183,7 +185,6 @@ export function parseSchema(
 					}
 				}
 
-
 				if (strataData.target === 'project') {
 					if (strataData.wranglerPath) {
 						wranglerPath = strataData.wranglerPath;
@@ -192,6 +193,27 @@ export function parseSchema(
 
 				if (strataData.path) {
 					externalPaths.push(strataData.path);
+				}
+
+				const init = decl.getInitializer();
+				const isEmptyObj = init?.isKind(SyntaxKind.ObjectLiteralExpression) && init.getProperties().length === 0;
+				if (isModularBarrel && isEmptyObj) {
+					auditIssues.push({
+						id: `audit_dummy_binding_${decl.getName()}_${statement.getStartLineNumber()}`,
+						severity: 'warning',
+						code: 'BARREL_DUMMY_BINDING',
+						message: `Cloudflare binding "${decl.getName()}" is declared as a dummy empty JS constant in the schema barrel. In modular setups, bindings belong in wrangler.jsonc with visual metadata and synthetic relations consolidated into @strata-layout.`,
+						symbolName: decl.getName(),
+						line: statement.getStartLineNumber(),
+						rawMatch: statement.getText(),
+						suggestedFix: {
+							label: 'Consolidate into @strata-layout',
+							action: 'migrate_dummy_to_manifest',
+							payload: {
+								symbolName: decl.getName()
+							}
+						}
+					});
 				}
 
 				// Only process if it's a known storage target
@@ -750,13 +772,44 @@ export function parseSchema(
 			}
 		}
 
+		// Check for unused drizzle-orm/sqlite-core imports in a modular barrel
+		if (isModularBarrel) {
+			for (const imp of sf.getImportDeclarations()) {
+				if (imp.getModuleSpecifierValue() === 'drizzle-orm/sqlite-core') {
+					const hasTableCall = sf.getDescendantsOfKind(SyntaxKind.CallExpression).some(c => c.getExpression().getText() === 'sqliteTable');
+					if (!hasTableCall) {
+						auditIssues.push({
+							id: `audit_unused_drizzle_import_${imp.getStartLineNumber()}`,
+							severity: 'warning',
+							code: 'UNUSED_BARREL_IMPORT',
+							message: `Unused Drizzle import in schema barrel. Clean modular barrels should contain only @strata-layout and domain re-exports.`,
+							symbolName: 'sqliteTable',
+							line: imp.getStartLineNumber(),
+							rawMatch: imp.getText(),
+							suggestedFix: {
+								label: 'Remove Unused Import',
+								action: 'remove_unused_import',
+								payload: {
+									moduleSpecifier: 'drizzle-orm/sqlite-core'
+								}
+							}
+						});
+					}
+				}
+			}
+		}
+
 		// Cleanup: Ensure all edges point to existing nodes and emit actionable diagnostics for broken references
 		const allNodeIds = new Set(nodes.map(n => n.id));
 		const validEdges: Edge[] = [];
 		for (const edge of edges) {
-			if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
+			const isSynthetic = (edge.data as any)?.isSynthetic || (edge.data as any)?.edgeType === 'synthetic' || edge.label === 'synthetic';
+			const sourceKnown = allNodeIds.has(edge.source) || Boolean(layoutManifest && layoutManifest[edge.source]);
+			const targetKnown = allNodeIds.has(edge.target) || Boolean(layoutManifest && layoutManifest[edge.target]);
+
+			if (isSynthetic ? (sourceKnown && targetKnown) : (allNodeIds.has(edge.source) && allNodeIds.has(edge.target))) {
 				validEdges.push(edge);
-			} else if (!(edge.data as any)?.isSynthetic && (edge.data as any)?.edgeType !== 'synthetic' && edge.label !== 'synthetic') {
+			} else if (!isSynthetic) {
 				const fromNode = edge.source;
 				const colName = (edge.data as any)?.sourceCol || (edge as any).sourceHandle;
 				const isFk = (edge.data as any)?.edgeType === 'fk' || !(edge.data as any)?.isVirtual;

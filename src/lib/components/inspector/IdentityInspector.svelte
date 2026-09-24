@@ -111,15 +111,19 @@ export const organizations = sqliteTable("organizations", {
     PlatformService.openExternal(config.docsUrl);
   }
 
-  function handleCopySnippet() {
-    navigator.clipboard.writeText(config.snippet);
-    copiedSnippet = true;
-    toast.success(`Copied ${config.mirrorTableName} Schema Snippet`, {
-      description: "Paste into your schema module (e.g. src/schema/clerk.ts or src/schema.ts)."
-    });
-    setTimeout(() => {
-      copiedSnippet = false;
-    }, 2000);
+  async function handleCopySnippet() {
+    const ok = await PlatformService.writeClipboard(config.snippet);
+    if (ok) {
+      copiedSnippet = true;
+      toast.success(`Copied ${config.mirrorTableName} Schema Snippet`, {
+        description: "Paste into your schema module (e.g. src/schema/clerk.ts or src/schema.ts)."
+      });
+      setTimeout(() => {
+        copiedSnippet = false;
+      }, 2000);
+    } else {
+      toast.error("Failed to copy snippet to clipboard");
+    }
   }
 
   function navigateToTable(tableId: string) {

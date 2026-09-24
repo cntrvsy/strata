@@ -15,6 +15,16 @@ export class UIState {
 	/** ID of currently hovered node on canvas */
 	hoveredNodeId = $state<string | null>(null);
 
+	/** Hovered column coordinates { nodeId, colName } */
+	hoveredCol = $state<{ nodeId: string; colName: string } | null>(null);
+
+	/** Subgraph Focus Lock */
+	isFocusLocked = $state(false);
+	focusLockedNodeId = $state<string | null>(null);
+
+	/** Highlight exploration mode: direct (1 hop) vs transitive (2 hops) */
+	highlightMode = $state<'direct' | 'transitive'>('direct');
+
 	/** Compact mode toggle (keys only) */
 	compactMode = $state(false);
 
@@ -75,6 +85,26 @@ export class UIState {
 		this.activeInspectorNodeId = null;
 		this.activeCoordinates = null;
 		this.hoveredNodeId = null;
+		this.hoveredCol = null;
+	}
+
+	/** Toggle subgraph focus lock */
+	toggleFocusLock(targetNodeId?: string) {
+		if (this.isFocusLocked) {
+			this.clearFocusLock();
+		} else {
+			const node = targetNodeId || this.hoveredNodeId || this.activeInspectorNodeId;
+			if (node) {
+				this.isFocusLocked = true;
+				this.focusLockedNodeId = node;
+			}
+		}
+	}
+
+	/** Clear subgraph focus lock */
+	clearFocusLock() {
+		this.isFocusLocked = false;
+		this.focusLockedNodeId = null;
 	}
 }
 

@@ -15,6 +15,21 @@ import { resolveRelativePath, getRelativeImportSpecifier, createIsolatedProject,
 import type { AuditIssue, PackageWrapperInfo } from "#lib/parser/types";
 import { uiState } from "#lib/state/uiStore.svelte";
 
+export type NodeHighlightStatus = 'self' | 'upstream' | 'downstream' | 'transitive' | 'dimmed' | 'normal';
+
+export interface HighlightGraph {
+	isActive: boolean;
+	primaryActiveNodeId: string | null;
+	activeNodeIds: Set<string>;
+	getNodeHighlight: (nodeId: string) => NodeHighlightStatus;
+	isEdgeActive: (edgeId: string) => boolean;
+	isColumnHighlighted: (nodeId: string, colName: string) => boolean;
+	isFocusLocked: boolean;
+	focusLockedNodeId: string | null;
+	highlightMode: 'direct' | 'transitive';
+	connectedCount: number;
+}
+
 
 /**
  * State-machine JSONC parser.
@@ -670,7 +685,7 @@ export class SchemaState {
 	/** Convenient getter to retrieve the active inspector node object */
 	get activeInspectorNode() {
 		if (!this.activeInspectorNodeId) return undefined;
-		return this.nodes.find(n => n.id === this.activeInspectorNodeId);
+		return this.nodes.find(n => n.id === this.activeInspectorNodeId || (n.data as any)?.label === this.activeInspectorNodeId);
 	}
 
 	get selectedNode() {
@@ -685,9 +700,176 @@ export class SchemaState {
 	get hoveredNodeId() { return uiState.hoveredNodeId; }
 	set hoveredNodeId(val: string | null) { uiState.hoveredNodeId = val; }
 
+	/** Hovered column coordinates { nodeId, colName } */
+	get hoveredCol() { return uiState.hoveredCol; }
+	set hoveredCol(val: { nodeId: string; colName: string } | null) { uiState.hoveredCol = val; }
+
+	/** Subgraph Focus Lock */
+	get isFocusLocked() { return uiState.isFocusLocked; }
+	set isFocusLocked(val: boolean) { uiState.isFocusLocked = val; }
+
+	get focusLockedNodeId() { return uiState.focusLockedNodeId; }
+	set focusLockedNodeId(val: string | null) { uiState.focusLockedNodeId = val; }
+
+	get highlightMode() { return uiState.highlightMode; }
+	set highlightMode(val: 'direct' | 'transitive') { uiState.highlightMode = val; }
+
+	toggleFocusLock(targetNodeId?: string) { uiState.toggleFocusLock(targetNodeId); }
+	clearFocusLock() { uiState.clearFocusLock(); }
+
 	/** Whether compact mode is currently active (keys only) */
 	get compactMode() { return uiState.compactMode; }
 	set compactMode(val: boolean) { uiState.compactMode = val; }
+
+	/**
+	 * Single reactive derived memo for graph highlights.
+	 * Analyzes hover, selection, and focus lock to compute O(1) status lookups.
+	 */
+	get highlightGraph(): HighlightGraph {
+		const isLocked = uiState.isFocusLocked && !!uiState.focusLockedNodeId;
+		const lockedNodeId = isLocked ? uiState.focusLockedNodeId : null;
+		const hoveredCol = uiState.hoveredCol;
+		const hoveredNodeId = uiState.hoveredNodeId;
+		
+		let activeInitiatorIds: string[] = [];
+		if (lockedNodeId) {
+			activeInitiatorIds = [lockedNodeId];
+		} else if (hoveredCol) {
+			activeInitiatorIds = [hoveredCol.nodeId];
+		} else if (hoveredNodeId) {
+			activeInitiatorIds = [hoveredNodeId];
+		} else {
+			const selected = this.nodes.filter(n => n.selected).map(n => n.id);
+			if (selected.length > 0) {
+				activeInitiatorIds = selected;
+			}
+		}
+
+		if (activeInitiatorIds.length === 0) {
+			return {
+				isActive: false,
+				primaryActiveNodeId: null,
+				activeNodeIds: new Set(),
+				getNodeHighlight: () => 'normal',
+				isEdgeActive: () => true,
+				isColumnHighlighted: () => false,
+				isFocusLocked: false,
+				focusLockedNodeId: null,
+				highlightMode: uiState.highlightMode,
+				connectedCount: 0
+			};
+		}
+
+		const activeSet = new Set(activeInitiatorIds);
+		const nodeStatus = new Map<string, NodeHighlightStatus>();
+		const activeEdgeIds = new Set<string>();
+		const activeColumnKeys = new Set<string>();
+
+		for (const id of activeSet) {
+			nodeStatus.set(id, 'self');
+		}
+
+		// Helper to resolve standard or custom target column name
+		const getColFromTarget = (targetId: string, handle?: string | null): string => {
+			if (handle && handle !== 'target') return handle;
+			const targetNode = this.nodes.find(n => n.id === targetId || (n.data as any)?.label === targetId);
+			const pk = (targetNode?.data as any)?.columns?.find((c: any) => c.isPk)?.name;
+			return pk || 'id';
+		};
+
+		// 1. Column-specific matching
+		if (hoveredCol) {
+			const hNode = hoveredCol.nodeId;
+			const hCol = hoveredCol.colName;
+
+			for (const edge of this.edges) {
+				const src = edge.source;
+				const tgt = edge.target;
+				const srcCol = (edge.data as any)?.sourceCol || edge.sourceHandle || (typeof edge.label === 'string' ? edge.label : undefined);
+				const tgtCol = (edge.data as any)?.targetCol || getColFromTarget(tgt, edge.targetHandle);
+
+				if (src === hNode && srcCol === hCol) {
+					activeEdgeIds.add(edge.id);
+					nodeStatus.set(tgt, 'upstream');
+					activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (tgt === hNode && tgtCol === hCol) {
+					activeEdgeIds.add(edge.id);
+					nodeStatus.set(src, 'downstream');
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				}
+			}
+		} else {
+			// 2. Node-level matching
+			for (const edge of this.edges) {
+				const src = edge.source;
+				const tgt = edge.target;
+				const srcCol = (edge.data as any)?.sourceCol || edge.sourceHandle || (typeof edge.label === 'string' ? edge.label : undefined);
+				const tgtCol = (edge.data as any)?.targetCol || getColFromTarget(tgt, edge.targetHandle);
+
+				const isSrcActive = activeSet.has(src);
+				const isTgtActive = activeSet.has(tgt);
+
+				if (isSrcActive && isTgtActive) {
+					activeEdgeIds.add(edge.id);
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (isSrcActive) {
+					activeEdgeIds.add(edge.id);
+					if (!nodeStatus.has(tgt)) {
+						nodeStatus.set(tgt, 'upstream'); // target is referenced by active node
+					}
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				} else if (isTgtActive) {
+					activeEdgeIds.add(edge.id);
+					if (!nodeStatus.has(src)) {
+						nodeStatus.set(src, 'downstream'); // source references active node
+					}
+					if (srcCol) activeColumnKeys.add(`${src}:${srcCol}`);
+					if (tgtCol) activeColumnKeys.add(`${tgt}:${tgtCol}`);
+				}
+			}
+
+			// 3. Transitive 2nd-degree neighbors (if mode is transitive)
+			if (uiState.highlightMode === 'transitive') {
+				const directNeighbors = Array.from(nodeStatus.keys()).filter(id => !activeSet.has(id));
+				// Safeguard against hub-entity explosion (e.g. if > 12 direct neighbors)
+				if (directNeighbors.length <= 12) {
+					const directSet = new Set(directNeighbors);
+					for (const edge of this.edges) {
+						const src = edge.source;
+						const tgt = edge.target;
+						if (directSet.has(src) && !nodeStatus.has(tgt)) {
+							nodeStatus.set(tgt, 'transitive');
+							activeEdgeIds.add(edge.id);
+						} else if (directSet.has(tgt) && !nodeStatus.has(src)) {
+							nodeStatus.set(src, 'transitive');
+							activeEdgeIds.add(edge.id);
+						}
+					}
+				}
+			}
+		}
+
+		const primaryActiveNodeId = activeInitiatorIds.length === 1 ? activeInitiatorIds[0] : null;
+
+		return {
+			isActive: true,
+			primaryActiveNodeId,
+			activeNodeIds: activeSet,
+			getNodeHighlight: (nodeId: string) => {
+				return nodeStatus.get(nodeId) || 'dimmed';
+			},
+			isEdgeActive: (edgeId: string) => activeEdgeIds.has(edgeId),
+			isColumnHighlighted: (nodeId: string, colName: string) => activeColumnKeys.has(`${nodeId}:${colName}`),
+			isFocusLocked: isLocked,
+			focusLockedNodeId: lockedNodeId,
+			highlightMode: uiState.highlightMode,
+			connectedCount: nodeStatus.size - activeSet.size
+		};
+	}
 
 
 	// --- File State ---
@@ -973,6 +1155,22 @@ export class SchemaState {
 			} else {
 				await this.repairNodeJsdoc(issue.symbolName);
 			}
+		} else if (issue.suggestedFix?.action === 'migrate_dummy_to_manifest') {
+			const { consolidateDummyBindingsIntoManifest } = await import("../parser");
+			await this.executeSchemaMutation("Consolidate bindings to manifest", (rootCode) =>
+				consolidateDummyBindingsIntoManifest(rootCode)
+			);
+			toast.success("Bindings Consolidated", {
+				description: "Migrated non-SQL bindings into @strata-layout and stripped dummy variables."
+			});
+		} else if (issue.suggestedFix?.action === 'remove_unused_import' && issue.suggestedFix.payload?.moduleSpecifier) {
+			const { removeUnusedImportFromSchema } = await import("../parser");
+			await this.executeSchemaMutation("Remove unused import", (rootCode) =>
+				removeUnusedImportFromSchema(rootCode, issue.suggestedFix!.payload!.moduleSpecifier)
+			);
+			toast.success("Cleaned Barrel", {
+				description: `Removed unused import "${issue.suggestedFix.payload.moduleSpecifier}".`
+			});
 		}
 	}
 
@@ -1031,10 +1229,12 @@ export class SchemaState {
 			
 			for (const binding of wranglerBindings) {
 				if (!finalNodes.some(n => n.id === binding.name)) {
+					const manifestEntry = (result.layoutManifest as any)?.[binding.name];
 					let cols: any[] = [];
 					if (binding.type === 'kv') {
-						cols = binding.extra?.schema 
-							? Object.entries(binding.extra.schema).map(([k, v]) => {
+						const kvSchema = manifestEntry?.schema || binding.extra?.schema;
+						cols = kvSchema 
+							? Object.entries(kvSchema).map(([k, v]) => {
 								if (typeof v === 'object' && v !== null) {
 									const vObj = v as any;
 									return {
@@ -1057,12 +1257,14 @@ export class SchemaState {
 							})
 							: [];
 					} else if (binding.type === 'do') {
-						cols = binding.extra?.methods 
-							? binding.extra.methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m)
+						const doMethods = manifestEntry?.methods || binding.extra?.methods;
+						cols = doMethods 
+							? doMethods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m)
 							: [];
 					} else if (binding.type === 'r2') {
-						cols = binding.extra?.folders
-							? Object.entries(binding.extra.folders).map(([k, v]) => ({
+						const r2Folders = manifestEntry?.folders || binding.extra?.folders;
+						cols = r2Folders
+							? Object.entries(r2Folders).map(([k, v]) => ({
 								name: k.endsWith('/') ? k : `${k}/`,
 								definition: String(v),
 								isPk: false,
@@ -1072,7 +1274,6 @@ export class SchemaState {
 							: [];
 					}
 
-					const manifestEntry = (result.layoutManifest as any)?.[binding.name];
 					const initialPos = manifestEntry && typeof manifestEntry.x === 'number' && typeof manifestEntry.y === 'number'
 						? { x: Math.round(manifestEntry.x), y: Math.round(manifestEntry.y) }
 						: { x: Math.round(Math.random() * 200), y: Math.round(Math.random() * 200) };
@@ -1095,6 +1296,13 @@ export class SchemaState {
 								binding: binding.name,
 								class: binding.extra?.class_name || binding.extra?.class || manifestEntry?.class,
 								path: binding.extra?.path || manifestEntry?.path,
+								folders: manifestEntry?.folders || binding.extra?.folders,
+								schema: manifestEntry?.schema || binding.extra?.schema,
+								methods: manifestEntry?.methods || binding.extra?.methods,
+								public: manifestEntry?.public ?? binding.extra?.public,
+								cors: manifestEntry?.cors ?? binding.extra?.cors,
+								customDomain: manifestEntry?.customDomain || binding.extra?.customDomain,
+								relations: manifestEntry?.relations || binding.extra?.relations,
 								...binding.extra
 							},
 							isExternal: true
@@ -1104,10 +1312,96 @@ export class SchemaState {
 				}
 			}
 
+			// Also spawn nodes for any non-SQL targets declared in layoutManifest that aren't in wranglerBindings or finalNodes
+			if (result.layoutManifest) {
+				for (const [nodeId, manifestEntry] of Object.entries(result.layoutManifest)) {
+					const target = (manifestEntry as any)?.target;
+					if (target && (target === 'kv' || target === 'do' || target === 'r2') && !finalNodes.some(n => n.id === nodeId)) {
+						let cols: any[] = [];
+						if (target === 'kv' && (manifestEntry as any).schema) {
+							cols = Object.entries((manifestEntry as any).schema).map(([k, v]: [string, any]) => ({
+								name: k,
+								definition: typeof v === 'object' && v?.type ? String(v.type) : String(v || 'string'),
+								ttl: typeof v === 'object' ? v?.ttl : undefined,
+								metadata: typeof v === 'object' ? v?.metadata : undefined,
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}));
+						} else if (target === 'do' && (manifestEntry as any).methods) {
+							cols = (manifestEntry as any).methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m);
+						} else if (target === 'r2' && (manifestEntry as any).folders) {
+							cols = Object.entries((manifestEntry as any).folders).map(([k, v]: [string, any]) => ({
+								name: k.endsWith('/') ? k : `${k}/`,
+								definition: String(v),
+								isPk: false,
+								notNull: false,
+								isReferences: false
+							}));
+						}
+						const pos = typeof (manifestEntry as any).x === 'number' && typeof (manifestEntry as any).y === 'number'
+							? { x: Math.round((manifestEntry as any).x), y: Math.round((manifestEntry as any).y) }
+							: { x: 100, y: 100 };
+						finalNodes.push({
+							id: nodeId,
+							type: target,
+							data: {
+								label: nodeId,
+								columns: cols,
+								methods: target === 'do' ? cols : undefined,
+								patterns: target === 'kv' ? cols : undefined,
+								folders: target === 'r2' ? cols : undefined,
+								target,
+								strata: {
+									target,
+									x: pos.x,
+									y: pos.y,
+									binding: nodeId,
+									...manifestEntry
+								},
+								isExternal: true
+							},
+							position: pos
+						});
+					}
+				}
+			}
+
+			// Ensure all synthetic edges declared in layoutManifest connecting to finalNodes are preserved
+			const finalNodeIds = new Set(finalNodes.map(n => n.id));
+			const combinedEdges = [...result.edges];
+			if (result.layoutManifest) {
+				for (const [nodeId, meta] of Object.entries(result.layoutManifest)) {
+					if (meta && Array.isArray((meta as any).relations)) {
+						for (const rel of (meta as any).relations) {
+							if (rel && rel.to && finalNodeIds.has(nodeId) && finalNodeIds.has(rel.to)) {
+								const alreadyExists = combinedEdges.some(
+									e => (e.source === nodeId && e.target === rel.to) || (e.source === rel.to && e.target === nodeId)
+								);
+								if (!alreadyExists) {
+									combinedEdges.push({
+										id: `edge_${nodeId}_${rel.to}`,
+										source: nodeId,
+										target: rel.to,
+										type: 'relation',
+										label: 'synthetic',
+										data: {
+											isSynthetic: true,
+											edgeType: 'synthetic',
+											isVirtual: true
+										}
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// Preserve selection state
 			const selectedNodeIds = new Set(this.nodes.filter(n => n.selected).map(n => n.id));
 			this.nodes = mapNodesWithExternalPositions(finalNodes, this.filePath || 'sandbox', selectedNodeIds, this.nodes);
-			this.edges = result.edges;
+			this.edges = combinedEdges;
 			this.rawCode = code;
 			this.isValid = true;
 			this.error = null;
@@ -1307,42 +1601,78 @@ export class SchemaState {
 	 */
 	getTargetFilePath(tableName: string): string | undefined {
 		if (this.isSandboxMode) return undefined;
-		const node = this.nodes.find(n => n.id === tableName);
+		const node = this.nodes.find(n => n.id === tableName || (n.data as any)?.label === tableName);
 		return (node?.data as any)?.moduleInfo?.sourceFilePath || this.filePath || undefined;
 	}
 
 	/**
 	 * Returns the Drizzle/TypeScript definition snippet for a given table or entity.
+	 * Searches across modular domain files, root schema code, and falls back to
+	 * synthesizing the definition from the node's AST properties.
 	 */
 	getTableDefinitionSnippet(tableName: string): string {
-		const node = this.nodes.find(n => n.id === tableName);
+		const node = this.nodes.find(n => n.id === tableName || (n.data as any)?.label === tableName);
 		if (!node) return "";
-		const target = (node.data as any)?.target || "d1";
-		const rawCode = this.rawCode;
 
-		if (target === "d1" && rawCode) {
+		// 1. Identity Providers (Clerk, WorkOS)
+		if (node.type === "identity" || (node.data as any)?.provider) {
+			const isClerk = (node.data as any)?.provider === "clerk";
+			return isClerk
+				? `// Recommended D1 Webhook User Mirror\nexport const clerkUsers = sqliteTable("clerkUsers", {\n  id: text("id").primaryKey(),\n  clerkUserId: text("clerk_user_id").notNull().unique(),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  imageUrl: text("image_url"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`
+				: `// Recommended D1 WorkOS Users Mirror\nexport const workosUsers = sqliteTable("workosUsers", {\n  id: text("id").primaryKey(),\n  workosUserId: text("workos_user_id").notNull().unique(),\n  workosOrgId: text("workos_org_id"),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`;
+		}
+
+		const name = node.id;
+		const target = (node.data as any)?.target || (node.type === "table" ? "d1" : node.type) || "d1";
+		
+		// Resolve file content: check modular domain file first, then fall back to rawCode
+		const targetFile = (node.data as any)?.moduleInfo?.sourceFilePath || this.getTargetFilePath(name) || this.filePath;
+		const fileCode = (targetFile && this.externalFilesMap.get(targetFile)) || this.rawCode;
+
+		// 2. Exact regex extraction from source file
+		if (target === "d1" && fileCode) {
 			const pattern = new RegExp(
-				`(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${tableName}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
+				`(?:\\/\\*\\*[\\s\\S]*?\\*\\/\\s*)?export\\s+const\\s+${name}\\s*=\\s*sqliteTable[\\s\\S]*?\\n\\}\\);?`,
 				"m"
 			);
-			const match = rawCode.match(pattern);
-			if (match) return match[0];
+			const match = fileCode.match(pattern);
+			if (match) return match[0].trim();
+		}
+
+		// 3. Robust AST synthesis fallback for D1 tables (works for sandbox mode or modified files)
+		if (target === "d1") {
+			const cols = ((node.data as any)?.columns || [])
+				.map((col: any) => {
+					let chain = col.definition || `text("${col.name}")`;
+					if (!chain.includes("(")) {
+						chain = `${chain}("${col.name}")`;
+					}
+					if (col.isPk && !chain.includes(".primaryKey(")) chain += ".primaryKey()";
+					if (col.notNull && !chain.includes(".notNull(")) chain += ".notNull()";
+					if (col.defaultVal !== undefined && col.defaultVal !== null && !chain.includes(".default(") && !chain.includes(".$defaultFn(")) {
+						chain += `.default(${col.defaultVal})`;
+					}
+					return `  ${col.name}: ${chain},`;
+				})
+				.join("\n");
+			return `export const ${name} = sqliteTable("${name}", {\n${cols}\n});`;
 		} else if (target === "kv") {
-			const fields = ((node.data as any)?.columns || [])
+			const fields = ((node.data as any)?.columns || (node.data as any)?.patterns || [])
 				.map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
 				.join("\n");
-			return `export interface ${tableName}KV {\n${fields}\n}`;
+			return `export interface ${name}KV {\n${fields}\n}`;
 		} else if (target === "r2") {
-			const fields = ((node.data as any)?.columns || [])
+			const fields = ((node.data as any)?.columns || (node.data as any)?.folders || [])
 				.map((c: any) => `  "${c.name}": "${c.definition || "*/*"}";`)
 				.join("\n");
-			return `export interface ${tableName}Bucket {\n${fields}\n}`;
+			return `export interface ${name}Bucket {\n${fields}\n}`;
 		} else if (target === "do") {
-			const methods = ((node.data as any)?.columns || [])
+			const methods = ((node.data as any)?.columns || (node.data as any)?.methods || [])
 				.map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
 				.join("\n");
-			return `export class ${tableName} {\n${methods}\n}`;
+			return `export class ${name} {\n${methods}\n}`;
 		}
+
 		return "";
 	}
 

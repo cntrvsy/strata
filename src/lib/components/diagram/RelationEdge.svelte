@@ -33,14 +33,9 @@
     markerEnd,
   }: EdgeProps = $props();
 
-  const activeNodeId = $derived(
-    schemaState.hoveredNodeId ||
-      schemaState.nodes.find((n) => n.selected)?.id ||
-      null,
-  );
-  const isEdgeRelated = $derived(
-    !activeNodeId || source === activeNodeId || target === activeNodeId,
-  );
+  const isGraphActive = $derived(schemaState.highlightGraph.isActive);
+  const isEdgeActive = $derived(schemaState.highlightGraph.isEdgeActive(id));
+  const isEdgeRelated = $derived(!isGraphActive || isEdgeActive);
 
   // Choose path algorithm based on connection primitive:
   // Cloudflare Service Topology Links use curved Bezier pipelines;
@@ -62,16 +57,21 @@
   // Nudge the label 40% closer to the source node
   const finalX = $derived(labelX + (sourceX - labelX) * 0.4);
   const finalY = $derived(labelY + (sourceY - labelY) * 0.4);
+
+  const edgeStyle = $derived(
+    isEdgeRelated
+      ? (isGraphActive && isEdgeActive
+          ? (style ? style + "; stroke-width: 2.75; transition: opacity 250ms ease;" : "stroke-width: 2.75; transition: opacity 250ms ease;")
+          : (style ? style + "; transition: opacity 250ms ease;" : "transition: opacity 250ms ease;"))
+      : (style ? style + "; opacity: 0.05; transition: opacity 250ms ease;" : "opacity: 0.05; transition: opacity 250ms ease;")
+  );
 </script>
 
 <BaseEdge
   {id}
   path={edgePath}
-  style={isEdgeRelated
-    ? style
-    : style
-      ? style + "; opacity: 0.05;"
-      : "opacity: 0.05;"}
+  style={edgeStyle}
+  class={isGraphActive && isEdgeActive ? "strata-active-edge" : ""}
   {markerStart}
   markerEnd={isEdgeRelated ? markerEnd : undefined}
 />
@@ -95,11 +95,22 @@
       : isPhysical
         ? `Physical FK: ${labelText}`
         : `Relation: ${labelText}`}
+  {@const srcCol = (data as any)?.sourceCol || (typeof label === "string" ? label : undefined)}
   <EdgeLabel x={finalX} y={finalY}>
     <div
-      class="flex items-center gap-1.5 bg-base-100/95 backdrop-blur-xs border border-base-300 px-2 py-0.5 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/85 whitespace-nowrap shadow-xs hover:border-primary/50 transition-all cursor-default group/edge"
+      class="flex items-center gap-1.5 bg-base-100/95 backdrop-blur-xs border border-base-300 px-2 py-0.5 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/85 whitespace-nowrap shadow-xs hover:border-primary/50 transition-all cursor-pointer group/edge {isGraphActive && isEdgeActive ? 'ring-2 ring-primary/40 border-primary shadow-md' : ''}"
       style={typeof labelStyle === "string" ? labelStyle : undefined}
       title={tooltip}
+      role="button"
+      tabindex="0"
+      onmouseenter={() => {
+        if (srcCol) schemaState.hoveredCol = { nodeId: source, colName: srcCol };
+      }}
+      onmouseleave={() => {
+        if (schemaState.hoveredCol?.nodeId === source && schemaState.hoveredCol?.colName === srcCol) {
+          schemaState.hoveredCol = null;
+        }
+      }}
     >
       <span
         class="text-[8px] font-black font-mono px-1 py-0.2 rounded leading-none {isTopology
@@ -113,3 +124,19 @@
     </div>
   </EdgeLabel>
 {/if}
+
+<style>
+  :global(.strata-active-edge) {
+    stroke-dasharray: 6 3 !important;
+    animation: strataFlowDash 1s linear infinite !important;
+  }
+
+  @keyframes strataFlowDash {
+    from {
+      stroke-dashoffset: 18;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+</style>

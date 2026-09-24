@@ -13,6 +13,7 @@
     Layers,
     Cpu,
     Zap,
+    HardDrive,
     TriangleAlert,
     CircleAlert,
     Wrench,
@@ -30,10 +31,12 @@
 
     return {
       d1: nodes.filter(
-        (n) => (n.data as any).target === "d1" || !(n.data as any).target,
+        (n) => n.type !== "identity" && ((n.data as any).target === "d1" || !(n.data as any).target),
       ).length,
       do: nodes.filter((n) => (n.data as any).target === "do").length,
       kv: nodes.filter((n) => (n.data as any).target === "kv").length,
+      r2: nodes.filter((n) => (n.data as any).target === "r2").length,
+      identity: nodes.filter((n) => n.type === "identity").length,
       columns: nodes.reduce(
         (acc, n) => acc + ((n.data as any).columns?.length || 0),
         0,
@@ -414,6 +417,24 @@
             >
               <Zap class="w-3 h-3" />
               <span>{stats.kv} KV</span>
+            </button>
+          {/if}
+
+          {#if stats.r2 > 0}
+            <span class="opacity-30">•</span>
+            <!-- R2 filter button -->
+            <button
+              onclick={() =>
+                (schemaState.activeFilter =
+                  schemaState.activeFilter === "r2" ? null : "r2")}
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-field transition-all hover:bg-base-200/80 cursor-pointer {schemaState.activeFilter ===
+              'r2'
+                ? 'text-info font-bold bg-info/10'
+                : 'text-base-content/75'}"
+              title="Filter R2 Buckets"
+            >
+              <HardDrive class="w-3 h-3" />
+              <span>{stats.r2} R2</span>
             </button>
           {/if}
 

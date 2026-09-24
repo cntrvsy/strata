@@ -216,7 +216,31 @@ export async function addColumnToSchema(
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			if (manifest[tableName]) {
+				const entry = { ...manifest[tableName] };
+				if (entry.target === 'kv' || entry.schema) {
+					entry.schema = { ...(entry.schema || {}), [columnName]: type === 'text' ? 'string' : type };
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.target === 'r2' || entry.folders) {
+					entry.folders = { ...(entry.folders || {}), [columnName]: type || '*/*' };
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.target === 'do' || entry.methods) {
+					entry.methods = Array.from(new Set([...(entry.methods || []), columnName.trim()]));
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				}
+			}
+		}
+		return code;
+	}
 
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -731,7 +755,35 @@ export async function removeColumnFromSchema(
 ): Promise<string> {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			if (manifest[tableName]) {
+				const entry = { ...manifest[tableName] };
+				if (entry.schema && entry.schema[columnName]) {
+					delete entry.schema[columnName];
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				} else if (entry.folders) {
+					const cleanKey = columnName.endsWith('/') ? columnName.slice(0, -1) : columnName;
+					if (entry.folders[cleanKey]) {
+						delete entry.folders[cleanKey];
+						return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+					}
+				} else if (entry.methods) {
+					const cleanMethod = columnName.replace(/\(.*$/, '').trim();
+					entry.methods = entry.methods.filter((m: string) => m !== cleanMethod && m !== columnName);
+					return updateLayoutManifestInSchema(code, { [tableName]: entry }, false);
+				}
+			}
+		}
+		return code;
+	}
 	
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -1187,7 +1239,28 @@ export function updateTableMetadataInSchema(
 ): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
-	if (!decl) return code;
+	if (!decl) {
+		if (/@strata-layout\s+{/.test(code)) {
+			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			let manifest: Record<string, any> = {};
+			if (match) {
+				try {
+					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+				} catch {}
+			}
+			const existingEntry = manifest[tableName] || { x: 100, y: 100 };
+			const updatedEntry = { ...existingEntry };
+			for (const [key, val] of Object.entries(metadata)) {
+				if (val === undefined || val === null || val === '') {
+					delete updatedEntry[key];
+				} else {
+					updatedEntry[key] = val;
+				}
+			}
+			return updateLayoutManifestInSchema(code, { [tableName]: updatedEntry }, false);
+		}
+		return code;
+	}
 
 	const statement = decl.getVariableStatement();
 	if (statement) {
@@ -1321,7 +1394,13 @@ export function updateLayoutManifestInSchema(
 
 		let merged: Record<string, any>;
 		if (pruneMissing) {
-			merged = { ...positions };
+			merged = {};
+			for (const [key, val] of Object.entries(positions)) {
+				merged[key] = { ...(currentManifest[key] || {}), ...val };
+				if (val && 'relations' in val && (val as any).relations === undefined) {
+					delete merged[key].relations;
+				}
+			}
 		} else {
 			merged = { ...currentManifest };
 			for (const [key, val] of Object.entries(positions)) {
@@ -1495,5 +1574,98 @@ export function parseDrizzleConfigSchemaPath(configCode: string, configFilePath:
 
 	return rawPath;
 }
+
+/**
+ * Migrates dummy Cloudflare binding declarations (export const BUCKET = {}; with @strata)
+ * from a schema barrel file into the root @strata-layout manifest, and strips unused Drizzle imports.
+ */
+export function consolidateDummyBindingsIntoManifest(code: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	
+	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	let manifest: Record<string, any> = {};
+	if (match) {
+		try {
+			manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+		} catch {}
+	}
+
+	let modified = false;
+
+	const statementsToRemove: any[] = [];
+	for (const statement of sf.getVariableStatements()) {
+		let isDummy = false;
+		for (const decl of statement.getDeclarations()) {
+			const init = decl.getInitializer();
+			const isEmptyObj = init?.isKind(SyntaxKind.ObjectLiteralExpression) && init.getProperties().length === 0;
+			const jsDocs = statement.getJsDocs();
+			let strataData: any = null;
+
+			for (const doc of jsDocs) {
+				const text = doc.getText();
+				const m = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				if (m) {
+					try {
+						strataData = JSON.parse(m[1].replace(/^\s*\*\s?/gm, ''));
+					} catch {}
+				}
+			}
+
+			if (isEmptyObj) {
+				const name = decl.getName();
+				const current = manifest[name] || { x: 100, y: 100 };
+				manifest[name] = {
+					...current,
+					...(strataData || {})
+				};
+				isDummy = true;
+			}
+		}
+		if (isDummy) {
+			statementsToRemove.push(statement);
+		}
+	}
+
+	for (const stmt of statementsToRemove) {
+		stmt.remove();
+		modified = true;
+	}
+
+	// Remove unused drizzle-orm/sqlite-core imports if no sqliteTable calls remain
+	for (const imp of sf.getImportDeclarations()) {
+		if (imp.getModuleSpecifierValue() === 'drizzle-orm/sqlite-core') {
+			const anyTableCall = sf.getDescendantsOfKind(SyntaxKind.CallExpression).some(c => c.getExpression().getText() === 'sqliteTable');
+			if (!anyTableCall) {
+				imp.remove();
+				modified = true;
+			}
+		}
+	}
+
+	let workingText = sf.getFullText();
+	// Clean up comment block headers if left hanging
+	workingText = workingText.replace(/\/\*\*[\s\S]*?Cloudflare Storage Targets & Non-SQL Bindings[\s\S]*?\*\/\s*/g, '');
+
+	if (modified || Object.keys(manifest).length > 0) {
+		return updateLayoutManifestInSchema(workingText, manifest, false);
+	}
+
+	return workingText;
+}
+
+/**
+ * Removes an unused import declaration from a schema file.
+ */
+export function removeUnusedImportFromSchema(code: string, moduleSpecifier: string): string {
+	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
+	for (const imp of sf.getImportDeclarations()) {
+		if (imp.getModuleSpecifierValue() === moduleSpecifier) {
+			imp.remove();
+			return sf.getFullText();
+		}
+	}
+	return code;
+}
+
 
 

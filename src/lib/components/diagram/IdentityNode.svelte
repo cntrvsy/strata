@@ -20,7 +20,8 @@
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
 
-  const { data, selected } = $props<{
+  const { id, data, selected, dragging } = $props<{
+    id?: string;
     data: {
       provider: "clerk" | "workos";
       label: string;
@@ -29,7 +30,36 @@
       boundTables?: Array<{ tableId: string; colName: string }>;
     };
     selected?: boolean;
+    dragging?: boolean;
   }>();
+
+  const nodeId = $derived(
+    id || (data.provider === "clerk" ? "__clerk_identity__" : "__workos_identity__"),
+  );
+
+  const matchesFilter = $derived(
+    !schemaState.activeFilter || schemaState.activeFilter === "d1",
+  );
+
+  const highlightStatus = $derived(
+    schemaState.highlightGraph.getNodeHighlight(nodeId),
+  );
+
+  const opacityClass = $derived(
+    !matchesFilter
+      ? "opacity-20 scale-98 pointer-events-none"
+      : highlightStatus === "normal"
+        ? "opacity-100 scale-100"
+        : highlightStatus === "self"
+          ? "opacity-100 scale-100 z-30 ring-2 ring-primary/60 shadow-2xl"
+          : highlightStatus === "upstream"
+            ? "opacity-100 scale-100 z-20 ring-2 ring-primary/50 shadow-xl"
+            : highlightStatus === "downstream"
+              ? "opacity-100 scale-100 z-20 ring-2 ring-secondary/50 shadow-xl"
+              : highlightStatus === "transitive"
+                ? "opacity-65 scale-[0.99] z-10 border-dashed"
+                : "opacity-20 scale-98 pointer-events-auto",
+  );
 
   const isClerk = $derived(data.provider === "clerk");
   const config = $derived(
@@ -104,15 +134,33 @@ export const workosUsers = sqliteTable("workosUsers", {
 </script>
 
 <NodeQuickActions
-  nodeId={data.label}
+  {nodeId}
   nodeType="identity"
   {selected}
 />
 
 <div
-  class="relative group/identity min-w-64 max-w-72 transition-all duration-300"
+  class="relative group/identity min-w-64 max-w-72 transition-all duration-300 {opacityClass}"
   data-testid="identity-node"
   data-provider={data.provider}
+  role="button"
+  tabindex="0"
+  aria-label="{config.name} Identity Boundary"
+  onmouseenter={() => {
+    if (!dragging) schemaState.hoveredNodeId = nodeId;
+  }}
+  onmouseleave={() => {
+    if (schemaState.hoveredNodeId === nodeId)
+      schemaState.hoveredNodeId = null;
+  }}
+  ondblclick={() => {
+    schemaState.activeInspectorNodeId = nodeId;
+  }}
+  onkeydown={(e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      schemaState.activeInspectorNodeId = nodeId;
+    }
+  }}
 >
   <div
     class="bg-base-100/95 backdrop-blur-md border rounded-box overflow-hidden shadow-xl transition-all duration-200 {config.border} {selected
@@ -139,6 +187,13 @@ export const workosUsers = sqliteTable("workosUsers", {
             >
               External IdP
             </span>
+            {#if highlightStatus === "upstream"}
+              <span class="badge badge-xs badge-primary font-mono text-[8px] px-1 py-0 shadow-xs" title="Upstream dependency: referenced by active table">↑ upstream</span>
+            {:else if highlightStatus === "downstream"}
+              <span class="badge badge-xs badge-secondary font-mono text-[8px] px-1 py-0 shadow-xs" title="Downstream dependent: references active table">↓ dependent</span>
+            {:else if highlightStatus === "transitive"}
+              <span class="badge badge-xs badge-ghost border-base-300 font-mono text-[8px] px-1 py-0 opacity-80" title="2-hop transitive connection">2-hop</span>
+            {/if}
           </div>
           <p class="text-[10px] text-base-content/60 leading-tight mt-0.5">
             {data.description}
@@ -164,8 +219,11 @@ export const workosUsers = sqliteTable("workosUsers", {
       {#if data.boundTables && data.boundTables.length > 0}
         <div class="space-y-1 max-h-28 overflow-y-auto pr-1">
           {#each data.boundTables as bound}
+            {@const isBoundActive = schemaState.highlightGraph.isColumnHighlighted(bound.tableId, bound.colName)}
             <div
-              class="flex items-center justify-between px-2 py-1 bg-base-200/60 rounded text-[10px] font-mono border border-base-300/40"
+              class="flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono border transition-all {isBoundActive
+                ? 'bg-primary/20 border-primary/60 font-semibold ring-1 ring-primary/40'
+                : 'bg-base-200/60 border-base-300/40'}"
             >
               <span class="text-base-content/90 font-medium"
                 >{bound.tableId}</span

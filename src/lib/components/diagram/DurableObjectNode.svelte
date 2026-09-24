@@ -25,7 +25,7 @@
     TriangleAlert,
   } from "lucide-svelte";
 
-  const { data, selected, dragging } = $props<{
+  const { id, data, selected, dragging } = $props<{
     data: {
       label: string;
       columns?: Array<{
@@ -63,34 +63,33 @@
     };
     selected?: boolean;
     dragging?: boolean;
+    id?: string;
   }>();
+
+  const nodeId = $derived(id || data.label);
 
   const isMatch = $derived(
     !schemaState.activeFilter || schemaState.activeFilter === "do",
   );
 
-  const activeNodeId = $derived(
-    schemaState.hoveredNodeId ||
-      schemaState.nodes.find((n) => n.selected)?.id ||
-      null,
-  );
-
-  const isRelated = $derived(
-    !activeNodeId ||
-      data.label === activeNodeId ||
-      schemaState.edges.some(
-        (e) =>
-          (e.source === data.label && e.target === activeNodeId) ||
-          (e.source === activeNodeId && e.target === data.label),
-      ),
+  const highlightStatus = $derived(
+    schemaState.highlightGraph.getNodeHighlight(nodeId),
   );
 
   const opacityClass = $derived(
     !isMatch
       ? "opacity-30 pointer-events-none"
-      : isRelated
+      : highlightStatus === "normal"
         ? "opacity-100 scale-100"
-        : "opacity-20 scale-98",
+        : highlightStatus === "self"
+          ? "opacity-100 scale-100 z-30 ring-2 ring-secondary/60 shadow-2xl"
+          : highlightStatus === "upstream"
+            ? "opacity-100 scale-100 z-20 ring-2 ring-primary/50 shadow-xl"
+            : highlightStatus === "downstream"
+              ? "opacity-100 scale-100 z-20 ring-2 ring-secondary/50 shadow-xl"
+              : highlightStatus === "transitive"
+                ? "opacity-65 scale-[0.99] z-10 border-dashed"
+                : "opacity-20 scale-98 pointer-events-auto",
   );
 
   const methodsToDisplay = $derived(
@@ -110,11 +109,11 @@
   );
 
   function handleOpenEditor() {
-    schemaState.activeInspectorNodeId = data.label;
+    schemaState.activeInspectorNodeId = nodeId;
     const targetFile =
       data.strata?.path ||
       data.moduleInfo?.sourceFilePath ||
-      schemaState.getTargetFilePath(data.label) ||
+      schemaState.getTargetFilePath(nodeId) ||
       schemaState.filePath;
     const line = data.line;
     if (targetFile) {
@@ -126,16 +125,16 @@
   $effect(() => {
     const _m = methodsToDisplay.length;
     tick().then(() => {
-      updateNodeInternals(data.label);
+      updateNodeInternals(nodeId);
     });
   });
 </script>
 
 <NodeQuickActions
-  nodeId={data.label}
+  {nodeId}
   nodeType="do"
   {selected}
-  targetFile={data.strata?.path || data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(data.label) || schemaState.filePath}
+  targetFile={data.strata?.path || data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath}
   line={data.line}
 />
 
@@ -145,15 +144,17 @@
   data-node-name={data.label}
   role="button"
   tabindex="0"
-  onmouseenter={() => (schemaState.hoveredNodeId = data.label)}
+  onmouseenter={() => {
+    if (!dragging) schemaState.hoveredNodeId = nodeId;
+  }}
   onmouseleave={() => {
-    if (schemaState.hoveredNodeId === data.label)
+    if (schemaState.hoveredNodeId === nodeId)
       schemaState.hoveredNodeId = null;
   }}
   ondblclick={handleOpenEditor}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {
-      schemaState.activeInspectorNodeId = data.label;
+      schemaState.activeInspectorNodeId = nodeId;
     }
   }}
 >
@@ -175,6 +176,13 @@
           <Cpu class="w-4 h-4 text-secondary" />
         </div>
         <span class="font-bold text-xs tracking-wide uppercase">{data.label}</span>
+        {#if highlightStatus === "upstream"}
+          <span class="badge badge-xs badge-primary font-mono text-[8px] px-1 py-0 shadow-xs" title="Upstream dependency: referenced by active table">↑ upstream</span>
+        {:else if highlightStatus === "downstream"}
+          <span class="badge badge-xs badge-secondary font-mono text-[8px] px-1 py-0 shadow-xs" title="Downstream dependent: references active table">↓ dependent</span>
+        {:else if highlightStatus === "transitive"}
+          <span class="badge badge-xs badge-ghost border-base-300 font-mono text-[8px] px-1 py-0 opacity-80" title="2-hop transitive connection">2-hop</span>
+        {/if}
         {#if data.moduleInfo && !data.moduleInfo.isRootFile}
           <span
             class="badge badge-sm badge-ghost border-base-300/80 font-mono text-[9px] text-base-content/70 px-1.5 py-0.5 rounded flex items-center gap-1"

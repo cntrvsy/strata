@@ -80,6 +80,34 @@
     }
   });
 
+  function handleKeyDown(e: KeyboardEvent) {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement ||
+      (e.target as HTMLElement)?.isContentEditable ||
+      schemaState.showNewTableModal ||
+      schemaState.showHelpModal ||
+      schemaState.showProjectSettingsModal ||
+      schemaState.showConfirmModal
+    ) {
+      return;
+    }
+
+    if (e.key === "f" || e.key === "F") {
+      schemaState.toggleFocusLock();
+      if (schemaState.isFocusLocked) {
+        toast.info("Subgraph Focus Locked", {
+          description: `Press [Esc] or click canvas background to release.`,
+          duration: 2500,
+        });
+      }
+    } else if (e.key === "Escape") {
+      if (schemaState.isFocusLocked) {
+        schemaState.clearFocusLock();
+      }
+    }
+  }
+
   function isValidConnection(connection: any): boolean {
     if (!connection.source || !connection.target) return false;
     if (connection.source === connection.target) return false;
@@ -158,13 +186,18 @@
       const provider = (node?.data as any)?.provider;
       const isClerk = provider === "clerk";
       const mirrorName = isClerk ? "clerkUsers" : "workosUsers";
-      const snippet = isClerk
-        ? `// Recommended D1 Webhook User Mirror\nexport const clerkUsers = sqliteTable("clerkUsers", {\n  id: text("id").primaryKey(),\n  clerkUserId: text("clerk_user_id").notNull().unique(),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  imageUrl: text("image_url"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`
-        : `// Recommended D1 WorkOS Users Mirror\nexport const workosUsers = sqliteTable("workosUsers", {\n  id: text("id").primaryKey(),\n  workosUserId: text("workos_user_id").notNull().unique(),\n  workosOrgId: text("workos_org_id"),\n  email: text("email").notNull(),\n  firstName: text("first_name"),\n  lastName: text("last_name"),\n  createdAt: integer("created_at", { mode: "timestamp" }),\n  updatedAt: integer("updated_at", { mode: "timestamp" })\n});`;
-      navigator.clipboard.writeText(snippet);
-      toast.success(`Copied ${mirrorName} Schema Snippet`, {
-        description: "Paste into your schema file in VS Code or Cursor.",
-      });
+      const snippet = schemaState.getTableDefinitionSnippet(targetId);
+      if (snippet) {
+        PlatformService.writeClipboard(snippet).then((ok) => {
+          if (ok) {
+            toast.success(`Copied ${mirrorName} Schema Snippet`, {
+              description: "Paste into your schema file in VS Code or Cursor.",
+            });
+          } else {
+            toast.error("Failed to copy schema snippet to clipboard");
+          }
+        });
+      }
     } else if (action === "open_blueprint_guide") {
       schemaState.openHelpTopic("identity-auth");
     } else if (action === "open_docs") {
@@ -186,7 +219,9 @@
     } else if (action === "open_in_editor" && targetId) {
       const node = schemaState.nodes.find((n) => n.id === targetId);
       const targetFile =
-        schemaState.getTargetFilePath(targetId) || schemaState.filePath;
+        (node?.data as any)?.moduleInfo?.sourceFilePath ||
+        schemaState.getTargetFilePath(targetId) ||
+        schemaState.filePath;
       const line = (node?.data as any)?.line;
       if (targetFile) {
         PlatformService.openInEditor(targetFile, line);
@@ -194,14 +229,21 @@
     } else if (action === "copy_drizzle_code" && targetId) {
       const snippet = schemaState.getTableDefinitionSnippet(targetId);
       if (snippet) {
-        navigator.clipboard.writeText(snippet);
-        toast.success(`Copied "${targetId}" Drizzle Schema`, {
-          description: "Paste directly into your schema file.",
+        PlatformService.writeClipboard(snippet).then((ok) => {
+          if (ok) {
+            toast.success(`Copied "${targetId}" Drizzle Schema`, {
+              description: "Paste directly into your schema file.",
+            });
+          } else {
+            toast.error("Failed to copy schema to clipboard");
+          }
         });
       }
     }
   }
 </script>
+
+<svelte:window onkeydown={handleKeyDown} />
 
 <div
   class="w-full h-full bg-base-200/30 relative overflow-hidden {schemaState.isArrangingLayout
@@ -246,6 +288,9 @@
     }}
     onpaneclick={() => {
       schemaState.activeInspectorNodeId = null;
+      if (schemaState.isFocusLocked) {
+        schemaState.clearFocusLock();
+      }
     }}
     connectionMode={ConnectionMode.Loose}
     fitView
@@ -295,6 +340,40 @@
       class="bg-base-100! border-base-300! shadow-lg! rounded-xl!"
     />
   </SvelteFlow>
+
+  {#if schemaState.isFocusLocked}
+    <div
+      class="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-base-100/90 backdrop-blur-md border border-primary/40 px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-2.5 text-xs select-none animate-in fade-in zoom-in-95 duration-200"
+    >
+      <span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+      <span class="font-semibold text-base-content/90">
+        Focus Mode: <span class="font-bold text-primary">{schemaState.focusLockedNodeId}</span>
+        <span class="opacity-60 text-[11px]">({schemaState.highlightGraph.connectedCount} connected)</span>
+      </span>
+
+      <div class="h-3 w-px bg-base-300"></div>
+
+      <!-- 1-hop vs 2-hop toggle -->
+      <button
+        type="button"
+        class="badge badge-sm font-mono text-[9px] transition-all cursor-pointer {schemaState.highlightMode === 'transitive' ? 'badge-primary font-bold' : 'badge-ghost border-base-300'}"
+        onclick={() => {
+          schemaState.highlightMode = schemaState.highlightMode === 'direct' ? 'transitive' : 'direct';
+        }}
+        title="Toggle 2-hop transitive graph expansion"
+      >
+        {schemaState.highlightMode === 'transitive' ? '2-Hop Subgraph' : 'Direct Only'}
+      </button>
+
+      <button
+        type="button"
+        class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
+        onclick={() => schemaState.clearFocusLock()}
+      >
+        Esc to exit
+      </button>
+    </div>
+  {/if}
 
   {#if contextMenu.visible}
     <ContextMenu

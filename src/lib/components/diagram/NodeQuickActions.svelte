@@ -14,6 +14,8 @@
     SlidersHorizontal,
     Trash2,
     Check,
+    Focus,
+    ExternalLink,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
@@ -49,15 +51,35 @@
     }
   }
 
-  function handleCopySnippet() {
-    const snippet = schemaState.getTableDefinitionSnippet(nodeId);
-    if (snippet) {
-      navigator.clipboard.writeText(snippet);
+  function handleOpenDocs() {
+    const url = nodeId.includes("workos")
+      ? "https://workos.com/docs/events"
+      : "https://clerk.com/docs/integrations/webhooks/sync-data";
+    PlatformService.openExternal(url);
+  }
+
+  async function handleCopySnippet() {
+    try {
+      const snippet = schemaState.getTableDefinitionSnippet(nodeId);
+      if (!snippet) {
+        toast.error(`Snippet unavailable for "${nodeId}"`);
+        return;
+      }
+
+      const ok = await PlatformService.writeClipboard(snippet);
+      if (!ok) {
+        toast.error("Failed to copy snippet to clipboard");
+        return;
+      }
+
       copied = true;
-      toast.success(`Copied ${nodeId} snippet`, {
+      toast.success(`Copied "${nodeId}" snippet`, {
         description: "Ready to paste into your codebase.",
       });
       setTimeout(() => (copied = false), 1500);
+    } catch (err) {
+      console.error("Failed to copy snippet:", err);
+      toast.error("Failed to copy snippet to clipboard");
     }
   }
 
@@ -93,16 +115,29 @@
     role="toolbar"
     aria-label="Node quick actions"
   >
-    <!-- Jump to Code in VS Code / Cursor -->
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-      data-tip="Open in Editor"
-      onclick={handleOpenEditor}
-      title="Open in Editor"
-    >
-      <FileCode class="w-3.5 h-3.5" />
-    </button>
+    {#if nodeType === "identity"}
+      <!-- Provider External Documentation -->
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-info hover:bg-info/10 transition-colors tooltip tooltip-bottom"
+        data-tip="Provider Docs"
+        onclick={handleOpenDocs}
+        title="Provider Docs"
+      >
+        <ExternalLink class="w-3.5 h-3.5" />
+      </button>
+    {:else}
+      <!-- Jump to Code in VS Code / Cursor -->
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
+        data-tip="Open in Editor"
+        onclick={handleOpenEditor}
+        title="Open in Editor"
+      >
+        <FileCode class="w-3.5 h-3.5" />
+      </button>
+    {/if}
 
     <!-- Copy Code / Snippet -->
     <button
@@ -134,6 +169,17 @@
 
     <div class="w-px h-3 bg-base-300 mx-0.5"></div>
 
+    <!-- Isolate / Focus Subgraph -->
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs btn-square rounded-lg transition-colors tooltip tooltip-bottom {schemaState.isFocusLocked && schemaState.focusLockedNodeId === nodeId ? 'text-primary bg-primary/15' : 'text-base-content/75 hover:text-primary hover:bg-primary/10'}"
+      data-tip={schemaState.isFocusLocked && schemaState.focusLockedNodeId === nodeId ? "Unlock Subgraph (F)" : "Isolate Subgraph (F)"}
+      onclick={() => schemaState.toggleFocusLock(nodeId)}
+      title="Isolate Subgraph (F)"
+    >
+      <Focus class="w-3.5 h-3.5" />
+    </button>
+
     <!-- Focus Inspector Sidebar -->
     <button
       type="button"
@@ -145,15 +191,17 @@
       <SlidersHorizontal class="w-3.5 h-3.5" />
     </button>
 
-    <!-- Delete Entity -->
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
-      data-tip="Delete"
-      onclick={handleDelete}
-      title="Delete"
-    >
-      <Trash2 class="w-3.5 h-3.5" />
-    </button>
+    <!-- Delete Entity (physical tables & storage only) -->
+    {#if nodeType !== "identity"}
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
+        data-tip="Delete"
+        onclick={handleDelete}
+        title="Delete"
+      >
+        <Trash2 class="w-3.5 h-3.5" />
+      </button>
+    {/if}
   </div>
 </NodeToolbar>
