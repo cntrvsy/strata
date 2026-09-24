@@ -31,7 +31,9 @@
 
     return {
       d1: nodes.filter(
-        (n) => n.type !== "identity" && ((n.data as any).target === "d1" || !(n.data as any).target),
+        (n) =>
+          n.type !== "identity" &&
+          ((n.data as any).target === "d1" || !(n.data as any).target),
       ).length,
       do: nodes.filter((n) => (n.data as any).target === "do").length,
       kv: nodes.filter((n) => (n.data as any).target === "kv").length,
@@ -519,7 +521,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.1.8</span
+      title="Strata App Version">v3.2.0</span
     >
   </div>
 </div>
