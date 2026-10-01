@@ -1,11 +1,16 @@
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { readFileSync } from "node:fs";
 
+const pkg = JSON.parse(readFileSync("./package.json", "utf-8"));
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     tailwindcss(),
     sveltekit(),
@@ -24,9 +29,6 @@ export default defineConfig({
           }
           if (id.includes('node_modules/elkjs/')) {
             return 'elkjs';
-          }
-          if (id.includes('node_modules/codemirror/') || id.includes('node_modules/@codemirror/')) {
-            return 'codemirror';
           }
         }
       }

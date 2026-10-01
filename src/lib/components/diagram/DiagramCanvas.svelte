@@ -85,7 +85,6 @@
       e.target instanceof HTMLInputElement ||
       e.target instanceof HTMLTextAreaElement ||
       (e.target as HTMLElement)?.isContentEditable ||
-      schemaState.showNewTableModal ||
       schemaState.showHelpModal ||
       schemaState.showProjectSettingsModal ||
       schemaState.showConfirmModal
@@ -171,9 +170,7 @@
   }
 
   function handleContextMenuAction(action: string, targetId?: string) {
-    if (action === "new_table") {
-      schemaState.showNewTableModal = true;
-    } else if (action === "fit_view") {
+    if (action === "fit_view") {
       fitView();
     } else if (action === "inspect_node" && targetId) {
       schemaState.activeInspectorNodeId = targetId;

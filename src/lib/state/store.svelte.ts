@@ -973,15 +973,6 @@ export class SchemaState {
 	get connectionModelerData() { return uiState.connectionModelerData; }
 	set connectionModelerData(val: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null } | null) { uiState.connectionModelerData = val; }
 
-	/** Whether the 'New Table' modal is currently visible */
-	get showNewTableModal() { return uiState.showNewTableModal; }
-	set showNewTableModal(val: boolean) { uiState.showNewTableModal = val; }
-
-	/** Whether the 'Scaffold Auth & Identity' modal is currently visible */
-	get showScaffoldAuthModal() { return uiState.showScaffoldAuthModal; }
-	set showScaffoldAuthModal(val: boolean) { uiState.showScaffoldAuthModal = val; }
-	get showScaffoldModal() { return uiState.showScaffoldAuthModal; }
-	set showScaffoldModal(val: boolean) { uiState.showScaffoldAuthModal = val; }
 
 	/** Custom relative path to wrangler.toml configured in the schema */
 	wranglerPath = $state<string | undefined>(undefined);

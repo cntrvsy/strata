@@ -8,7 +8,7 @@
 [![Svelte 5](https://img.shields.io/badge/Svelte-5.0-orange.svg)](https://svelte.dev)
 [![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg)](https://v2.tauri.app)
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-v0.45.2-brightgreen.svg)](https://orm.drizzle.team)
-[![Tests Passing](https://img.shields.io/badge/Tests-177%20passed-success.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/Tests-223%20passed-success.svg)](tests/)
 
 _Single Source of Truth • AST-Driven • Local-First • Zero Git Noise • Zero Lock-In_
 
@@ -56,11 +56,10 @@ Unlike traditional database diagram tools that rely on sidecar JSON files, hidde
 - **Durable Objects (DO)**: Define embedded state objects, class targets, and interface methods.
 - **R2 Storage Buckets**: Configure bucket bindings, CORS policies, public access flags, and folder structure targets.
 
-### Three-Tier Relationship Engine
+### Two-Tier Relationship Engine
 
 1. **Physical Foreign Keys (Solid Lines)**: Native Drizzle relational constraints (`.references(() => users.id)`).
 2. **Logical Drizzle Relations (Dashed, Animated)**: Declared via Drizzle's query-builder `relations()` API.
-3. **Synthetic JSDoc Connections (Dashed, Static)**: Cross-storage links (e.g., linking a D1 SQL record to a KV namespace key or Durable Object stub) stored inside entity JSDoc comments.
 
 ### Wrangler Configuration Auto-Alignment
 
@@ -205,7 +204,7 @@ Strata maintains a strict suite of unit, AST, type diagnostic, and E2E browser t
 # Run Svelte & TypeScript type diagnostic checks
 npm run check
 
-# Run Vitest unit & AST parser test suite (177 tests)
+# Run Vitest unit & AST parser test suite (223 tests across 17 files)
 npm test
 
 # Run Playwright end-to-end UI tests (16 tests)

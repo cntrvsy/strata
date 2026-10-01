@@ -15,9 +15,12 @@
     Layers,
     ArrowRight,
     Trash2,
+    Compass,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { SAMPLE_TEMPLATES } from "#lib/mock";
+  import { APP_VERSION } from "#lib/version";
+  import { startStrataTour } from "#lib/services/tour";
 
   let activeTab = $state<"quickstart" | "templates" | "recents">("quickstart");
 </script>
@@ -160,16 +163,26 @@
                   <div class="flex flex-col text-left">
                     <span class="text-xs font-bold text-base-content">New to Strata?</span>
                     <span class="text-[11px] text-base-content/60">
-                      Try an interactive Cloudflare D1 + KV + DO playground demo.
+                      Take a quick tour or explore interactive demos.
                     </span>
                   </div>
                 </div>
-                <button
-                  class="btn btn-secondary btn-xs rounded-field font-semibold px-3"
-                  onclick={() => (activeTab = "templates")}
-                >
-                  Explore Demos
-                </button>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    class="btn btn-ghost btn-xs text-primary font-semibold px-2 hover:bg-primary/10 rounded-field"
+                    onclick={() => startStrataTour()}
+                    title="Launch interactive walkthrough tour"
+                  >
+                    <Compass class="w-3.5 h-3.5 mr-1" />
+                    Tour
+                  </button>
+                  <button
+                    class="btn btn-secondary btn-xs rounded-field font-semibold px-3"
+                    onclick={() => (activeTab = "templates")}
+                  >
+                    Explore Demos
+                  </button>
+                </div>
               </div>
             {/if}
           </div>
@@ -268,7 +281,7 @@
         class="bg-base-200/40 px-6 py-3 border-t border-base-300/60 flex items-center justify-between shrink-0 text-[11px] text-base-content/50"
       >
         <span>Git & JSDoc metadata standard</span>
-        <span class="font-mono text-[10px]">Strata v3.1</span>
+        <span class="font-mono text-[10px]">Strata v{APP_VERSION}</span>
       </div>
     </div>
   </div>

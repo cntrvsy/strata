@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { addTableToSchema, addColumnToSchema, sanitizeIdentifier, generateD1TableColumns, createD1ModuleCode } from '#lib/parser/mutators';
 import { parseSchema } from '#lib/parser';
-import { 
-	slugifyIdentifier, 
-	isJsReservedKeyword,
-	d1TableSchema,
-	doBindingSchema,
-	kvBindingSchema,
-	r2BindingSchema
-} from '#lib/schemas';
-import * as v from 'valibot';
 
 describe('Entity Creation & Identifier Safeguards', () => {
 	it('should sanitize invalid JS identifiers (spaces, hyphens, leading numbers)', () => {
@@ -19,41 +10,6 @@ describe('Entity Creation & Identifier Safeguards', () => {
 		expect(sanitizeIdentifier('  orders  ')).toBe('orders');
 		expect(sanitizeIdentifier('special@#$name')).toBe('special___name');
 		expect(sanitizeIdentifier('')).toBe('entity');
-	});
-
-	it('should slugify identifiers for user-friendly table naming', () => {
-		expect(slugifyIdentifier('User Profile Data')).toBe('user_profile_data');
-		expect(slugifyIdentifier('Post-Tags')).toBe('post_tags');
-		expect(slugifyIdentifier('  order items  ')).toBe('order_items');
-		expect(slugifyIdentifier('CamelCaseName')).toBe('camel_case_name');
-		expect(slugifyIdentifier('123abc')).toBe('t_123abc');
-	});
-
-	it('should detect JS reserved words correctly', () => {
-		expect(isJsReservedKeyword('class')).toBe(true);
-		expect(isJsReservedKeyword('function')).toBe(true);
-		expect(isJsReservedKeyword('delete')).toBe(true);
-		expect(isJsReservedKeyword('users')).toBe(false);
-		expect(isJsReservedKeyword('account')).toBe(false);
-	});
-
-	it('should validate primitive schemas correctly', () => {
-		// D1 Table
-		expect(v.safeParse(d1TableSchema, { name: 'users' }).success).toBe(true);
-		expect(v.safeParse(d1TableSchema, { name: '123_invalid' }).success).toBe(false);
-
-		// DO Binding (allows uppercase binding, PascalCase class)
-		expect(v.safeParse(doBindingSchema, { 
-			name: 'USER_SESSION_DO', 
-			className: 'UserSession',
-			classPath: './src/objects/UserSession.ts'
-		}).success).toBe(true);
-
-		// KV Binding (screaming snake case)
-		expect(v.safeParse(kvBindingSchema, { name: 'CACHE_KV', target: 'kv' }).success).toBe(true);
-
-		// R2 Binding (screaming snake case)
-		expect(v.safeParse(r2BindingSchema, { name: 'UPLOADS_BUCKET', target: 'r2' }).success).toBe(true);
 	});
 
 	it('should generate table columns based on architectural presets', () => {

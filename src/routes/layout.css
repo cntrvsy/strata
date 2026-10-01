@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@xyflow/svelte/dist/style.css";
+@import "../lib/styles/driver-theme.css";
 
 @import "@fontsource-variable/inter";
 @import "@fontsource/jetbrains-mono";
