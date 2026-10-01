@@ -23,6 +23,7 @@
     Menu,
     CircleArrowUp,
     BadgeQuestionMark,
+    Compass,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { updateState } from "#lib/state/updateState.svelte";
@@ -32,6 +33,7 @@
   import { getNodesBounds, getViewportForBounds } from "@xyflow/svelte";
   import UpdateModal from "#lib/components/modals/UpdateModal.svelte";
   import { arrangeLayout } from "#lib/services/layout";
+  import { startStrataTour } from "#lib/services/tour";
 
   /** Dismiss active element focus to cleanly close DaisyUI dropdowns */
   function closeDropdown() {
@@ -382,19 +384,7 @@
       data-tauri-drag-region="false"
     >
       {#if schemaState.filePath || schemaState.isSandboxMode}
-        <!-- Primary Action: New Entity -->
-        <button
-          class="btn btn-primary btn-xs h-7 min-h-0 font-semibold px-2.5 shadow-sm text-[11px] gap-1 rounded-field"
-          onclick={() => (schemaState.showNewTableModal = true)}
-          data-testid="new-table-button"
-        >
-          <span class="text-xs font-bold leading-none">+</span>
-          <span>New Entity</span>
-        </button>
-
         {#if schemaState.nodes.length > 0}
-          <div class="h-4 w-px bg-base-300/80 mx-0.5"></div>
-
           <!-- Quick Canvas Actions -->
           <div
             class="tooltip tooltip-bottom text-[10px] font-sans"
@@ -439,10 +429,10 @@
               <Camera class="w-3.5 h-3.5" />
             </button>
           </div>
+
+          <div class="h-4 w-px bg-base-300/80 mx-0.5"></div>
         {/if}
       {/if}
-
-      <div class="h-4 w-px bg-base-300/80 mx-0.5"></div>
 
       <!-- Settings & Help Dropdown -->
       <div class="dropdown dropdown-end">
@@ -451,6 +441,7 @@
           role="button"
           class="btn btn-ghost btn-xs btn-square w-7 h-7 rounded-field hover:bg-base-200/80 flex items-center justify-center relative"
           title="Settings & Help"
+          data-testid="settings-menu-button"
         >
           <Menu class="w-3.5 h-3.5 text-base-content/75" />
           {#if updateState.hasUnseenUpdate}
@@ -507,6 +498,19 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
                 ></span>
               {/if}
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                startStrataTour();
+              }}
+              title="Start interactive walkthrough tour"
+            >
+              <Compass class="w-3.5 h-3.5 text-primary" />
+              <span>Tour</span>
             </button>
           </li>
           <li>

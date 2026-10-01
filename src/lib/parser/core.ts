@@ -22,7 +22,7 @@ export function wrapCode(code: string) {
 /**
  * Helper to retrieve external file content with normalized path matching (handles optional ./ prefixes).
  */
-export function getMapFileContent(map: Map<string, string> | undefined, rawPath: string | undefined): string | undefined {
+function getMapFileContent(map: Map<string, string> | undefined, rawPath: string | undefined): string | undefined {
 	if (!map || !rawPath) return undefined;
 	const withExt = rawPath.endsWith('.ts') ? rawPath : rawPath + '.ts';
 	const withoutExt = rawPath.endsWith('.ts') ? rawPath.slice(0, -3) : rawPath;
@@ -897,7 +897,7 @@ export function parseSchema(
 /**
  * Extracts column definitions from a Drizzle sqliteTable declaration.
  */
-export function extractColumns(decl: VariableDeclaration) {
+function extractColumns(decl: VariableDeclaration) {
 	const columns: any[] = [];
 	const initializer = decl.getInitializer();
 	if (!initializer) return columns;
@@ -949,7 +949,7 @@ export function extractColumns(decl: VariableDeclaration) {
 /**
  * Extracts fields from a plain object (used for KV/DO mocking).
  */
-export function extractObjectFields(decl: VariableDeclaration) {
+function extractObjectFields(decl: VariableDeclaration) {
 	const fields: any[] = [];
 	const initializer = decl.getInitializer();
 	let objectLiteral: any = initializer;
@@ -979,7 +979,7 @@ export function extractObjectFields(decl: VariableDeclaration) {
 /**
  * Adds a physical Foreign Key edge backed by .references().
  */
-export function addPhysicalFkEdge(
+function addPhysicalFkEdge(
 	edges: Edge[],
 	source: string,
 	target: string,
@@ -1205,7 +1205,7 @@ function unifyOrAddDrizzleRelation(
 /**
  * Extracts and unifies both physical (FK) and logical (relations()) relationships across all tables and files.
  */
-export function extractAllSchemaRelations(
+function extractAllSchemaRelations(
 	tableDeclarations: Map<string, VariableDeclaration>,
 	edges: Edge[],
 	sfOrFiles: any
@@ -1341,19 +1341,10 @@ export function extractAllSchemaRelations(
 }
 
 /**
- * Backwards compatibility wrapper for extracting relations on a single table.
- */
-export function extractRelations(tableName: string, decl: VariableDeclaration, edges: Edge[], sfOrFiles: any) {
-	const tableMap = new Map<string, VariableDeclaration>();
-	tableMap.set(tableName, decl);
-	extractAllSchemaRelations(tableMap, edges, sfOrFiles);
-}
-
-/**
  * Adds an edge to the diagram if it doesn't already exist.
  * Standardizes styling for physical vs virtual vs synthetic edges.
  */
-export function addEdgeIfUnique(
+function addEdgeIfUnique(
 	edges: Edge[], 
 	source: string, 
 	target: string, 

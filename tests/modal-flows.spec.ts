@@ -5,13 +5,8 @@ test.describe('Modal Flows', () => {
     await page.goto('/');
   });
 
-  test('can open and close the New Table modal', async ({ page }) => {
-    // 1. New Table button is only visible when a file is open.
-    // Since we start EMPTY, it shouldn't be there.
-    const newTableButton = page.getByTestId('new-table-button');
-    await expect(newTableButton).not.toBeVisible();
-
-    // 2. We mock a file path and transition state to IDLE to see the button
+  test('can open and close the Project Settings modal', async ({ page }) => {
+    // 1. Transition state to IDLE with a mock file path so Project Settings is enabled
     await page.evaluate(async () => {
       while (!(window as any).schemaState) {
         await new Promise(r => setTimeout(r, 50));
@@ -22,21 +17,25 @@ test.describe('Modal Flows', () => {
       state.machine.send("SUCCESS");
     });
 
-    // 3. The New Table button should now be visible
-    await expect(newTableButton).toBeVisible();
+    // 2. Open Settings & Help dropdown
+    const helpDropdown = page.getByRole('button', { name: 'Settings & Help' });
+    await expect(helpDropdown).toBeVisible();
+    await helpDropdown.click();
 
-    // 4. Click it to open the New Table Modal
-    await newTableButton.click();
+    // 3. Click Project Settings button
+    const settingsButton = page.getByRole('button', { name: 'Project Settings' });
+    await expect(settingsButton).toBeVisible();
+    await settingsButton.click();
 
-    // 5. The modal should be visible
-    const newTableModal = page.getByTestId('new-table-modal');
-    await expect(newTableModal).toBeVisible();
+    // 4. Modal should be visible
+    const settingsModal = page.getByTestId('project-settings-modal');
+    await expect(settingsModal).toBeVisible();
 
-    // 6. Close the modal by clicking the X button in its header
-    await newTableModal.locator('button.btn-circle').click();
+    // 5. Close modal by clicking the X button in its header
+    await settingsModal.locator('button.btn-circle').click();
 
-    // 7. Modal should be hidden
-    await expect(newTableModal).not.toBeVisible();
+    // 6. Modal should be hidden
+    await expect(settingsModal).not.toBeVisible();
   });
 
   test('can open and close the Help Modal', async ({ page }) => {

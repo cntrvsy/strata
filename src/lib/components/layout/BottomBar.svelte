@@ -24,6 +24,7 @@
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import { APP_VERSION } from "#lib/version";
 
   const stats = $derived.by(() => {
     const nodes = schemaState.nodes;
@@ -521,7 +522,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v3.2.0</span
+      title="Strata App Version">v{APP_VERSION}</span
     >
   </div>
 </div>

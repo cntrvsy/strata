@@ -1,0 +1,147 @@
+/**
+ * driver-theme.css
+ *
+ * Theme-aware DaisyUI v5 / Tailwind v4 styles for Driver.js walkthrough popovers.
+ * Inherits semantic tokens (--color-base-100, --color-base-content, --color-primary)
+ * to ensure high contrast in all themes.
+ */
+
+@import "driver.js/dist/driver.css";
+
+.driver-popover {
+  background-color: var(--color-base-100, #ffffff) !important;
+  color: var(--color-base-content, #181825) !important;
+  border: 1px solid var(--color-base-300, rgba(0, 0, 0, 0.15)) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.35), 0 0 20px rgba(99, 102, 241, 0.15) !important;
+  padding: 1.25rem !important;
+  max-width: 380px !important;
+  font-family: inherit !important;
+  backdrop-filter: blur(12px) !important;
+  z-index: 100000 !important;
+}
+
+.driver-popover * {
+  pointer-events: auto !important;
+}
+
+.driver-popover-title {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: var(--color-base-content, #111827) !important;
+  margin-bottom: 0.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  letter-spacing: -0.01em !important;
+}
+
+.driver-popover-description {
+  font-size: 0.8125rem !important;
+  line-height: 1.55 !important;
+  color: var(--color-base-content, #1f2937) !important;
+  opacity: 0.85 !important;
+  margin-bottom: 1rem !important;
+}
+
+.driver-popover-description code {
+  background-color: var(--color-base-200, #f3f4f6) !important;
+  color: var(--color-primary, #4f46e5) !important;
+  border: 1px solid var(--color-base-300, #e5e7eb) !important;
+  padding: 0.15rem 0.35rem !important;
+  border-radius: 0.35rem !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+}
+
+.driver-popover-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  border-top: 1px solid var(--color-base-300, #e5e7eb) !important;
+  padding-top: 0.85rem !important;
+  margin-top: 0.5rem !important;
+}
+
+.driver-popover-progress-text {
+  font-size: 0.72rem !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  color: var(--color-base-content, #6b7280) !important;
+  opacity: 0.65 !important;
+  font-weight: 600 !important;
+}
+
+.driver-popover-navigation-btns {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+}
+
+.driver-popover-prev-btn,
+.driver-popover-next-btn,
+.driver-popover-close-btn {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  border-radius: 0.5rem !important;
+  padding: 0.35rem 0.75rem !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  outline: none !important;
+  text-shadow: none !important;
+}
+
+.driver-popover-prev-btn {
+  background: var(--color-base-200, #f3f4f6) !important;
+  color: var(--color-base-content, #374151) !important;
+  border: 1px solid var(--color-base-300, #d1d5db) !important;
+}
+
+.driver-popover-prev-btn:hover {
+  background: var(--color-base-300, #e5e7eb) !important;
+}
+
+.driver-popover-next-btn {
+  background: var(--color-primary, #6366f1) !important;
+  color: var(--color-primary-content, #ffffff) !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+}
+
+.driver-popover-next-btn:hover {
+  filter: brightness(1.08) !important;
+  transform: translateY(-1px) !important;
+}
+
+.driver-popover-close-btn {
+  background: transparent !important;
+  color: var(--color-base-content, #6b7280) !important;
+  opacity: 0.5 !important;
+  border: none !important;
+}
+
+.driver-popover-close-btn:hover {
+  opacity: 1 !important;
+  color: var(--color-base-content, #111827) !important;
+}
+
+/* Arrow styling matching base-100 background */
+.driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: var(--color-base-100, #ffffff) !important;
+}
+.driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: var(--color-base-100, #ffffff) !important;
+}
+.driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: var(--color-base-100, #ffffff) !important;
+}
+.driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: var(--color-base-100, #ffffff) !important;
+}
+
+/* Ensure driver highlight elements don't capture native Tauri window dragging */
+.driver-overlay,
+.driver-popover,
+.driver-stage {
+  -webkit-app-region: no-drag !important;
+}

@@ -20,15 +20,3 @@ export function createIsolatedProject(filename: string, code: string): { project
 	const sourceFile = project.createSourceFile(filename, code, { overwrite: true });
 	return { project, sourceFile };
 }
-
-/**
- * Executes an operation on a SourceFile within an isolated project context.
- */
-export function withSourceFile<T>(
-	filename: string, 
-	code: string, 
-	fn: (sourceFile: SourceFile, project: Project) => T
-): T {
-	const { project, sourceFile } = createIsolatedProject(filename, code);
-	return fn(sourceFile, project);
-}

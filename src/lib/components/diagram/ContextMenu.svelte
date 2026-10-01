@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Plus, Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal } from "lucide-svelte";
+  import { Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal } from "lucide-svelte";
 
   const { x, y, type, targetId, nodeType, nodeData, onClose, onAction } = $props<{
     x: number;
@@ -147,16 +147,6 @@
       </button>
     {/if}
   {:else if type === "canvas"}
-    <button
-      class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
-      onclick={() => {
-        onAction("new_table");
-        onClose();
-      }}
-    >
-      <Plus class="w-3.5 h-3.5 opacity-60 text-primary" />
-      Create New Entity
-    </button>
     <button
       class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
       onclick={() => {

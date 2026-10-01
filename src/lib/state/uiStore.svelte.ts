@@ -32,25 +32,6 @@ export class UIState {
 	activeFilter = $state<'d1' | 'do' | 'kv' | 'r2' | null>(null);
 
 	/** Modal visibility flags */
-	showNewTableModal = $state(false);
-	/** Legacy alias: forwarding to Help Center Auth Blueprints */
-	get showScaffoldAuthModal() {
-		return this.showHelpModal && this.activeHelpTab === 'identity-auth';
-	}
-	set showScaffoldAuthModal(val: boolean) {
-		if (val) {
-			this.activeHelpTab = 'identity-auth';
-			this.showHelpModal = true;
-		} else if (this.activeHelpTab === 'identity-auth') {
-			this.showHelpModal = false;
-		}
-	}
-	get showScaffoldModal() {
-		return this.showScaffoldAuthModal;
-	}
-	set showScaffoldModal(val: boolean) {
-		this.showScaffoldAuthModal = val;
-	}
 	showProjectSettingsModal = $state(false);
 	showHelpModal = $state(false);
 	activeHelpTab = $state<string>("all");
