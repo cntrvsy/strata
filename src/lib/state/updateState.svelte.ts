@@ -2,11 +2,20 @@
  * updateState.svelte.ts
  *
  * Summary: Reactive global state store using Svelte 5 Runes to manage application software update checks,
- * download progress, modal visibility, and app relaunch.
+ * download progress, stages (downloading, installing, ready), modal visibility, and app relaunch.
  */
 import { PlatformService } from "#lib/services/platform";
 
-export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'store-managed' | 'available' | 'downloading' | 'ready' | 'error';
+export type UpdateStatus =
+	| 'idle'
+	| 'checking'
+	| 'up-to-date'
+	| 'store-managed'
+	| 'available'
+	| 'downloading'
+	| 'installing'
+	| 'ready'
+	| 'error';
 
 export interface UpdateInfo {
 	version: string;
@@ -21,15 +30,50 @@ export interface DownloadProgress {
 	percent: number;
 }
 
+export function formatBytes(bytes: number): string {
+	if (bytes === 0) return "0 B";
+	const k = 1024;
+	const sizes = ["B", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
 export class UpdateState {
 	status = $state<UpdateStatus>('idle');
 	showModal = $state(false);
 	updateInfo = $state<UpdateInfo | null>(null);
-	progress = $state<DownloadProgress>({ downloaded: 0, total: 0, percent: 0 });
 	errorMessage = $state<string | null>(null);
 	hasUnseenUpdate = $state(false);
 	autoCheckOnStartup = $state(true);
 	isStore = $state(false);
+
+	// Raw progress state
+	downloadedBytes = $state(0);
+	contentLength = $state<number | null>(null);
+
+	// Svelte 5 Runes ($derived)
+	percent = $derived.by(() => {
+		if (!this.contentLength || this.contentLength <= 0) return null;
+		return Math.min(100, Math.round((this.downloadedBytes / this.contentLength) * 100));
+	});
+
+	isIndeterminate = $derived(this.status === 'downloading' && this.percent === null);
+	formattedDownloaded = $derived(formatBytes(this.downloadedBytes));
+	formattedTotal = $derived(this.contentLength ? formatBytes(this.contentLength) : null);
+	isBusy = $derived(this.status === 'checking' || this.status === 'downloading' || this.status === 'installing');
+
+	// Backward-compatible progress getter & setter
+	get progress(): DownloadProgress {
+		return {
+			downloaded: this.downloadedBytes,
+			total: this.contentLength ?? 0,
+			percent: this.percent ?? (this.status === 'ready' ? 100 : 0),
+		};
+	}
+	set progress(val: DownloadProgress) {
+		this.downloadedBytes = val.downloaded;
+		this.contentLength = val.total;
+	}
 
 	constructor() {
 		// Detect if running inside Microsoft Store package
@@ -70,7 +114,8 @@ export class UpdateState {
 	async check() {
 		this.status = 'checking';
 		this.errorMessage = null;
-		this.progress = { downloaded: 0, total: 0, percent: 0 };
+		this.downloadedBytes = 0;
+		this.contentLength = null;
 
 		try {
 			const result = await PlatformService.checkForUpdate();
@@ -123,19 +168,24 @@ export class UpdateState {
 		if (this.isStore || !this.updateInfo) return;
 		this.status = 'downloading';
 		this.errorMessage = null;
-		this.progress = { downloaded: 0, total: 0, percent: 0 };
+		this.downloadedBytes = 0;
+		this.contentLength = null;
 
 		try {
+			let knownTotal: number | null = null;
 			await PlatformService.downloadAndInstallUpdate(
 				this.updateInfo.rawUpdate,
 				(downloaded, total) => {
-					const totalBytes = total || 1;
-					const pct = Math.min(100, Math.round((downloaded / totalBytes) * 100));
-					this.progress = {
-						downloaded,
-						total: totalBytes,
-						percent: pct,
-					};
+					this.downloadedBytes = downloaded;
+					if (total !== undefined && total > 0) {
+						knownTotal = total;
+						this.contentLength = total;
+					} else if (knownTotal !== null) {
+						this.contentLength = knownTotal;
+					}
+				},
+				(stage) => {
+					this.status = stage;
 				}
 			);
 			this.status = 'ready';
@@ -157,7 +207,8 @@ export class UpdateState {
 		this.status = 'idle';
 		this.updateInfo = null;
 		this.errorMessage = null;
-		this.progress = { downloaded: 0, total: 0, percent: 0 };
+		this.downloadedBytes = 0;
+		this.contentLength = null;
 	}
 }
 

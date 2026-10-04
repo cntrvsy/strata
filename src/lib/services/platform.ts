@@ -375,22 +375,58 @@ export class PlatformService {
 		}
 	}
 
-	static async downloadAndInstallUpdate(
+	static async downloadUpdate(
 		rawUpdate: any,
 		onProgress?: (downloaded: number, contentLength?: number) => void
 	): Promise<void> {
 		if (!this.isTauri() || !rawUpdate || (await this.isStore())) return;
+		let totalLength: number | undefined;
 		let downloadedBytes = 0;
-		await rawUpdate.downloadAndInstall((event: any) => {
-			if (event.event === "Started") {
-				onProgress?.(0, event.data.contentLength);
-			} else if (event.event === "Progress") {
-				downloadedBytes += event.data.chunkLength;
-				onProgress?.(downloadedBytes);
-			} else if (event.event === "Finished") {
-				onProgress?.(downloadedBytes);
-			}
-		});
+
+		if (typeof rawUpdate.download === "function") {
+			await rawUpdate.download((event: any) => {
+				if (event.event === "Started") {
+					totalLength = event.data?.contentLength;
+					onProgress?.(0, totalLength);
+				} else if (event.event === "Progress") {
+					downloadedBytes += event.data?.chunkLength ?? 0;
+					onProgress?.(downloadedBytes, totalLength);
+				} else if (event.event === "Finished") {
+					onProgress?.(downloadedBytes, totalLength);
+				}
+			});
+		} else if (typeof rawUpdate.downloadAndInstall === "function") {
+			await rawUpdate.downloadAndInstall((event: any) => {
+				if (event.event === "Started") {
+					totalLength = event.data?.contentLength;
+					onProgress?.(0, totalLength);
+				} else if (event.event === "Progress") {
+					downloadedBytes += event.data?.chunkLength ?? 0;
+					onProgress?.(downloadedBytes, totalLength);
+				} else if (event.event === "Finished") {
+					onProgress?.(downloadedBytes, totalLength);
+				}
+			});
+		}
+	}
+
+	static async installUpdate(rawUpdate: any): Promise<void> {
+		if (!this.isTauri() || !rawUpdate || (await this.isStore())) return;
+		if (typeof rawUpdate.install === "function") {
+			await rawUpdate.install();
+		}
+	}
+
+	static async downloadAndInstallUpdate(
+		rawUpdate: any,
+		onProgress?: (downloaded: number, contentLength?: number) => void,
+		onStageChange?: (stage: "downloading" | "installing") => void
+	): Promise<void> {
+		if (!this.isTauri() || !rawUpdate || (await this.isStore())) return;
+		onStageChange?.("downloading");
+		await this.downloadUpdate(rawUpdate, onProgress);
+		onStageChange?.("installing");
+		await this.installUpdate(rawUpdate);
 	}
 
 	static async relaunchApp(): Promise<void> {

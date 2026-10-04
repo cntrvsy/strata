@@ -99,6 +99,7 @@ describe('PlatformService Adapter Unit Tests', () => {
 
   it('should calculate download progress correctly across Started, Progress, Finished events', async () => {
     const onProgress = vi.fn();
+    const onStageChange = vi.fn();
     const mockRawUpdate = {
       downloadAndInstall: vi.fn(async (cb: (event: any) => void) => {
         cb({ event: 'Started', data: { contentLength: 1000 } });
@@ -108,10 +109,32 @@ describe('PlatformService Adapter Unit Tests', () => {
       })
     };
 
-    await PlatformService.downloadAndInstallUpdate(mockRawUpdate, onProgress);
+    await PlatformService.downloadAndInstallUpdate(mockRawUpdate, onProgress, onStageChange);
     expect(onProgress).toHaveBeenCalledWith(0, 1000);
-    expect(onProgress).toHaveBeenCalledWith(400);
-    expect(onProgress).toHaveBeenCalledWith(1000);
+    expect(onProgress).toHaveBeenCalledWith(400, 1000);
+    expect(onProgress).toHaveBeenCalledWith(1000, 1000);
+    expect(onStageChange).toHaveBeenCalledWith('downloading');
+    expect(onStageChange).toHaveBeenCalledWith('installing');
+  });
+
+  it('should separate downloadUpdate and installUpdate when supported by Update resource', async () => {
+    const onProgress = vi.fn();
+    const mockRawUpdate = {
+      download: vi.fn(async (cb: (event: any) => void) => {
+        cb({ event: 'Started', data: { contentLength: 5000 } });
+        cb({ event: 'Progress', data: { chunkLength: 2500 } });
+        cb({ event: 'Finished' });
+      }),
+      install: vi.fn(async () => {})
+    };
+
+    await PlatformService.downloadUpdate(mockRawUpdate, onProgress);
+    expect(mockRawUpdate.download).toHaveBeenCalled();
+    expect(onProgress).toHaveBeenCalledWith(0, 5000);
+    expect(onProgress).toHaveBeenCalledWith(2500, 5000);
+
+    await PlatformService.installUpdate(mockRawUpdate);
+    expect(mockRawUpdate.install).toHaveBeenCalled();
   });
 
   it('should query getDistributionChannel and cache result', async () => {
@@ -172,6 +195,8 @@ describe('PlatformService Adapter Unit Tests', () => {
       await expect(PlatformService.closeWindow()).resolves.toBeUndefined();
       await expect(PlatformService.relaunchApp()).resolves.toBeUndefined();
       await expect(PlatformService.downloadAndInstallUpdate({}, () => {})).resolves.toBeUndefined();
+      await expect(PlatformService.downloadUpdate({}, () => {})).resolves.toBeUndefined();
+      await expect(PlatformService.installUpdate({})).resolves.toBeUndefined();
     });
   });
 });

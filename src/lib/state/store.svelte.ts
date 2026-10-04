@@ -1567,6 +1567,37 @@ export class SchemaState {
 			}
 		}
 
+		// Protect modular domain files from receiving direct canvas layout writes
+		const normalized = targetPath.replace(/\\/g, '/');
+		const isDomainFileCandidate =
+			normalized.endsWith('.ts') &&
+			!normalized.endsWith('index.ts') &&
+			!normalized.endsWith('schema.ts') &&
+			!normalized.endsWith('drizzle.config.ts');
+
+		if (isDomainFileCandidate) {
+			const parentDir = normalized.substring(0, normalized.lastIndexOf('/'));
+			const siblingIndex = `${parentDir}/index.ts`;
+			const baseName = normalized.split('/').pop()?.replace('.ts', '') || '';
+			try {
+				const siblingContent = await PlatformService.readText(siblingIndex);
+				const hasReExport =
+					siblingContent.includes(`from "./${baseName}"`) ||
+					siblingContent.includes(`from './${baseName}'`) ||
+					siblingContent.includes('@strata-layout');
+
+				if (hasReExport) {
+					toast.info("Switched to Root Schema Barrel", {
+						description: `Redirected to "${siblingIndex.split('/').slice(-2).join('/')}" to preserve Git-clean layout and protect "${normalized.split('/').pop()}".`,
+						duration: 6000
+					});
+					targetPath = siblingIndex;
+				}
+			} catch {
+				// Sibling index.ts does not exist or cannot be read; proceed with targetPath
+			}
+		}
+
 		this.filePath = targetPath;
 		this.machine.send("OPEN");
 		await this.syncWithFile();

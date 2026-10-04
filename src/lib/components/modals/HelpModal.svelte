@@ -3,7 +3,7 @@
 
   Summary: Complete Developer Help Center & Searchable Documentation for Strata.
   Expects: show bindable prop.
-  Output: Searchable help guides, zero lock-in policies, achievements walkthrough, and AI prompts.
+  Output: Searchable developer help center, zero lock-in architecture guides, interactive blueprints, and AI prompts.
 -->
 <script lang="ts">
   import {
@@ -19,7 +19,6 @@
     CircleQuestionMark,
     Info,
     TriangleAlert,
-    History,
     Braces,
     Wrench,
     Copy,
@@ -564,14 +563,9 @@ ${plainContent.trim()}
       label: "Identity & Auth (Better Auth / Clerk / WorkOS)",
       icon: ShieldCheck,
     },
-    { id: "cloudflare", label: "Cloudflare Bindings", icon: Database },
+    { id: "cloudflare", label: "Cloudflare Edge Bindings", icon: Database },
     { id: "relationships", label: "ERD Relationships", icon: Share2 },
-    { id: "troubleshooting", label: "Troubleshooting", icon: TriangleAlert },
-    {
-      id: "achievements",
-      label: "Advanced Guides & Diagnostics",
-      icon: History,
-    },
+    { id: "troubleshooting", label: "Diagnostics & Troubleshooting", icon: TriangleAlert },
     { id: "gotchas", label: "Gotchas & Guardrails", icon: Cpu },
     { id: "ai", label: "AI Co-Design Prompt", icon: Sparkles },
     { id: "jsdoc-builder", label: "JSDoc Metadata Builder", icon: Braces },
@@ -633,7 +627,44 @@ ${plainContent.trim()}
                     </ul>
                   </div>
                 </div>
-                <p class="text-xs text-base-content/70"><strong>Note:</strong> You can also open <code>drizzle.config.ts</code> directly, and Strata will automatically resolve either pattern from your config path!</p>`,
+                <p class="text-xs text-base-content/70"><strong>Tip:</strong> Selecting <code>drizzle.config.ts</code> automatically inspects your config to open the resolved schema entrypoint, keeping tool configuration and schema definitions cleanly separated.</p>`,
+    },
+    {
+      id: "root-entrypoint-rules",
+      category: "getting-started",
+      title: "What File Should I Open in Strata? (Entrypoints vs. Domain Files)",
+      tags: ["entrypoint", "open", "file", "barrel", "index", "domain", "drizzle.config"],
+      summary:
+        "Understand why Strata requires opening the Root Schema Entrypoint (schema/index.ts or schema.ts), and why you must never open domain files directly.",
+      content: `<p class="mb-2">To preserve visual topology and eliminate Git merge noise, Strata requires opening the Root Schema Entrypoint:</p>
+                <div class="space-y-2.5 my-2">
+                  <div class="p-2.5 rounded-xl bg-success/10 border border-success/20">
+                    <strong class="text-xs text-success flex items-center gap-1.5 mb-1">
+                      <span>✓</span> Always Open: Root Schema Entrypoint
+                    </strong>
+                    <ul class="list-disc pl-4 space-y-1 text-xs text-base-content/80">
+                      <li><strong>Modular Barrel (<code>schema/index.ts</code>):</strong> Re-exports all domain files (<code>users.ts</code>, <code>posts.ts</code>) and hosts the unified <code>@strata-layout</code> manifest comment. Strata maps your entire database topology from here.</li>
+                      <li><strong>Single-File Monolith (<code>schema.ts</code>):</strong> Contains all tables in a single file, with metadata stored inline directly above declarations.</li>
+                    </ul>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-error/10 border border-error/20">
+                    <strong class="text-xs text-error flex items-center gap-1.5 mb-1">
+                      <span>✕</span> Never Open Directly: Domain Modules & Library Wrappers
+                    </strong>
+                    <ul class="list-disc pl-4 space-y-1 text-xs text-base-content/80">
+                      <li><strong>Domain Files (<code>schema/users.ts</code>):</strong> Must remain 100% pure Drizzle code with ZERO <code>@strata</code> position comments. Opening a domain file directly causes Strata to treat it as a standalone monolith and write layout comments into it.</li>
+                      <li><strong>Package Client Entrypoints (<code>packages/db/src/index.ts</code>):</strong> Library export files that instantiate the Drizzle client (e.g. <code>drizzle(env.DB)</code>) are not schema files. Open the schema barrel (<code>packages/db/src/schema/index.ts</code>) instead.</li>
+                    </ul>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-info/10 border border-info/20">
+                    <strong class="text-xs text-info flex items-center gap-1.5 mb-1">
+                      <span>ℹ</span> Auto-Detection: <code>drizzle.config.ts</code>
+                    </strong>
+                    <p class="text-xs text-base-content/80 pl-4">
+                      Selecting or dropping <code>drizzle.config.ts</code> is supported for workspace discovery. Strata reads the <code>schema</code> field in read-only mode to locate your root entrypoint, but never uses the config file as a canvas target.
+                    </p>
+                  </div>
+                </div>`,
     },
     {
       id: "modular-architecture-guide",
@@ -700,11 +731,12 @@ ${plainContent.trim()}
       title: "drizzle.config.ts Workspace Auto-Detection",
       tags: ["drizzle.config", "workspace", "detection", "globs", "open"],
       summary:
-        "Open drizzle.config.ts directly or let Strata auto-resolve complex glob and array schema paths.",
-      content: `<p class="mb-2">Strata natively understands your Drizzle configuration:</p>
+        "Selecting drizzle.config.ts automatically inspects your schema configuration and opens the true schema entrypoint.",
+      content: `<p class="mb-2">Strata natively understands your Drizzle configuration in read-only mode:</p>
                 <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>Direct Configuration Selection:</strong> Opening <code>drizzle.config.ts</code> automatically inspects the <code>schema</code> field and loads the primary entrypoint or barrel directory.</li>
-                  <li><strong>Diverse Syntax Support:</strong> Seamlessly resolves double quotes, single quotes, template literal backticks (<code>\`./src/db/schema.ts\`</code>), string arrays (<code>schema: ["./src/db/schema/*"]</code>), and trailing directory slashes.</li>
+                  <li><strong>Read-Only Ingestion:</strong> Opening <code>drizzle.config.ts</code> automatically inspects the <code>schema</code> field and loads the primary entrypoint or barrel directory (e.g. <code>./src/schema/index.ts</code>). Strata never mutates your <code>drizzle.config.ts</code> file.</li>
+                  <li><strong>Diverse Syntax Support:</strong> Seamlessly resolves double quotes, single quotes, template literal backticks (<code>\`./src/db/schema/index.ts\`</code>), string arrays (<code>schema: ["./src/db/schema/*"]</code>), and trailing directory slashes.</li>
+                  <li><strong>Active Canvas Target:</strong> Once resolved, the canvas binds directly to the detected schema entrypoint, where visual coordinates are persisted in <code>@strata-layout</code>.</li>
                 </ul>`,
     },
     {
@@ -725,55 +757,98 @@ ${plainContent.trim()}
       id: "offboarding-policy",
       category: "getting-started",
       title: "Lock-in Free Offboarding Guarantee",
-      tags: ["offboarding", "lockin", "jsdoc", "clean", "walk"],
+      tags: ["offboarding", "lockin", "jsdoc", "clean", "walk", "strata-layout"],
       summary:
         "Strata leaves no proprietary databases or JSON sidecars in your workspace. You can walk away at any time.",
-      content: `<p class="mb-2">We respect your engineering intelligence. All metadata is stored exclusively in standard JSDoc tags:</p>
-                <pre class="bg-neutral p-3 rounded-lg text-neutral-content font-mono text-[10px] my-2">
-/** @strata { "target": "d1", "x": 100, "y": 200 } */
+      content: `<p class="mb-2">We respect your engineering intelligence. Metadata is stored cleanly using standard TypeScript and JSDoc comments:</p>
+                <div class="space-y-2 text-xs">
+                  <div class="p-2.5 rounded-xl bg-base-200/60 border border-base-300">
+                    <strong class="text-primary block mb-1">Modular Barrel (Recommended):</strong>
+                    <p class="text-base-content/80 mb-1.5">All layout coordinates live in a single root comment in <code>schema/index.ts</code>. Domain files (<code>users.ts</code>, <code>posts.ts</code>) contain <strong>0 comments</strong>:</p>
+                    <pre class="bg-neutral p-2.5 rounded text-neutral-content font-mono text-[10px]">/**
+ * @strata-layout {
+ *   "users": { "x": 100, "y": 150 },
+ *   "posts": { "x": 520, "y": 150 }
+ * }
+ */</pre>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-base-200/60 border border-base-300">
+                    <strong class="text-base-content block mb-1">Single-File Monolith:</strong>
+                    <pre class="bg-neutral p-2.5 rounded text-neutral-content font-mono text-[10px]">/** @strata { "target": "d1", "x": 100, "y": 200 } */
 export const users = sqliteTable("users", {});</pre>
-                <p>If you stop using Strata, your schema remains 100% standard Drizzle code. You can strip the comments or keep them—zero locked configurations, zero dependencies.</p>`,
+                  </div>
+                </div>
+                <p class="mt-2 text-xs">If you stop using Strata, your schema remains 100% standard Drizzle code. You can strip the comments or keep them—zero locked configurations, zero dependencies.</p>`,
     },
     {
       id: "tracking-entities",
       category: "getting-started",
       title: "How Strata Tracks Canvas Entities",
-      tags: ["tracking", "ast", "jsdoc", "naming", "unique"],
+      tags: ["tracking", "ast", "jsdoc", "naming", "unique", "strata-layout"],
       summary:
-        "Strata does not generate artificial IDs; it maps @strata JSDoc blocks directly to your TypeScript variable declarations.",
+        "Strata does not generate artificial IDs; it maps exported TypeScript variable names directly to AST entities and layout coordinates.",
       content: `<p class="mb-2">Strata tracks nodes and connections using the Abstract Syntax Tree (AST):</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Variable Names as IDs:</strong> The unique identifier is the variable name (e.g., <code>users</code> in <code>export const users = sqliteTable(...)</code>). Because variable names must be unique within a file, this acts as a robust natural ID.</li>
-                  <li><strong>JSDoc Statement Binding:</strong> JSDocs are syntactically bound to the variable statement immediately following them. If you rename the variable, ts-morph updates all references, and the JSDoc metadata moves with it.</li>
-                  <li><strong>No Sidecars:</strong> This design ensures zero hidden state, no UUID generation, and no proprietary JSON sidecars—your code remains the single source of truth.</li>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Exported Variable Names as Natural IDs:</strong> The unique identifier is the TypeScript variable name (e.g., <code>users</code> in <code>export const users = sqliteTable(...)</code>). Because variable names must be unique within a TypeScript project, this serves as a robust natural ID.</li>
+                  <li><strong>Modular Barrel Mapping (<code>@strata-layout</code>):</strong> In modular setups, coordinates and synthetic relations are mapped in the root manifest keyed by variable name (e.g. <code>"users": { "x": 100, "y": 150 }</code>). Renaming the variable in code or via the canvas updates both the declaration and manifest entry.</li>
+                  <li><strong>Monolith Inline Binding (<code>@strata</code>):</strong> In single-file schemas, JSDoc blocks are syntactically bound to the variable statement immediately following them.</li>
+                  <li><strong>No Database Sidecars:</strong> This design ensures zero hidden state, no UUID generation, and no proprietary JSON sidecars—your code remains the single source of truth.</li>
                 </ul>`,
     },
     {
       id: "wrangler-sync",
       category: "cloudflare",
-      title: "Wrangler Bindings & 1-Click Recipe Alignment",
-      tags: ["wrangler", "toml", "json", "jsonc", "recipe"],
+      title: "Wrangler Config Discovery & 1-Click Alignment",
+      tags: ["wrangler", "toml", "json", "jsonc", "recipe", "bindings"],
       summary:
-        "Strata discovers Wrangler bindings in read-only mode and generates copyable wrangler.jsonc snippets to prevent blind file mutations.",
+        "Strata discovers Wrangler bindings up to 12 parent levels deep in read-only mode, diagnoses mismatches, and generates copyable recipes.",
       content: `<p class="mb-2">Strata maintains a strict boundary between database schema and Cloudflare Worker infrastructure:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Read-Only Config Discovery:</strong> Automatically detects <code>wrangler.jsonc</code> or <code>wrangler.toml</code> in parent directories up to 12 levels deep.</li>
-                  <li><strong>1-Click Clipboard Recipes:</strong> When you design a KV, DO, or R2 binding in Strata, click "Copy Wrangler Binding Recipe" to copy the clean, formatted JSONC snippet into your clipboard.</li>
-                  <li><strong>Zero File Corruption:</strong> Strata never executes blind AST or regex writes to your Wrangler files. You maintain 100% control over your Cloudflare configuration.</li>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Recursive Config Discovery:</strong> Scans parent directories up to 12 levels deep for <code>wrangler.jsonc</code>, <code>wrangler.json</code>, or <code>wrangler.toml</code> to detect all KV, DO, D1, and R2 bindings.</li>
+                  <li><strong>Read-Only Safety Guarantee:</strong> Strata never executes blind AST or regex writes into your Wrangler configuration files. You maintain 100% control over your Cloudflare deployment setup.</li>
+                  <li><strong>Zero Dummy JavaScript Objects:</strong> Cloudflare bindings are never declared as empty objects (e.g. <code>export const MY_KV = {}</code>) in Drizzle schema files. In modular mode, their visual layout and synthetic links live purely in the root <code>@strata-layout</code> manifest.</li>
+                  <li><strong>1-Click Clipboard Recipes:</strong> When a binding mismatch is detected, click "Copy Wrangler Binding Recipe" to copy clean, production-ready JSONC declarations directly into your clipboard.</li>
                 </ul>`,
     },
     {
       id: "durable-objects",
       category: "cloudflare",
-      title: "Stateful Durable Objects Class Mutations",
-      tags: ["durable", "objects", "class", "methods", "do"],
+      title: "Durable Objects: Architecture & Public RPC Mutations",
+      tags: ["durable", "objects", "class", "methods", "do", "rpc", "tsmorph"],
       summary:
-        "Visual Durable Object public method edits rewrite the underlying TS class declaration files.",
-      content: `<p class="mb-2">Strata bridges the gap between database schema and method routing:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>External Class Mutation:</strong> Modifying methods in DO canvas cards directly patches external class declarations (declared via <code>strata.path</code>).</li>
-                  <li><strong>Local JSDoc Fallbacks:</strong> If class files are omitted, method states fall back to JSDoc comments.</li>
-                  <li><strong>DO Method Builder:</strong> Interactive public method builders displaying names, params, and DO return types (e.g. <code>Promise&lt;string&gt;</code>).</li>
+        "Visual Durable Object public method edits rewrite underlying TypeScript class declarations without database sidecars.",
+      content: `<p class="mb-2">Strata bridges the gap between database schemas and stateful Workers RPC:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>External Class Mutation:</strong> Modifying methods in DO canvas cards directly patches external class declarations (configured via <code>path</code> and <code>class</code>) using <code>ts-morph</code> AST transformations.</li>
+                  <li><strong>Flexible Folder Structures:</strong> Supports dedicated class files (e.g. <code>./src/do/UserDO.ts</code>), multi-class files, co-located route handlers, and <code>tsconfig.json</code> path aliases (e.g. <code>$lib/server/do/...</code>).</li>
+                  <li><strong>Interactive Method Builder:</strong> Visually inspect and edit method names, argument lists, and asynchronous return types (e.g. <code>Promise&lt;Session&gt;</code>).</li>
+                  <li><strong>Git-Clean Positions:</strong> Moving DO cards on the canvas touches only the root <code>@strata-layout</code> manifest in <code>schema/index.ts</code>, keeping external DO class files completely clean.</li>
+                </ul>`,
+    },
+    {
+      id: "durable-objects-frameworks",
+      category: "cloudflare",
+      title: "Framework-Agnostic Durable Object Exports (Hono, SvelteKit, Remix, Astro)",
+      tags: [
+        "durable",
+        "objects",
+        "hono",
+        "sveltekit",
+        "remix",
+        "astro",
+        "nuxt",
+        "nextjs",
+        "exports",
+        "wrangler",
+      ],
+      summary:
+        "How Durable Object classes must be exported from your Worker entrypoint module (main in wrangler.jsonc).",
+      content: `<p class="mb-2">Cloudflare Workers requires every bound Durable Object class to be exported from your worker entrypoint module (<code>main</code> in <code>wrangler.jsonc</code>). Strata leverages this for <strong>zero-config auto-discovery</strong>:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Automatic Re-Export Discovery:</strong> Strata reads <code>main</code> from <code>wrangler.jsonc</code> (e.g. <code>src/index.ts</code>) and follows re-exports (e.g. <code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { SessionDO } from './do/SessionDO';</code>) to parse public RPC methods automatically.</li>
+                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class directly in your entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>).</li>
+                  <li><strong>SvelteKit:</strong> Reference the DO class inside <code>vite.config.ts</code> with <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/do/SessionDO.ts'] })</code>.</li>
+                  <li><strong>Remix / Astro / Nuxt:</strong> Re-export the DO class from your server entrypoint or custom worker adapter.</li>
                 </ul>`,
     },
     {
@@ -782,28 +857,28 @@ export const users = sqliteTable("users", {});</pre>
       title: "KV Namespace Static Registry Mode",
       tags: ["kv", "keys", "expiration", "ttl", "metadata"],
       summary:
-        "Allows modeling key-value namespaces with custom data-type assertions, custom Expirations, and metadata fields.",
-      content: `<p class="mb-2">Provides database-like visual inspector structures over flat key stores:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Advanced Inspector:</strong> Define key data-types (String, Number, Boolean, or Any).</li>
-                  <li><strong>Expiration Limits:</strong> Assign custom Expiration TTL limits (minimum 60 seconds).</li>
-                  <li><strong>Badges:</strong> Visual pills showing expirations and metadata strings per row.</li>
+        "Model key-value namespaces with custom data-type assertions, custom Expirations, and metadata fields.",
+      content: `<p class="mb-2">Provides structured schema-like visualization over Cloudflare Key-Value stores:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Data-Type Assertions:</strong> Define expected value types (<code>string</code>, <code>number</code>, <code>boolean</code>, <code>any</code>, or custom objects).</li>
+                  <li><strong>Mandatory 60s TTL Guard:</strong> Visual inspector prevents Expiration TTL values below Cloudflare's mandatory 60-second limit.</li>
+                  <li><strong>Visual Key Registry:</strong> Render key definitions, TTL limits, and metadata badges directly on canvas cards.</li>
                 </ul>`,
     },
     {
       id: "r2-buckets",
       category: "cloudflare",
       title: "R2 Bucket Configuration Settings",
-      tags: ["r2", "bucket", "public", "cors", "domain"],
+      tags: ["r2", "bucket", "public", "cors", "domain", "mime"],
       summary:
-        "Model storage folders and edit access control settings (Public, CORS, Domains) visually.",
-      content: `<p class="mb-2">Visualize R2 buckets with comprehensive config drawers:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Public access:</strong> Toggles bucket visibility directly.</li>
-                  <li><strong>Custom domains:</strong> Routable text inputs for public domain endpoints.</li>
-                  <li><strong>CORS policies:</strong> Toggles Cross-Origin Resource Sharing.</li>
-                  <li><strong>Directories:</strong> List folders mapped to specific MIME-type filters.</li>
--                </ul>`,
+        "Model storage folders, access control settings (Public, CORS, Domains), and MIME filters visually.",
+      content: `<p class="mb-2">Visualize and configure R2 storage buckets directly on the canvas:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Public Access & CORS:</strong> Toggle bucket visibility and Cross-Origin Resource Sharing directly in the inspector drawer.</li>
+                  <li><strong>Custom Domains:</strong> Model public domain endpoints and CDN routing.</li>
+                  <li><strong>Directory MIME-Type Filters:</strong> Map logical folders to specific MIME-type patterns (e.g. <code>avatars: image/*</code>, <code>reports: application/pdf</code>).</li>
+                  <li><strong>Zero Sidecars:</strong> Storage configuration is persisted in the root <code>@strata-layout</code> manifest or inline comments without sidecar JSON files.</li>
+                </ul>`,
     },
     {
       id: "erd-relationships",
@@ -847,7 +922,7 @@ export const users = sqliteTable("users", {});</pre>
       summary:
         "Steps to fix errors when the parser blocks workspace synchronization due to invalid TypeScript code.",
       content: `<p class="mb-2">If Strata shows parse errors after saving changes in your external editor:</p>
-                <ul class="list-disc pl-4 space-y-1">
+                <ul class="list-disc pl-4 space-y-1 text-xs">
                   <li>Ensure all typescript imports (e.g. from <code>drizzle-orm/sqlite-core</code>) are valid.</li>
                   <li>Look at the parse failure console logs or toast warning messages for line/column highlights.</li>
                   <li>Check that braces, commas, and parentheses are closed in variable declarations.</li>
@@ -857,14 +932,14 @@ export const users = sqliteTable("users", {});</pre>
       id: "relation-warnings",
       category: "troubleshooting",
       title: "Resolving Target Mismatch Warnings",
-      tags: ["warning", "target", "relations", "missing"],
+      tags: ["warning", "target", "relations", "missing", "strata-layout"],
       summary:
         "How to fix synthetic target warning flags when a relation references a node variable that has been deleted or renamed.",
       content: `<p class="mb-2">If you see warnings about missing synthetic relationship targets:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li>Open the JSDoc of the warning table.</li>
-                  <li>Verify that <code>strata.relations</code> targets point to exact, case-sensitive variable names existing in the diagram.</li>
-                  <li>Update the target <code>to</code> key if the related KV, DO, or R2 table has been renamed.</li>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Modular Barrels (<code>schema/index.ts</code>):</strong> Open <code>schema/index.ts</code> and check the <code>@strata-layout</code> manifest. Ensure the target name inside <code>"relations": [{ "to": "targetName" }]</code> matches the exact variable or binding name. Domain files (<code>users.ts</code>) must remain comment-free.</li>
+                  <li><strong>Single-File Monoliths (<code>schema.ts</code>):</strong> Check the declaration's inline <code>/** @strata { ... } */</code> comment and verify the <code>relations</code> array.</li>
+                  <li><strong>Rename Sync:</strong> Update the <code>to</code> key if the related KV, DO, or R2 binding was renamed in <code>wrangler.jsonc</code>.</li>
                 </ul>`,
     },
     {
@@ -874,102 +949,7 @@ export const users = sqliteTable("users", {});</pre>
       tags: ["kv", "ttl", "guard", "limit", "time"],
       summary:
         "Addresses Cloudflare's mandatory minimum of 60 seconds for expiration values to prevent deploy-time validation errors.",
-      content: `<p>Cloudflare KV requires any configured Expiration TTL values to be at least <strong>60 seconds</strong>. Strata's visual inspector implements client-side validation preventing values below 60s, keeping your configuration deployments clean.</p>`,
-    },
-    {
-      id: "ach-framework-do-exports",
-      category: "achievements",
-      title:
-        "Framework-Agnostic Durable Object Exports (Hono, SvelteKit, Remix, Astro, Nuxt, Next.js)",
-      tags: [
-        "durable",
-        "objects",
-        "hono",
-        "sveltekit",
-        "remix",
-        "astro",
-        "nuxt",
-        "nextjs",
-        "exports",
-        "wrangler",
-      ],
-      summary:
-        "How Durable Object classes must be exported from your Worker entrypoint (main in wrangler.jsonc).",
-      content: `<p class="mb-2">The Cloudflare Workers runtime requires every Durable Object class bound in <code>wrangler.jsonc</code> / <code>wrangler.toml</code> to be exported from your worker entrypoint module (<code>main</code>). Strata leverages this authoritative Cloudflare requirement for <strong>zero-config auto-discovery</strong>:</p>
-                <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>Automatic Re-Export Following:</strong> Point Strata to your project. Strata reads <code>main</code> from <code>wrangler.jsonc</code> (e.g. <code>src/index.ts</code>), follows statements like <code class="bg-neutral text-neutral-content px-1.5 py-0.5 rounded text-[10px]">export { SessionDO } from './durable-objects/SessionDO';</code>, and automatically extracts public RPC methods with zero manual path setup.</li>
-                  <li><strong>Hono / Standalone Workers:</strong> Re-export the DO class directly in your main entry file (e.g. <code>src/index.ts</code> or <code>src/worker.ts</code>).</li>
-                  <li><strong>SvelteKit:</strong> Ensure <code>vite.config.ts</code> references the DO class file inside <code>cloudflareDoExporter({ durableObjects: ['src/lib/server/durable-objects/TelemetrySessionDO.ts'] })</code>.</li>
-                  <li><strong>Remix (Vite):</strong> Re-export the DO class from your custom server entrypoint (e.g. <code>server.ts</code> or <code>app/entry.server.ts</code>).</li>
-                  <li><strong>Astro / Nuxt:</strong> Re-export the DO class from your custom worker wrapper file (e.g. <code>src/worker.ts</code> or <code>server/index.ts</code>).</li>
-                  <li><strong>Workers RPC Introspection:</strong> Public methods on the DO class are parsed via TypeScript AST into interactive canvas card signatures.</li>
-                  <li><strong>Git-Clean Positions:</strong> Moving or dragging DO cards on the canvas touches only the root <code>@strata-layout</code> manifest, keeping both Drizzle schema files and Worker entrypoints 100% clean of Git noise.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-do-mutations",
-      category: "achievements",
-      title: "Durable Object Folder Structures & File Path Resolution",
-      tags: [
-        "durable",
-        "objects",
-        "ast",
-        "paths",
-        "folders",
-        "resolution",
-        "aliases",
-      ],
-      summary:
-        "How Strata flexibly resolves single files, shared folders, co-located routes, and tsconfig path aliases for Durable Objects.",
-      content: `<p class="mb-2">Strata places <strong>zero restrictions on your folder structure</strong> when organizing Durable Objects:</p>
-                <ul class="list-disc pl-4 space-y-1.5 text-xs">
-                  <li><strong>Dedicated Class Files (Recommended):</strong> Store one DO class per file in a shared folder (e.g. <code>"path": "./src/durable-objects/UserSessionDO.ts"</code>).</li>
-                  <li><strong>Multiple Classes in One File:</strong> Declare multiple DO classes inside a single file. Strata targets the matching class using the <code>class</code> parameter (e.g. <code>"class": "CounterDO"</code>).</li>
-                  <li><strong>Co-Located Feature Routes:</strong> Keep DO files next to API endpoints (e.g. <code>"path": "./src/routes/api/counter/CounterDO.ts"</code>).</li>
-                  <li><strong>Path Alias Support:</strong> Relative paths, workspace absolute paths, and <code>tsconfig.json</code> aliases (e.g. <code>$lib/server/durable-objects/...</code>) are fully supported.</li>
-                  <li><strong>AST Integrity:</strong> Edits to public methods parse and update the target file using <code>ts-morph</code>. Missing or unreadable files raise visual diagnostic warning flags.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-wrangler-validation",
-      category: "achievements",
-      title: "Wrangler & Schema Alignment Diagnostics",
-      summary:
-        "How Strata validates Drizzle JSDoc metadata against your project's wrangler.jsonc or wrangler.toml bindings.",
-      tags: ["wrangler", "validation", "sync", "mismatch", "bindings"],
-      content: `<p class="mb-2">Strata ensures your visual layout aligns directly with Cloudflare Wrangler bindings:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Direct Binding Source:</strong> Strata parses <code>wrangler.jsonc</code> or <code>wrangler.toml</code> directly as the source of truth for KV, DO, D1, and R2 bindings.</li>
-                  <li><strong>Binding Mismatches:</strong> If an entity name in <code>schema.ts</code> JSDoc metadata does not match Wrangler bindings, Strata flags a mismatch warning in the Bottom Bar.</li>
-                  <li><strong>1-Click Alignment:</strong> Click "Copy Wrangler Binding Recipe" in the Bottom Bar or inspector drawers to copy missing binding declarations into your clipboard.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-visual-overhaul",
-      category: "achievements",
-      title: "Recursive Wrangler Config Discovery",
-      tags: ["wrangler", "detect", "parent", "folders", "discovery"],
-      summary:
-        "Learn how Strata locates wrangler configurations recursively, and how to troubleshoot config detection errors.",
-      content: `<p class="mb-2">Strata searches recursively up parent directories to identify binding targets:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Search Depth:</strong> Scans up to 12 parent levels to identify <code>wrangler.toml</code> or <code>wrangler.json</code>.</li>
-                  <li><strong>Permissions Check:</strong> Verify the application has directory reading privileges in parent project folders if bindings do not sync.</li>
-                  <li><strong>Single Config Source:</strong> Ensure you do not have conflicting <code>wrangler.toml</code> and <code>wrangler.json</code> files in the same directory.</li>
-                </ul>`,
-    },
-    {
-      id: "ach-r2-settings",
-      category: "achievements",
-      title: "R2 Access Control & CORS Configuration",
-      summary:
-        "Troubleshoot R2 configuration writes, bucket visibility settings, CORS rules, and custom domain paths.",
-      tags: ["r2", "bucket", "cors", "public", "domain"],
-      content: `<p class="mb-2">Model R2 bucket settings directly within JSDoc metadata without database sidecars:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Public access & CORS:</strong> Toggle bucket visibility and CORS headers directly from the visual inspector drawer.</li>
-                  <li><strong>Folder MIME filters:</strong> Map directories to specific MIME-type patterns (e.g. <code>avatars: image/*</code>).</li>
-                </ul>`,
+      content: `<p class="text-xs leading-relaxed">Cloudflare KV requires any configured Expiration TTL values to be at least <strong>60 seconds</strong>. Strata's visual inspector implements client-side validation preventing values below 60s, keeping your configuration deployments clean.</p>`,
     },
     {
       id: "ai-prompt-guide",
@@ -998,13 +978,13 @@ export const users = sqliteTable("users", {});</pre>
     {
       id: "gotcha-jsdoc-strict-json",
       category: "gotchas",
-      title: "Double-Quoted JSDoc Formatting",
-      tags: ["json", "jsdoc", "strict", "quotes", "format"],
+      title: "Double-Quoted JSDoc Formatting (@strata & @strata-layout)",
+      tags: ["json", "jsdoc", "strict", "quotes", "format", "strata-layout"],
       summary:
         "The AST comment parser reads comments using JSON.parse. Avoid single quotes, trailing commas, and unquoted keys.",
-      content: `<p class="mb-2">The JSDoc metadata parser reads <code>@strata</code> configs strictly as JSON. Any syntax issues will cause node parsing failures:</p>
-                <ul class="list-disc pl-4 space-y-1">
-                  <li><strong>Strict Quotes:</strong> Keys and string values must be enclosed in double quotes (e.g., <code>"target": "d1"</code>). Single quotes will throw errors.</li>
+      content: `<p class="mb-2">Both the barrel manifest parser (<code>@strata-layout</code>) and the entity parser (<code>@strata</code>) read metadata strictly using <code>JSON.parse</code>. Any syntax issues will cause node parsing failures:</p>
+                <ul class="list-disc pl-4 space-y-1.5 text-xs">
+                  <li><strong>Strict Quotes:</strong> Keys and string values must be enclosed in double quotes (e.g., <code>"users": { "x": 100, "y": 150 }</code>). Single quotes will throw parse errors.</li>
                   <li><strong>No Trailing Commas:</strong> Do not add trailing commas after the last parameter key. Standard JSON parser rules apply.</li>
                   <li><strong>Brackets Matching:</strong> Ensure curly brackets and double quotes close correctly inside comments.</li>
                 </ul>`,
@@ -2034,8 +2014,6 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                       <TriangleAlert
                         class="w-3.5 h-3.5 text-warning shrink-0"
                       />
-                    {:else if topic.category === "achievements"}
-                      <History class="w-3.5 h-3.5 text-success shrink-0" />
                     {:else}
                       <Info class="w-3.5 h-3.5 text-primary shrink-0" />
                     {/if}
@@ -2060,9 +2038,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                     <span
                       class="badge badge-outline badge-xs opacity-60 text-[9px] font-mono capitalize"
                     >
-                      {topic.category === "achievements"
-                        ? "Architecture"
-                        : topic.category.replace("-", " ")}
+                      {topic.category.replace("-", " ")}
                     </span>
                   </div>
                 </div>
@@ -2111,8 +2087,8 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                 <p class="text-[11px] opacity-70 leading-relaxed">
                   Feed this context template directly to your preferred LLM when
                   prompt co-designing schemas. It teaches the AI how to
-                  automatically output Drizzle variables decorated with
-                  pre-calculated <code>@strata</code> layouts.
+                  automatically output clean Drizzle schemas with centralized
+                  <code>@strata-layout</code> barrel manifests or inline monolith metadata.
                 </p>
                 <pre
                   class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-48 overflow-y-auto">
@@ -2158,7 +2134,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
           class="btn btn-primary btn-sm px-6 rounded-xl shadow-lg shadow-primary/15 font-bold transition-all active:scale-95"
           onclick={() => (show = false)}
         >
-          Acknowledge & Close
+          Close
         </button>
       </div>
     </div>

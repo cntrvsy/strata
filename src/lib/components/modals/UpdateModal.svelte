@@ -179,26 +179,57 @@
             >
               <Download class="w-6 h-6" />
             </div>
-            <div class="space-y-1 w-full">
+            <div class="space-y-1.5 w-full">
               <h4 class="text-sm font-bold text-base-content">
                 Downloading Update...
               </h4>
-              <progress
-                class="progress progress-primary w-full h-2 rounded-full"
-                value={updateState.progress.percent}
-                max="100"
-              ></progress>
-              <div
-                class="flex items-center justify-between text-[11px] text-base-content/60 font-mono px-1"
-              >
-                <span>{updateState.progress.percent}%</span>
-                <span>
-                  {formatBytes(updateState.progress.downloaded)}
-                  {#if updateState.progress.total > 1}
-                    / {formatBytes(updateState.progress.total)}
-                  {/if}
-                </span>
-              </div>
+              {#if updateState.percent !== null}
+                <progress
+                  class="progress progress-primary w-full h-2 rounded-full"
+                  value={updateState.percent}
+                  max="100"
+                ></progress>
+                <div
+                  class="flex items-center justify-between text-[11px] text-base-content/60 font-mono px-1"
+                >
+                  <span>{updateState.percent}%</span>
+                  <span>
+                    {updateState.formattedDownloaded}
+                    {#if updateState.formattedTotal}
+                      / {updateState.formattedTotal}
+                    {/if}
+                  </span>
+                </div>
+              {:else}
+                <progress
+                  class="progress progress-primary w-full h-2 rounded-full"
+                  max="100"
+                ></progress>
+                <div
+                  class="flex items-center justify-between text-[11px] text-base-content/60 font-mono px-1"
+                >
+                  <span>Streaming chunks...</span>
+                  <span>{updateState.formattedDownloaded}</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <!-- 4.5. INSTALLING STATE -->
+        {:else if updateState.status === "installing"}
+          <div class="flex flex-col items-center gap-3 py-2 w-full">
+            <div
+              class="w-12 h-12 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary"
+            >
+              <RefreshCw class="w-6 h-6 animate-spin" />
+            </div>
+            <div class="space-y-1 text-center">
+              <h4 class="text-sm font-bold text-base-content">
+                Installing Update...
+              </h4>
+              <p class="text-xs text-base-content/70 max-w-xs leading-relaxed">
+                Verifying package integrity and extracting update files. Please wait a moment...
+              </p>
             </div>
           </div>
 
@@ -321,7 +352,7 @@
           <button
             class="btn btn-ghost btn-sm rounded-field text-xs font-semibold"
             onclick={() => updateState.closeModal()}
-            disabled={updateState.status === "downloading"}
+            disabled={updateState.isBusy}
           >
             Cancel
           </button>
