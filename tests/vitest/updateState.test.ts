@@ -194,4 +194,40 @@ describe('UpdateState Unit Tests', () => {
 		await store.openStore('ms-windows-store://updates');
 		expect(PlatformService.openExternal).toHaveBeenCalledWith('ms-windows-store://updates');
 	});
+
+	it('should properly derive progress, indeterminate status, and formatting via Svelte runes', () => {
+		store.status = 'downloading';
+		store.downloadedBytes = 1048576; // 1 MB
+		store.contentLength = null; // chunked transfer encoding (unknown total)
+
+		expect(store.percent).toBeNull();
+		expect(store.isIndeterminate).toBe(true);
+		expect(store.formattedDownloaded).toBe('1 MB');
+		expect(store.formattedTotal).toBeNull();
+		expect(store.isBusy).toBe(true);
+
+		// Now content length is discovered
+		store.contentLength = 4194304; // 4 MB
+		expect(store.percent).toBe(25);
+		expect(store.isIndeterminate).toBe(false);
+		expect(store.formattedTotal).toBe('4 MB');
+	});
+
+	it('should transition through downloading, installing, and ready stages', async () => {
+		store.updateInfo = { version: 'v3.2.0', rawUpdate: {} };
+		vi.mocked(PlatformService.downloadAndInstallUpdate).mockImplementationOnce(async (raw, onProgress, onStageChange) => {
+			onStageChange?.('downloading');
+			expect(store.status).toBe('downloading');
+			onProgress?.(1000, 2000);
+			expect(store.percent).toBe(50);
+
+			onStageChange?.('installing');
+			expect(store.status).toBe('installing');
+			expect(store.isBusy).toBe(true);
+		});
+
+		await store.downloadAndInstall();
+		expect(store.status).toBe('ready');
+		expect(store.isBusy).toBe(false);
+	});
 });
