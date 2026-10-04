@@ -182,9 +182,7 @@
               const droppedPath = paths[0];
               if (droppedPath.endsWith(".ts")) {
                 console.log("[Strata] File dropped, opening:", droppedPath);
-                schemaState.filePath = droppedPath;
-                schemaState.machine.send("OPEN");
-                await schemaState.syncWithFile();
+                await schemaState.openFileDirectly(droppedPath);
               }
             }
           },

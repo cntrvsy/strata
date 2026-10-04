@@ -1,3 +1,5 @@
+import adapter from "@sveltejs/adapter-static";
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vitest/config";
 import { sveltekit } from "@sveltejs/kit/vite";
@@ -13,7 +15,17 @@ export default defineConfig({
   },
   plugins: [
     tailwindcss(),
-    sveltekit(),
+    sveltekit({
+      preprocess: vitePreprocess(),
+      adapter: adapter({
+        fallback: "index.html"
+      }),
+      inspector: {
+        toggleKeyCombo: "alt-x",
+        showToggleButton: "always",
+        toggleButtonPos: "bottom-left"
+      }
+    }),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   clearScreen: false,

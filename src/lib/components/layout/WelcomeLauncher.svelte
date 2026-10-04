@@ -16,6 +16,7 @@
     ArrowRight,
     Trash2,
     Compass,
+    Info,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { SAMPLE_TEMPLATES } from "#lib/mock";
@@ -96,9 +97,9 @@
           <div class="space-y-4 animate-in fade-in duration-200">
             <!-- Focused Drop Zone / File Opener -->
             <button
-              class="w-full border-2 border-dashed border-base-300 hover:border-primary/60 bg-base-200/20 hover:bg-primary/5 rounded-box p-7 flex flex-col items-center justify-center text-center transition-all group cursor-pointer"
+              class="w-full border-2 border-dashed border-base-300 hover:border-primary/60 bg-base-200/20 hover:bg-primary/5 rounded-box p-6 flex flex-col items-center justify-center text-center transition-all group cursor-pointer"
               onclick={() => schemaState.openNewFile()}
-              aria-label="Open Schema File"
+              aria-label="Open Root Schema Entrypoint"
             >
               <div
                 class="p-3 bg-primary/10 rounded-field text-primary mb-2.5 group-hover:scale-105 transition-transform"
@@ -106,17 +107,29 @@
                 <Upload class="w-6 h-6" />
               </div>
               <span class="font-bold text-sm text-base-content group-hover:text-primary transition-colors">
-                Select or Drop Schema File
+                Select or Drop Root Schema Entrypoint
               </span>
               <p class="text-xs text-base-content/60 mt-1 max-w-sm leading-relaxed">
-                Open <code class="font-mono text-primary font-semibold">schema.ts</code>, <code class="font-mono text-primary font-semibold">schema/index.ts</code>, or <code class="font-mono text-primary font-semibold">drizzle.config.ts</code>
+                Open root barrel <code class="font-mono text-primary font-semibold">schema/index.ts</code> or monolith <code class="font-mono text-primary font-semibold">schema.ts</code>
               </p>
 
-              <span class="btn btn-primary btn-sm rounded-field px-5 mt-4 shadow-xs font-semibold text-xs">
+              <span class="btn btn-primary btn-sm rounded-field px-5 mt-3.5 shadow-xs font-semibold text-xs">
                 <FolderOpen class="w-4 h-4 mr-1" />
-                Browse Local Files
+                Browse Schema Files
               </span>
             </button>
+
+            <!-- Architecture & Config Guidance -->
+            <div class="px-3.5 py-2.5 bg-base-200/50 rounded-xl border border-base-300/60 text-[11px] text-base-content/70 flex flex-col gap-1.5 leading-relaxed text-left">
+              <div class="flex items-center gap-1.5 font-bold text-base-content/85 text-[11px]">
+                <Info class="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Entrypoint Architecture Rules:</span>
+              </div>
+              <ul class="list-disc pl-4 space-y-1 text-base-content/65 text-[10.5px]">
+                <li><strong>Modular Barrels:</strong> Always open the barrel root (<code class="font-mono text-primary font-semibold">index.ts</code>), not individual domain files (<code class="font-mono text-base-content/80">users.ts</code>), to keep your domain files 100% Git-clean.</li>
+                <li><strong>Drizzle Config:</strong> Selecting <code class="font-mono text-primary font-semibold">drizzle.config.ts</code> will auto-detect and resolve your root schema entrypoint.</li>
+              </ul>
+            </div>
 
             <!-- Quick Template Hint or Recent File Resume -->
             {#if schemaState.recentFiles.length > 0}
