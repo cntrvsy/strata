@@ -27,14 +27,12 @@
     selected = false,
     targetFile,
     line,
-    onAddField,
   } = $props<{
     nodeId: string;
     nodeType: "table" | "do" | "kv" | "r2" | "identity";
     selected?: boolean;
     targetFile?: string;
     line?: number;
-    onAddField?: () => void;
   }>();
 
   let copied = $state(false);
@@ -98,7 +96,7 @@
       return;
     }
     toast.info("Delete Code in Your Editor", {
-      description: "To prevent accidental code loss, delete the declaration in your editor. Strata will update instantly.",
+      description: "To prevent accidental code loss, delete the declaration in your editor. Cirrus will update instantly.",
     });
   }
 </script>
@@ -131,9 +129,9 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-        data-tip="Open in Editor"
+        data-tip="Open in Editor (Double-click)"
         onclick={handleOpenEditor}
-        title="Open in Editor"
+        title="Open in Editor (Double-click)"
       >
         <FileCode class="w-3.5 h-3.5" />
       </button>
@@ -154,21 +152,6 @@
       {/if}
     </button>
 
-    <!-- Add Field (D1 Tables Only) -->
-    {#if nodeType === "table" && onAddField}
-      <button
-        type="button"
-        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-primary hover:bg-primary/10 transition-colors tooltip tooltip-bottom"
-        data-tip="Add Field"
-        onclick={onAddField}
-        title="Add Field"
-      >
-        <Plus class="w-3.5 h-3.5" />
-      </button>
-    {/if}
-
-    <div class="w-px h-3 bg-base-300 mx-0.5"></div>
-
     <!-- Isolate / Focus Subgraph -->
     <button
       type="button"
@@ -180,25 +163,15 @@
       <Focus class="w-3.5 h-3.5" />
     </button>
 
-    <!-- Focus Inspector Sidebar -->
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-secondary hover:bg-secondary/10 transition-colors tooltip tooltip-bottom"
-      data-tip="Inspect Node"
-      onclick={handleInspect}
-      title="Inspect Node"
-    >
-      <SlidersHorizontal class="w-3.5 h-3.5" />
-    </button>
-
-    <!-- Delete Entity (physical tables & storage only) -->
-    {#if nodeType !== "identity"}
+    <!-- Delete Entity (Sandbox Mode Only) -->
+    {#if schemaState.isSandboxMode && nodeType !== "identity"}
+      <div class="w-px h-3 bg-base-300 mx-0.5"></div>
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
-        data-tip="Delete"
+        data-tip="Delete (Sandbox)"
         onclick={handleDelete}
-        title="Delete"
+        title="Delete (Sandbox)"
       >
         <Trash2 class="w-3.5 h-3.5" />
       </button>

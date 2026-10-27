@@ -16,7 +16,6 @@
     Key,
     Zap,
     Cpu,
-    Trash2,
     HardDrive,
     CircleX,
     TriangleAlert,
@@ -170,9 +169,6 @@
   {selected}
   targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath}
   line={(data as any).line}
-  onAddField={() => {
-    schemaState.activeInspectorNodeId = nodeId;
-  }}
 />
 
 <div
@@ -370,31 +366,13 @@
 
           <div class="flex items-center gap-1.5">
             <span
-              class="text-[10px] opacity-40 font-mono group-hover/row:opacity-0 transition-opacity bg-base-200 px-1.5 py-0.5 rounded-field uppercase leading-none"
+              class="text-[10px] opacity-40 font-mono bg-base-200 px-1.5 py-0.5 rounded-field uppercase leading-none"
             >
               {col.definition
                 .split("(")[0]
                 .replace("text", "txt")
                 .replace("integer", "int")}
             </span>
-            {#if data.target === "d1" || !data.target}
-              <button
-                class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  schemaState.promptConfirm({
-                    title: "Delete Column",
-                    message: `Are you sure you want to delete column "${col.name}" from table "${data.label}"? This change will be saved to disk.`,
-                    confirmLabel: "Delete Column",
-                    isDanger: true,
-                    onConfirm: () => schemaState.deleteColumn(data.label, col.name),
-                  });
-                }}
-                title="Delete Field"
-              >
-                <Trash2 class="w-3 h-3" />
-              </button>
-            {/if}
           </div>
         </div>
       {/each}

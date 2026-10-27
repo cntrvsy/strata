@@ -19,12 +19,7 @@ export default defineConfig({
       preprocess: vitePreprocess(),
       adapter: adapter({
         fallback: "index.html"
-      }),
-      inspector: {
-        toggleKeyCombo: "alt-x",
-        showToggleButton: "always",
-        toggleButtonPos: "bottom-left"
-      }
+      })
     }),
   ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

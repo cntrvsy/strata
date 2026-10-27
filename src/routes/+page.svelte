@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Strata: The Drizzle Design Companion
+   * Strata: Visual Architecture Canvas & ERD Studio
    *
    * This is the root page component that assembles the visual editor.
    * It handles global keyboard shortcuts, drag-and-drop relationship creation,
@@ -53,7 +53,7 @@
     const isCrossStorage = sourceType !== "d1" || targetType !== "d1";
 
     if (isCrossStorage) {
-      // Connect as an architectural edge in @strata-layout (preserves Git-clean domain files)
+      // Connect as an architectural edge in layout manifest (preserves Git-clean domain files)
       await schemaState.addSyntheticRelation(connection.source, connection.target);
       const { toast } = await import("svelte-sonner");
       toast.success("Architectural Binding Linked", {
@@ -128,16 +128,29 @@
       }
     } else if ((e.key === "Delete" || e.key === "Backspace") && !isInput) {
       const selectedNode = schemaState.nodes.find((n) => n.selected);
+      const selectedEdge = schemaState.edges.find((edge) => edge.selected);
       if (selectedNode) {
         e.preventDefault();
-        const targetId = selectedNode.id;
-        schemaState.promptConfirm({
-          title: "Delete Entity",
-          message: `Are you sure you want to delete entity "${targetId}" from your schema? This will remove its column definitions and relationship declarations.`,
-          confirmLabel: "Delete Entity",
-          isDanger: true,
-          onConfirm: () => schemaState.deleteTable(targetId),
-        });
+        if (schemaState.isSandboxMode) {
+          schemaState.deleteTable(selectedNode.id);
+        } else {
+          import("svelte-sonner").then(({ toast }) => {
+            toast.info("Delete Code in Your Editor", {
+              description: `To prevent accidental code loss, delete "${selectedNode.id}" in your editor. Press Enter to jump directly to it.`,
+            });
+          });
+        }
+      } else if (selectedEdge) {
+        e.preventDefault();
+        if (schemaState.isSandboxMode) {
+          schemaState.deleteRelation(selectedEdge.source, selectedEdge.target, selectedEdge.label);
+        } else {
+          import("svelte-sonner").then(({ toast }) => {
+            toast.info("Delete Relation in Your Editor", {
+              description: `To prevent accidental schema corruption, delete foreign keys or relations() between "${selectedEdge.source}" and "${selectedEdge.target}" in your editor.`,
+            });
+          });
+        }
       }
     }
   }

@@ -1,7 +1,7 @@
 {
-  "name": "Strata - Drizzle and D1 Studio",
-  "version": "3.2.2",
-  "description": "Making it easier to visualize your cloudflare applications",
+  "name": "strata",
+  "version": "3.3.0",
+  "description": "Visual Architecture Canvas & ERD Studio for Drizzle ORM and Cloudflare Edge",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

@@ -236,6 +236,13 @@
           }
         });
       }
+    } else if (action === "toggle_focus" && targetId) {
+      schemaState.toggleFocusLock(targetId);
+    } else if (action === "delete_sandbox" && targetId) {
+      if (schemaState.isSandboxMode) {
+        schemaState.deleteTable(targetId);
+        toast.success(`Deleted ${targetId}`);
+      }
     }
   }
 </script>
@@ -272,6 +279,11 @@
         toast.info("Delete Code in Your Editor", {
           description:
             "To prevent accidental code loss, delete the table declaration in your editor. Strata will update instantly.",
+        });
+      } else if (edges.length > 0) {
+        toast.info("Delete Relation in Your Editor", {
+          description:
+            "To prevent accidental schema corruption, delete foreign keys or relations() in your editor. Strata will update instantly.",
         });
       }
     }}
@@ -338,37 +350,59 @@
     />
   </SvelteFlow>
 
-  {#if schemaState.isFocusLocked}
+  {#if schemaState.isFocusLocked || schemaState.activeFilter}
     <div
-      class="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-base-100/90 backdrop-blur-md border border-primary/40 px-3.5 py-1.5 rounded-full shadow-2xl flex items-center gap-2.5 text-xs select-none animate-in fade-in zoom-in-95 duration-200"
+      class="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-base-100/95 backdrop-blur-md border border-base-300 shadow-2xl px-3.5 py-1.5 rounded-full flex items-center gap-2.5 text-xs select-none animate-in fade-in zoom-in-95 duration-200"
     >
-      <span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
-      <span class="font-semibold text-base-content/90">
-        Focus Mode: <span class="font-bold text-primary">{schemaState.focusLockedNodeId}</span>
-        <span class="opacity-60 text-[11px]">({schemaState.highlightGraph.connectedCount} connected)</span>
-      </span>
+      {#if schemaState.isFocusLocked}
+        <span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+        <span class="font-semibold text-base-content/90">
+          Focus: <span class="font-bold text-primary">{schemaState.focusLockedNodeId}</span>
+          <span class="opacity-60 text-[11px]">({schemaState.highlightGraph.connectedCount} connected)</span>
+        </span>
 
-      <div class="h-3 w-px bg-base-300"></div>
+        <!-- 1-hop vs 2-hop toggle -->
+        <button
+          type="button"
+          class="badge badge-sm font-mono text-[9px] transition-all cursor-pointer {schemaState.highlightMode === 'transitive' ? 'badge-primary font-bold' : 'badge-ghost border-base-300'}"
+          onclick={() => {
+            schemaState.highlightMode = schemaState.highlightMode === 'direct' ? 'transitive' : 'direct';
+          }}
+          title="Toggle 2-hop transitive graph expansion"
+        >
+          {schemaState.highlightMode === 'transitive' ? '2-Hop' : 'Direct'}
+        </button>
 
-      <!-- 1-hop vs 2-hop toggle -->
-      <button
-        type="button"
-        class="badge badge-sm font-mono text-[9px] transition-all cursor-pointer {schemaState.highlightMode === 'transitive' ? 'badge-primary font-bold' : 'badge-ghost border-base-300'}"
-        onclick={() => {
-          schemaState.highlightMode = schemaState.highlightMode === 'direct' ? 'transitive' : 'direct';
-        }}
-        title="Toggle 2-hop transitive graph expansion"
-      >
-        {schemaState.highlightMode === 'transitive' ? '2-Hop Subgraph' : 'Direct Only'}
-      </button>
+        <button
+          type="button"
+          class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
+          onclick={() => schemaState.clearFocusLock()}
+          title="Clear Focus Lock (Esc)"
+        >
+          ✕ Exit Focus
+        </button>
+      {/if}
 
-      <button
-        type="button"
-        class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
-        onclick={() => schemaState.clearFocusLock()}
-      >
-        Esc to exit
-      </button>
+      {#if schemaState.isFocusLocked && schemaState.activeFilter}
+        <div class="h-3 w-px bg-base-300"></div>
+      {/if}
+
+      {#if schemaState.activeFilter}
+        <span class="flex items-center gap-1.5 text-xs font-semibold text-base-content/90">
+          <span>Filter:</span>
+          <span class="badge badge-sm font-mono text-[9px] uppercase font-bold {schemaState.activeFilter === 'do' ? 'badge-secondary' : schemaState.activeFilter === 'kv' ? 'badge-warning' : schemaState.activeFilter === 'r2' ? 'badge-info' : 'badge-primary'}">
+            {schemaState.activeFilter}
+          </span>
+        </span>
+        <button
+          type="button"
+          class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
+          onclick={() => (schemaState.activeFilter = null)}
+          title="Clear Filter"
+        >
+          ✕ Clear
+        </button>
+      {/if}
     </div>
   {/if}
 

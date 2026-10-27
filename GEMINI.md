@@ -1,6 +1,6 @@
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation.
 
-# Project: Strata (D1 ERD Tool)
+# Project: Strata (D1 Architecture Canvas & ERD Studio)
 
 ## Vision
 
@@ -22,7 +22,7 @@ Strata natively supports two schema archetypes:
 1. **Modular Barrel (`schema/index.ts` or barrel root) [Recommended for Teams]:**
    - Domain tables/entities are partitioned into separate files (e.g. `users.ts`, `posts.ts`, `relations.ts`).
    - The root barrel file re-exports all domain files (`export * from "./users";`).
-   - **Git-Clean Layout Manifest (`@strata-layout`)**: Node layout coordinates live **exclusively** in a consolidated root manifest comment in `index.ts`:
+   - **Git-Clean Layout Manifest (`@strata-layout` / `@cirrus-layout`)**: Node layout coordinates live **exclusively** in a consolidated root manifest comment in `index.ts`:
      ```typescript
      /**
       * @strata-layout {
@@ -31,7 +31,7 @@ Strata natively supports two schema archetypes:
       * }
       */
      ```
-   - **CRITICAL:** Individual domain files (`users.ts`, `posts.ts`) MUST remain pure Drizzle code with zero `@strata` position comments. Moving or dragging nodes on the canvas must touch only the `@strata-layout` manifest in the barrel root, ensuring zero Git merge conflicts in domain files.
+   - **CRITICAL:** Individual domain files (`users.ts`, `posts.ts`) MUST remain pure Drizzle code with zero `@strata` or `@cirrus` position comments. Moving or dragging nodes on the canvas must touch only the root manifest in the barrel root, ensuring zero Git merge conflicts in domain files.
    - Mutations (e.g., adding columns, indexes, or relations) must target the originating domain module directly. Cross-module foreign keys must inject explicit relative imports (e.g. `import { users } from "./users";`).
 
 2. **Single-File Monolith (`schema.ts`):**
@@ -52,8 +52,8 @@ Strata natively supports two schema archetypes:
 ## Architectural Guardrails
 
 1. **Layout & Metadata Storage:**
-   - In modular setups, save visual positions to the root `@strata-layout` manifest in `index.ts`. Never dirty domain files with layout coordinates.
-   - In single-file monoliths, persist coordinates in the declaration's inline `/** @strata { ... } */` comment.
+   - In modular setups, save visual positions to the root `@strata-layout` (or `@cirrus-layout`) manifest in `index.ts`. Never dirty domain files with layout coordinates.
+   - In single-file monoliths, persist coordinates in the declaration's inline `/** @strata { ... } */` (or `/** @cirrus { ... } */`) comment.
    - Synthetic cross-storage relationships (connecting D1 tables to KV, DO, or R2) are stored in JSDoc: `"relations": [{ "to": "targetName" }]`.
 2. **External IDE Pairing & Git as History:**
    - Strata pairs side-by-side with external editors (VS Code, Cursor). Changes saved to disk trigger live re-parsing.

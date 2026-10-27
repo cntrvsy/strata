@@ -254,22 +254,23 @@ export interface ExtractedStrataMetadata {
 }
 
 /**
- * Robustly extracts balanced JSDoc @strata JSON metadata from text using a character stack parser.
+ * Robustly extracts balanced JSDoc @cirrus or @strata JSON metadata from text using a character stack parser.
  * Handles nested objects, arrays, string quotes, escaped characters, and multi-line JSDoc comment asterisks.
  */
 export function extractStrataMetadata(text: string): ExtractedStrataMetadata | null {
-	const match = /@strata(?!\w|-)/.exec(text);
+	const match = /@(cirrus|strata)(?!\w|-)/.exec(text);
 	if (!match) return null;
+	const tag = match[1];
 	const strataIdx = match.index;
 
 	const startBraceIdx = text.indexOf('{', strataIdx);
 	if (startBraceIdx === -1) {
 		return {
-			rawMatch: '@strata',
+			rawMatch: `@${tag}`,
 			jsonStr: '',
 			data: null,
 			issue: {
-				message: 'Malformed @strata JSDoc: Missing opening bracket `{`',
+				message: `Malformed @${tag} JSDoc: Missing opening bracket \`{\``,
 				code: 'JSDOC_SYNTAX_ERROR'
 			}
 		};
@@ -319,7 +320,7 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 			jsonStr: rawMatch,
 			data: null,
 			issue: {
-				message: 'Malformed @strata JSDoc: Unclosed closing bracket `}`',
+				message: `Malformed @${tag} JSDoc: Unclosed closing bracket \`}\``,
 				code: 'JSDOC_SYNTAX_ERROR'
 			}
 		};
@@ -339,7 +340,7 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 				jsonStr: cleanJson,
 				data,
 				issue: {
-					message: `Unrecognized storage target "${data.target}". Strata supports: 'd1', 'kv', 'do', 'r2', 'project', or 'schema'.`,
+					message: `Unrecognized storage target "${data.target}". Cirrus supports: 'd1', 'kv', 'do', 'r2', 'project', or 'schema'.`,
 					code: 'INVALID_TARGET'
 				}
 			};
@@ -358,13 +359,13 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 				jsonStr: cleanJson,
 				data: softRepaired,
 				issue: {
-					message: 'JSDoc @strata syntax formatting issue (single quotes or trailing commas auto-repaired)',
+					message: `JSDoc @${tag} syntax formatting issue (single quotes or trailing commas auto-repaired)`,
 					code: 'JSDOC_SYNTAX_ERROR'
 				}
 			};
 		}
 
-		console.warn('[Strata] Failed to parse @strata JSON payload:', cleanJson, e);
+		console.warn(`[Cirrus] Failed to parse @${tag} JSON payload:`, cleanJson, e);
 		return {
 			rawMatch,
 			jsonStr: cleanJson,
@@ -398,34 +399,41 @@ export interface StrataLayoutManifestResult {
 }
 
 /**
- * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file,
+ * Extracts consolidated layout positions from @cirrus-layout or @strata-layout JSDoc in the schema file,
  * returning both the parsed manifest and any parsing diagnostics.
  */
 export function extractStrataLayoutManifestDetails(code: string): StrataLayoutManifestResult {
-	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 	if (!match) return { manifest: null };
-	const rawJson = match[1];
+	const tag = match[1];
+	const rawJson = match[2];
 	const cleanJson = rawJson.replace(/^\s*\*\s?/gm, '');
 	try {
 		return { manifest: JSON.parse(cleanJson), rawMatch: match[0] };
 	} catch (err: any) {
 		const softRepaired = trySoftRepairJson(cleanJson);
 		if (softRepaired) return { manifest: softRepaired, rawMatch: match[0] };
-		console.warn('[Strata] Failed to parse @strata-layout manifest:', err);
+		console.warn(`[Cirrus] Failed to parse @${tag}-layout manifest:`, err);
 		return {
 			manifest: null,
-			error: `Malformed @strata-layout JSON manifest: ${err?.message || String(err)}`,
+			error: `Malformed @${tag}-layout JSON manifest: ${err?.message || String(err)}`,
 			rawMatch: match[0]
 		};
 	}
 }
 
 /**
- * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file.
+ * Extracts consolidated layout positions from @cirrus-layout or @strata-layout JSDoc in the schema file.
  */
 export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number; [key: string]: any }> | null {
 	return extractStrataLayoutManifestDetails(code).manifest;
 }
+
+export const extractCirrusMetadata = extractStrataMetadata;
+export const extractCirrusLayoutManifest = extractStrataLayoutManifest;
+export const extractCirrusLayoutManifestDetails = extractStrataLayoutManifestDetails;
+export type CirrusLayoutManifestResult = StrataLayoutManifestResult;
+export type ExtractedCirrusMetadata = ExtractedStrataMetadata;
 
 /**
  * Calculates the relative TypeScript module import specifier from one file to another.

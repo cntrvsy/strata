@@ -1907,9 +1907,18 @@ export class SchemaState {
 	}
 
 	/**
-	 * Deletes a column from a table in the schema and syncs to disk.
+	/**
+	 * Deletes a column from a table in the schema (Sandbox only).
+	 * In disk mode, displays an informative toast directing user to editor.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
+		if (!this.isSandboxMode) {
+			toast.info("Delete Field in Your Editor", {
+				description: `To prevent cascade breakages, delete field "${colName}" on "${tableName}" in your editor.`
+			});
+			return;
+		}
+
 		const targetNode = this.nodes.find(n => n.id === tableName);
 		const target = targetNode?.data?.target || 'd1';
 
@@ -1923,38 +1932,28 @@ export class SchemaState {
 			return this.deleteFolder(tableName, colName);
 		}
 
-		const targetFile = this.getTargetFilePath(tableName);
-		const { removeColumnFromSchema } = await import("../parser");
-		await this.executeSchemaMutation("Column delete", (code) => 
-			removeColumnFromSchema(code, tableName, colName, targetFile),
-			targetFile
-		);
+		if (targetNode?.data?.columns) {
+			targetNode.data.columns = targetNode.data.columns.filter((c: any) => c.name !== colName);
+			this.nodes = [...this.nodes];
+		}
 	}
 
 	/**
-	 * Deletes an entire table/entity from the schema and syncs to disk.
+	 * Deletes an entire table/entity from the schema (Sandbox only).
+	 * In disk mode, displays an informative toast directing user to editor.
 	 */
 	async deleteTable(tableName: string) {
-		const node = this.nodes.find(n => n.id === tableName);
-		const target = (node?.data as any)?.target || 'd1';
-		const targetFile = this.getTargetFilePath(tableName);
-
-		if (this.isSandboxMode || !this.filePath) {
-			this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		if (!this.isSandboxMode) {
+			toast.info("Delete Code in Your Editor", {
+				description: `To prevent accidental code loss, delete "${tableName}" in your editor. Strata will update instantly.`
+			});
+			return;
 		}
 
-		const { removeTableFromSchema, removeTableFromLayoutManifest } = await import("../parser");
-		await this.executeSchemaMutation("Table delete", (code) => 
-			removeTableFromSchema(code, tableName),
-			targetFile
-		);
-		if (this.filePath && targetFile !== this.filePath && this.rawCode.includes('@strata-layout')) {
-			const updatedRootCode = removeTableFromLayoutManifest(this.rawCode, tableName);
-			if (updatedRootCode !== this.rawCode) {
-				this.rawCode = updatedRootCode;
-				await PlatformService.writeText(this.filePath, updatedRootCode);
-			}
-		}
+		this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		this.nodes = this.nodes.filter(n => n.id !== tableName);
+		this.edges = this.edges.filter(e => e.source !== tableName && e.target !== tableName);
+
 		if (this.activeInspectorNodeId === tableName) {
 			this.activeInspectorNodeId = null;
 		}

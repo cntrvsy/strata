@@ -274,21 +274,21 @@
           </ul>
         </div>
       {:else if schemaState.filePath}
-        <!-- Active File Mode -->
+        <!-- Active File Mode: Single canonical breadcrumb -->
         <div class="dropdown dropdown-bottom" data-tauri-drag-region="false">
           <div
             tabindex="0"
             role="button"
-            class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer"
+            class="join border border-base-300/80 rounded-field overflow-hidden bg-base-200/50 p-0.5 shadow-2xs hover:bg-base-200/80 transition-colors cursor-pointer flex items-center"
             title={schemaState.filePath}
             data-tauri-drag-region="false"
           >
             <div
-              class="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-base-content/85 max-w-44 sm:max-w-60 truncate"
+              class="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold text-base-content/85 max-w-56 sm:max-w-72 truncate"
             >
               <FolderOpen class="w-3 h-3 text-primary shrink-0" />
-              <span class="truncate"
-                >{schemaState.filePath.split(/[/\\]/).pop()}</span
+              <span class="truncate font-mono"
+                >{schemaState.filePath.split(/[/\\]/).slice(-2).join("/")}</span
               >
               <ChevronDown class="w-2.5 h-2.5 opacity-60 shrink-0 ml-0.5" />
             </div>
@@ -297,23 +297,36 @@
           <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
           <ul
             tabindex="0"
-            class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-52 p-1.5 shadow-2xl mt-1 text-xs gap-0.5"
+            class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-56 p-1.5 shadow-2xl mt-1 text-xs gap-0.5"
             data-tauri-drag-region="false"
           >
             <li
               class="menu-title text-[9px] uppercase tracking-wider opacity-50 px-2 py-1"
             >
-              File Session Actions
+              Schema Session Actions
+            </li>
+            <li>
+              <button
+                class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
+                onclick={() => {
+                  closeDropdown();
+                  if (schemaState.filePath) PlatformService.openInEditor(schemaState.filePath);
+                }}
+              >
+                <FileCode class="w-3.5 h-3.5 text-primary" />
+                <span>Open in Editor</span>
+              </button>
             </li>
             <li>
               <button
                 class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] font-medium"
                 onclick={onOpenFile}
               >
-                <FolderOpen class="w-3.5 h-3.5 text-primary" />
+                <FolderOpen class="w-3.5 h-3.5 text-base-content/70" />
                 <span>Switch / Open File...</span>
               </button>
             </li>
+            <div class="h-px bg-base-300/50 my-0.5"></div>
             <li>
               <button
                 class="flex items-center gap-2 rounded-field py-1.5 px-2 text-[11px] text-error hover:bg-error/10 font-medium"
@@ -328,6 +341,18 @@
             </li>
           </ul>
         </div>
+
+        <!-- Quick Jump to Editor Button in Header -->
+        <button
+          class="btn btn-ghost btn-xs btn-square w-6 h-6 rounded-field text-base-content/70 hover:text-primary hover:bg-primary/10"
+          onclick={() => {
+            if (schemaState.filePath) PlatformService.openInEditor(schemaState.filePath);
+          }}
+          title="Open in Editor (VS Code / Cursor)"
+          data-testid="titlebar-quick-open-in-editor"
+        >
+          <FileCode class="w-3.5 h-3.5" />
+        </button>
       {:else}
         <!-- Empty State -->
         <button
@@ -355,27 +380,23 @@
           title="Layout saved to schema"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
-          <span>Layout Saved</span>
+          <span>Saved</span>
         </div>
       {/if}
     </div>
 
-    <!-- CENTER: Window Drag Region & Subtle Status -->
+    <!-- CENTER: Clean Window Drag Region -->
     <div
       class="navbar-center flex-1 flex items-center justify-center h-full cursor-default select-none"
       data-tauri-drag-region
     >
-      <div
-        class="flex items-center gap-1.5 opacity-40 hover:opacity-75 transition-opacity text-[10px] font-mono pointer-events-none truncate max-w-xs"
-      >
-        {#if schemaState.isSandboxMode}
+      {#if schemaState.isSandboxMode}
+        <div
+          class="flex items-center gap-1.5 opacity-40 hover:opacity-75 transition-opacity text-[10px] font-mono pointer-events-none truncate max-w-xs"
+        >
           <span>in-memory playground</span>
-        {:else if schemaState.filePath}
-          <span class="truncate"
-            >{schemaState.filePath.split(/[/\\]/).slice(-2).join("/")}</span
-          >
-        {/if}
-      </div>
+        </div>
+      {/if}
     </div>
 
     <!-- END: Canvas Actions, Settings, & Window Controls -->

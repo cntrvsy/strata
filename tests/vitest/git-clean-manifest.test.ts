@@ -38,7 +38,7 @@ describe('Git-Clean Layout Manifest & Workspace Ingestion (Phase 5)', () => {
     };
 
     const withManifest = updateLayoutManifestInSchema(rootCode, positions);
-    expect(withManifest).toContain('@strata-layout');
+    expect(withManifest).toMatch(/@(cirrus|strata)-layout/);
     expect(withManifest).toContain('"users"');
     expect(withManifest).toContain('"posts"');
 
@@ -92,6 +92,76 @@ describe('Git-Clean Layout Manifest & Workspace Ingestion (Phase 5)', () => {
     expect(postsNode?.position.y).toBe(250);
   });
 
+  it('should apply @cirrus-layout manifest coordinates to modular nodes on parse (dual compatibility)', () => {
+    const rootWithManifest = `
+      /**
+       * @cirrus-layout {
+       *   "users": { "x": 180, "y": 280 },
+       *   "posts": { "x": 720, "y": 280 }
+       * }
+       */
+      export * from './users';
+      export * from './posts';
+    `;
+
+    const usersContent = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+    `;
+
+    const postsContent = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const posts = sqliteTable("posts", { id: integer("id").primaryKey() });
+    `;
+
+    const externalMap = new Map<string, string>();
+    externalMap.set('/project/db/users.ts', usersContent);
+    externalMap.set('/project/db/posts.ts', postsContent);
+
+    const result = parseSchema(rootWithManifest, externalMap, undefined, undefined, '/project/db/index.ts');
+    expect(result.success).toBe(true);
+
+    const usersNode = result.nodes.find(n => n.id === 'users');
+    const postsNode = result.nodes.find(n => n.id === 'posts');
+
+    expect(usersNode?.position.x).toBe(180);
+    expect(usersNode?.position.y).toBe(280);
+    expect(postsNode?.position.x).toBe(720);
+    expect(postsNode?.position.y).toBe(280);
+  });
+
+  it('should preserve existing @strata-layout tag when updating layout in legacy repositories', () => {
+    const legacyCode = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 100 }
+       * }
+       */
+      export * from './users';
+    `;
+
+    const updated = updateLayoutManifestInSchema(legacyCode, { users: { x: 250, y: 350 } });
+    expect(updated).toContain('@strata-layout');
+    expect(updated).not.toContain('@cirrus-layout');
+    expect(updated).toContain('"x": 250');
+  });
+
+  it('should preserve existing @cirrus-layout tag when updating layout in modernized repositories', () => {
+    const modernCode = `
+      /**
+       * @cirrus-layout {
+       *   "users": { "x": 100, "y": 100 }
+       * }
+       */
+      export * from './users';
+    `;
+
+    const updated = updateLayoutManifestInSchema(modernCode, { users: { x: 300, y: 400 } });
+    expect(updated).toContain('@cirrus-layout');
+    expect(updated).not.toContain('@strata-layout');
+    expect(updated).toContain('"x": 300');
+  });
+
   it('should update layout manifest in index.ts and leave domain files 100% clean in Git on node drag/save', async () => {
     const barrelRoot = `
       export * from './users';
@@ -135,9 +205,9 @@ export const posts = sqliteTable("posts", {
     // Save diagram positions
     await schemaState.saveToFile();
 
-    // Verify index.ts received the @strata-layout manifest
+    // Verify index.ts received the layout manifest
     expect(writtenFiles['/project/db/index.ts']).toBeDefined();
-    expect(writtenFiles['/project/db/index.ts']).toContain('@strata-layout');
+    expect(writtenFiles['/project/db/index.ts']).toMatch(/@(cirrus|strata)-layout/);
     expect(writtenFiles['/project/db/index.ts']).toContain('"x": 300');
 
     // CRITICAL: Verify users.ts and posts.ts were NEVER written to (0 Git diffs!)
@@ -318,7 +388,7 @@ export const posts = sqliteTable("posts", {
     ];
 
     const updated = updateAllNodePositionsInSchema(code, nodes);
-    expect(updated).toContain('@strata-layout');
+    expect(updated).toMatch(/@(cirrus|strata)-layout/);
     expect(updated).toContain('__clerk_identity__');
 
     const manifest = extractStrataLayoutManifest(updated);
@@ -443,7 +513,7 @@ export const posts = sqliteTable("posts", {
     const codeWithDirective = `"use server";\n\nimport { sqliteTable, integer } from "drizzle-orm/sqlite-core";\nexport const users = sqliteTable("users", { id: integer("id") });`;
     const updated = updateLayoutManifestInSchema(codeWithDirective, { users: { x: 100, y: 200 } });
     
-    expect(updated.startsWith('"use server";\n\n/**\n * @strata-layout')).toBe(true);
+    expect(updated).toMatch(/^"use server";\n\n\/\*\*[\s\S]*?@(cirrus|strata)-layout/);
     expect(updated).toContain('"users"');
   });
 
@@ -460,8 +530,9 @@ export const posts = sqliteTable("posts", {
     ] as any;
 
     const saved = updateAllNodePositionsInSchema(monolith, nodes);
-    expect(saved).toContain('@strata-layout');
+    expect(saved).toMatch(/@(cirrus|strata)-layout/);
     expect(saved).not.toContain('@strata {');
+    expect(saved).not.toContain('@cirrus {');
     
     // Declarations remain pure Drizzle code
     expect(saved).toContain('export const users = sqliteTable("users"');

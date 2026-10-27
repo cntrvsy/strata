@@ -36,6 +36,7 @@ export {
 	addForeignKeyToColumnInSchema,
 	fixD1ColumnTypeInSchema,
 	extractStrataLayoutManifest,
+	extractCirrusLayoutManifest,
 	updateLayoutManifestInSchema,
 	removeTableFromLayoutManifest,
 	renameTableInLayoutManifest,
@@ -48,7 +49,9 @@ export {
 } from './mutators';
 
 export {
-	extractStrataLayoutManifestDetails
+	extractStrataLayoutManifestDetails,
+	extractCirrusLayoutManifestDetails,
+	extractCirrusMetadata
 } from './helpers';
 
 
@@ -58,6 +61,10 @@ export type {
 	StrataEdge,
 	StrataNodeData,
 	StrataEdgeData,
+	CirrusNode,
+	CirrusEdge,
+	CirrusNodeData,
+	CirrusEdgeData,
 	ColumnDefinition,
 	StorageTarget
 } from './types';

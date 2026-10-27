@@ -238,33 +238,7 @@ export const workosUsers = sqliteTable("workosUsers", {
         </p>
       {/if}
 
-      <!-- Actions -->
-      <div class="pt-2 border-t border-base-300/60 flex flex-col gap-1.5">
-        <button
-          type="button"
-          class="btn btn-xs btn-outline btn-primary w-full gap-1.5 font-sans font-semibold text-[10px] shadow-sm hover:scale-[1.01] transition-transform"
-          onclick={handleCopySnippet}
-          title="Copy local D1 mirror table schema snippet"
-        >
-          {#if copied}
-            <Check class="w-3 h-3 text-success" />
-            <span>Copied {mirrorTableName}!</span>
-          {:else}
-            <Copy class="w-3 h-3" />
-            <span>Copy {mirrorTableName} Schema</span>
-          {/if}
-        </button>
 
-        <a
-          href={config.docsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-xs btn-ghost w-full gap-1 text-[10px] text-base-content/60 hover:text-base-content"
-        >
-          <span>Webhook Sync Docs</span>
-          <ArrowUpRight class="w-2.5 h-2.5" />
-        </a>
-      </div>
     </div>
   </div>
 

@@ -183,37 +183,7 @@
       </div>
     </div>
 
-    <!-- Active File Path or Sandbox Badge (Compact Basename) -->
-    {#if schemaState.isSandboxMode}
-      <div class="h-3 w-px bg-base-300/80"></div>
-      <div
-        class="flex items-center gap-1 opacity-90 text-secondary font-semibold text-[10px]"
-        title="Playground Sandbox Mode (In-Memory Engine)"
-      >
-        <FileText class="w-3.5 h-3.5" />
-        <span>Sandbox</span>
-      </div>
-    {:else if schemaState.filePath}
-      <div class="h-3 w-px bg-base-300/80"></div>
-      <div
-        class="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity cursor-default"
-        title={schemaState.filePath}
-      >
-        <FileText class="w-3.5 h-3.5 text-base-content/60" />
-        <span
-          class="truncate max-w-28 sm:max-w-44 font-semibold text-base-content/85"
-        >
-          {schemaState.filePath.split(/[/\\]/).pop()}
-        </span>
-        <button
-          class="btn btn-ghost btn-xs btn-circle h-4 w-4 min-h-0 hover:bg-base-200 text-base-content/50 hover:text-error ml-0.5"
-          onclick={() => schemaState.closeFile()}
-          title="Close schema & return to welcome overlay"
-        >
-          <X class="w-3 h-3" />
-        </button>
-      </div>
-    {/if}
+
 
     <!-- Audit Issues & Configuration Mismatches -->
     {#if (schemaState.filePath || schemaState.isSandboxMode) && schemaState.totalAuditCount > 0}
@@ -475,20 +445,7 @@
               <span class="opacity-60">Active Edges</span>
               <span class="font-bold text-primary">{stats.relations}</span>
             </div>
-            {#if schemaState.activeCoordinates}
-              <div
-                class="flex items-center justify-between border-t border-base-300/40 pt-1.5 mt-0.5"
-              >
-                <span class="opacity-60 flex-1">Coordinates</span>
-                <span
-                  class="font-bold text-secondary font-mono text-[10px] text-right"
-                >
-                  X: {Math.round(schemaState.activeCoordinates.x)}, Y: {Math.round(
-                    schemaState.activeCoordinates.y,
-                  )}
-                </span>
-              </div>
-            {/if}
+
           </div>
 
           <div
@@ -522,7 +479,7 @@
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"
-      title="Strata App Version">v{APP_VERSION}</span
+      title="Strata Version">v{APP_VERSION}</span
     >
   </div>
 </div>

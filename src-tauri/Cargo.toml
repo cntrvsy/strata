@@ -1,7 +1,7 @@
 [package]
 name = "strata"
-version = "3.2.2"
-description = "Making it easier to visualize your cloudflare applications"
+version = "3.3.0"
+description = "Visual Architecture Canvas & ERD Studio for Drizzle ORM and Cloudflare Edge"
 authors = ["cntrvsy"]
 edition = "2021"
 

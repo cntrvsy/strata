@@ -154,6 +154,7 @@
           <div class="flex items-center gap-1 shrink-0">
             <button
               class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 text-primary"
+              data-testid="inspector-open-in-editor"
               onclick={() => {
                 const targetFile =
                   moduleInfo?.sourceFilePath ||

@@ -232,8 +232,9 @@ describe('Mutation Logic', () => {
       { id: 'users', position: { x: 100, y: 150 } },
       { id: 'posts', position: { x: 200, y: 250 } }
     ] as any);
-    expect(newCode).toContain('@strata-layout');
+    expect(newCode).toMatch(/@(cirrus|strata)-layout/);
     expect(newCode).not.toContain('@strata {"x":');
+    expect(newCode).not.toContain('@cirrus {"x":');
     const extracted = extractStrataLayoutManifest(newCode);
     expect(extracted?.users).toEqual({ x: 100, y: 150 });
     expect(extracted?.posts).toEqual({ x: 200, y: 250 });
@@ -349,7 +350,7 @@ describe('Mutation Logic', () => {
     it('should create a JSDoc with @strata if none exists when updating position', () => {
       const code = `export const t = sqliteTable("t", { id: integer("id") });`;
       const newCode = updateNodePositionInSchema(code, 't', 10, 20);
-      expect(newCode).toContain('@strata { "x": 10, "y": 20 }');
+      expect(newCode).toMatch(/@(cirrus|strata) { "x": 10, "y": 20 }/);
     });
 
     it('should handle invalid JSON in @strata gracefully', () => {
@@ -673,7 +674,7 @@ describe('Mutation Logic', () => {
     it('should write and update project configuration JSDoc metadata in @strata-layout manifest', () => {
       const baseCode = `export const users = sqliteTable("users", { id: integer("id") });`;
       let mutated = updateProjectConfigInSchema(baseCode, { wranglerPath: '../../wrangler.toml' });
-      expect(mutated).toContain('@strata-layout');
+      expect(mutated).toMatch(/@(cirrus|strata)-layout/);
       expect(mutated).toContain('"wranglerPath": "../../wrangler.toml"');
       const parsed1 = parseSchema(mutated);
       expect(parsed1.wranglerPath).toBe('../../wrangler.toml');
