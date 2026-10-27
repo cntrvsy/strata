@@ -25,10 +25,12 @@
   import { PlatformService } from "#lib/services/platform";
   import { toast } from "svelte-sonner";
 
-  const { onconnect, onnodedragstop } = $props<{
-    onconnect: (connection: any) => void;
-    onnodedragstop: (event: any) => void;
-  }>();
+  interface DiagramCanvasProps {
+    onconnect?: (connection: any) => void;
+    onnodedragstop?: (event: any) => void;
+  }
+
+  const { onconnect, onnodedragstop }: DiagramCanvasProps = $props();
 
   const nodeTypes = {
     table: TableNode,

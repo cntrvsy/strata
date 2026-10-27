@@ -21,19 +21,21 @@
   import { PlatformService } from "#lib/services/platform";
   import { toast } from "svelte-sonner";
 
+  interface NodeQuickActionsProps {
+    nodeId: string;
+    nodeType: "table" | "do" | "kv" | "r2" | "identity";
+    selected?: boolean;
+    targetFile?: string | null;
+    line?: number;
+  }
+
   const {
     nodeId,
     nodeType,
     selected = false,
     targetFile,
     line,
-  } = $props<{
-    nodeId: string;
-    nodeType: "table" | "do" | "kv" | "r2" | "identity";
-    selected?: boolean;
-    targetFile?: string;
-    line?: number;
-  }>();
+  }: NodeQuickActionsProps = $props();
 
   let copied = $state(false);
 

@@ -10,7 +10,7 @@
   import { Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal, FileCode } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
-  const { x, y, type, targetId, nodeType, nodeData, onClose, onAction } = $props<{
+  interface ContextMenuProps {
     x: number;
     y: number;
     type: "canvas" | "node";
@@ -19,7 +19,9 @@
     nodeData?: any;
     onClose: () => void;
     onAction: (action: string, data?: any) => void;
-  }>();
+  }
+
+  const { x, y, type, targetId, nodeType, nodeData, onClose, onAction }: ContextMenuProps = $props();
 
   let menuElement = $state<HTMLDivElement | null>(null);
 

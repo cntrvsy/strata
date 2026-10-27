@@ -20,7 +20,7 @@
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
 
-  const { id, data, selected, dragging } = $props<{
+  interface IdentityNodeProps {
     id?: string;
     data: {
       provider: "clerk" | "workos";
@@ -31,7 +31,9 @@
     };
     selected?: boolean;
     dragging?: boolean;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: IdentityNodeProps = $props();
 
   const nodeId = $derived(
     id || (data.provider === "clerk" ? "__clerk_identity__" : "__workos_identity__"),

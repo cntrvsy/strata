@@ -23,7 +23,7 @@
     ShieldCheck,
   } from "lucide-svelte";
 
-  const { id, data, selected, dragging } = $props<{
+  interface TableNodeProps {
     id?: string;
     data: {
       label: string;
@@ -43,7 +43,9 @@
     };
     selected?: boolean;
     dragging?: boolean;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: TableNodeProps = $props();
 
   const nodeId = $derived(id || data.label);
 
