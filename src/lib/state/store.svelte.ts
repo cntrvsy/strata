@@ -2730,14 +2730,12 @@ export class SchemaState {
 		if (doEntries.length > 0) snippet += `"durable_objects": {\n  "bindings": [\n${doEntries.join(",\n")}\n  ]\n},\n`;
 		if (r2Entries.length > 0) snippet += `"r2_buckets": [\n${r2Entries.join(",\n")}\n],\n`;
 
-		if (typeof navigator !== 'undefined' && navigator.clipboard) {
-			try {
-				await navigator.clipboard.writeText(snippet.trim());
-				toast.success("Wrangler Recipe Copied", {
-					description: `Copied configuration for ${unconfiguredNodes.length} binding(s) to clipboard. Paste into your wrangler.jsonc.`
-				});
-				return;
-			} catch {}
+		const copied = await PlatformService.writeClipboard(snippet.trim());
+		if (copied) {
+			toast.success("Wrangler Recipe Copied", {
+				description: `Copied configuration for ${unconfiguredNodes.length} binding(s) to clipboard. Paste into your wrangler.jsonc.`
+			});
+			return;
 		}
 
 		toast.info("Unconfigured Wrangler Bindings", {

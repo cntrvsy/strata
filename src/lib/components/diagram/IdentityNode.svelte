@@ -8,6 +8,7 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
   import NodeQuickActions from "./NodeQuickActions.svelte";
   import { FingerprintPattern, Building2, Link2 } from "lucide-svelte";
   import { toast } from "svelte-sonner";
@@ -115,8 +116,8 @@ export const workosUsers = sqliteTable("workosUsers", {
   let copied = $state(false);
 
   async function handleCopySnippet() {
-    try {
-      await navigator.clipboard.writeText(snippet);
+    const ok = await PlatformService.writeClipboard(snippet);
+    if (ok) {
       copied = true;
       toast.success(`Copied ${mirrorTableName} Schema Snippet`, {
         description: "Paste into your schema file in VS Code or Cursor.",
@@ -124,8 +125,6 @@ export const workosUsers = sqliteTable("workosUsers", {
       setTimeout(() => {
         copied = false;
       }, 2000);
-    } catch (e) {
-      console.error("Failed to copy snippet:", e);
     }
   }
 </script>

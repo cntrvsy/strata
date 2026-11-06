@@ -122,7 +122,7 @@
           class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-info hover:bg-info/10 transition-colors tooltip tooltip-bottom"
           data-tip="Provider Docs"
           onclick={handleOpenDocs}
-          title="Provider Docs"
+          aria-label="Provider Docs"
         >
           <ExternalLink class="w-3.5 h-3.5" />
         </button>
@@ -133,7 +133,7 @@
           class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
           data-tip="Open in Editor (Double-click)"
           onclick={handleOpenEditor}
-          title="Open in Editor (Double-click)"
+          aria-label="Open in Editor (Double-click)"
         >
           <FileCode class="w-3.5 h-3.5" />
         </button>
@@ -145,7 +145,7 @@
         class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
         data-tip={copied ? "Copied!" : "Copy Snippet"}
         onclick={handleCopySnippet}
-        title="Copy Snippet"
+        aria-label="Copy Snippet"
       >
         {#if copied}
           <Check class="w-3.5 h-3.5 text-success" />
@@ -166,7 +166,7 @@
           ? "Unlock Subgraph (F)"
           : "Isolate Subgraph (F)"}
         onclick={() => schemaState.toggleFocusLock(nodeId)}
-        title="Isolate Subgraph (F)"
+        aria-label="Isolate Subgraph (F)"
       >
         <Focus class="w-3.5 h-3.5" />
       </button>
@@ -179,7 +179,7 @@
           class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
           data-tip="Delete (Sandbox)"
           onclick={handleDelete}
-          title="Delete (Sandbox)"
+          aria-label="Delete (Sandbox)"
         >
           <Trash2 class="w-3.5 h-3.5" />
         </button>

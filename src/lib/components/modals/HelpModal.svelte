@@ -34,6 +34,7 @@
   import { toast } from "svelte-sonner";
   import { fade } from "svelte/transition";
   import { schemaState } from "#lib/state";
+  import { PlatformService } from "#lib/services/platform";
   import { SAMPLE_TEMPLATES } from "#lib/mock";
 
   let { show = $bindable(false) } = $props();
@@ -203,9 +204,9 @@ export const workosUsers = sqliteTable("workosUsers", {
   const currentBp = $derived(authBlueprints[activeAuthProvider]);
 
   async function copyAuthBlueprint(providerKey: AuthProviderKey) {
-    try {
-      const blueprint = authBlueprints[providerKey];
-      await navigator.clipboard.writeText(blueprint.snippet);
+    const blueprint = authBlueprints[providerKey];
+    const ok = await PlatformService.writeClipboard(blueprint.snippet);
+    if (ok) {
       authCopied = true;
       toast.success(`Copied ${blueprint.name} Schema`, {
         description: `Paste into ${authArchetype === 'barrel' ? blueprint.recommendedFile : 'schema.ts'}.`
@@ -213,8 +214,7 @@ export const workosUsers = sqliteTable("workosUsers", {
       setTimeout(() => {
         authCopied = false;
       }, 2000);
-    } catch (e) {
-      console.error("[Strata] Copy blueprint failed:", e);
+    } else {
       toast.error("Failed to copy blueprint to clipboard");
     }
   }
@@ -237,11 +237,13 @@ Summary: ${topic.summary}
 Details:
 ${plainContent.trim()}
 `;
-      await navigator.clipboard.writeText(markdown);
-      copiedTopicId = topic.id;
-      setTimeout(() => {
-        if (copiedTopicId === topic.id) copiedTopicId = null;
-      }, 2000);
+      const ok = await PlatformService.writeClipboard(markdown);
+      if (ok) {
+        copiedTopicId = topic.id;
+        setTimeout(() => {
+          if (copiedTopicId === topic.id) copiedTopicId = null;
+        }, 2000);
+      }
     } catch (e) {
       console.error("[Strata] Copy card failed:", e);
     }
@@ -532,12 +534,10 @@ ${plainContent.trim()}
   });
 
   async function copyBuilderJSDoc() {
-    try {
-      await navigator.clipboard.writeText(activeJSDocOutput);
+    const ok = await PlatformService.writeClipboard(activeJSDocOutput);
+    if (ok) {
       builderCopied = true;
       setTimeout(() => (builderCopied = false), 2000);
-    } catch (e) {
-      console.error("[Strata] Builder copy failed:", e);
     }
   }
 
@@ -1092,12 +1092,10 @@ TASK / DIRECTIVE:
 Generate only valid, production-ready TypeScript code inside standard markdown codeblocks without conversational fluff.`;
 
   async function copyPrompt() {
-    try {
-      await navigator.clipboard.writeText(aiPrompt);
+    const ok = await PlatformService.writeClipboard(aiPrompt);
+    if (ok) {
       copied = true;
       setTimeout(() => (copied = false), 2000);
-    } catch (e) {
-      console.error("[Strata] Clipboard write failed:", e);
     }
   }
 
