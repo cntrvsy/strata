@@ -11,7 +11,6 @@
     Cpu,
     Zap,
     X,
-    Heart,
     HardDrive,
     Wrench,
     TriangleAlert,
@@ -89,7 +88,7 @@
     const ok = await PlatformService.writeClipboard(drizzleSnippet);
     if (ok) {
       copied = true;
-      toast.success(`Copied "${selectedNode?.id || ''}" snippet`);
+      toast.success(`Copied "${selectedNode?.id || ""}" snippet`);
       setTimeout(() => {
         copied = false;
       }, 2000);
@@ -305,9 +304,13 @@
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           {#if isSource}
-                            <ArrowRight class="w-3.5 h-3.5 text-primary shrink-0" />
+                            <ArrowRight
+                              class="w-3.5 h-3.5 text-primary shrink-0"
+                            />
                           {:else}
-                            <ArrowLeft class="w-3.5 h-3.5 text-secondary shrink-0" />
+                            <ArrowLeft
+                              class="w-3.5 h-3.5 text-secondary shrink-0"
+                            />
                           {/if}
                           <span
                             class="font-bold text-xs text-base-content font-mono"

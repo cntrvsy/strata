@@ -6,20 +6,16 @@
   Output: Read-only telemetry for Durable Objects.
 -->
 <script lang="ts">
-  import {
-    FileCode,
-    TriangleAlert,
-    Cpu,
-    Layers,
-    Code,
-  } from "lucide-svelte";
+  import { TriangleAlert, Layers } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
-  let { tableName, data, isReadOnly } = $props<{
+  interface DOInspectorProps {
     tableName: string;
     data: any;
     isReadOnly: boolean;
-  }>();
+  }
+
+  let { tableName, data, isReadOnly }: DOInspectorProps = $props();
 
   const strataData = $derived(data.strata || {});
   const doClassName = $derived(strataData.class || data.doClass || tableName);
@@ -44,7 +40,9 @@
 
 <div class="flex flex-col gap-4">
   <!-- Cloudflare Worker Binding Read-Only Overlay Banner -->
-  <div class="px-3 py-2 bg-secondary/10 border border-secondary/20 rounded-box flex items-center justify-between text-[11px]">
+  <div
+    class="px-3 py-2 bg-secondary/10 border border-secondary/20 rounded-box flex items-center justify-between text-[11px]"
+  >
     <span class="font-bold text-secondary">Cloudflare Durable Object</span>
     <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
   </div>
@@ -77,8 +75,13 @@
 
     <!-- Class Name Display -->
     <div class="flex flex-col gap-1">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Class Name</span>
-      <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-xs font-bold text-secondary">
+      <span
+        class="text-[10px] font-bold uppercase tracking-wider text-base-content/60"
+        >Class Name</span
+      >
+      <div
+        class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-xs font-bold text-secondary"
+      >
         {doClassName}
       </div>
     </div>
@@ -86,17 +89,31 @@
     <!-- TS Path Display -->
     {#if doPathName}
       <div class="flex flex-col gap-1">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Source File</span>
-        <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/80 break-all">
+        <span
+          class="text-[10px] font-bold uppercase tracking-wider text-base-content/60"
+          >Source File</span
+        >
+        <div
+          class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/80 break-all"
+        >
           {doPathName}
         </div>
       </div>
     {/if}
 
     <!-- Storage Engine Display -->
-    <div class="flex items-center justify-between p-2 rounded-field bg-base-100 border border-base-300 text-xs">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-base-content/60">Storage Engine</span>
-      <span class="badge badge-xs {isSqlite ? 'badge-warning font-bold' : 'badge-ghost'} font-mono text-[9px]">
+    <div
+      class="flex items-center justify-between p-2 rounded-field bg-base-100 border border-base-300 text-xs"
+    >
+      <span
+        class="text-[10px] font-bold uppercase tracking-wider text-base-content/60"
+        >Storage Engine</span
+      >
+      <span
+        class="badge badge-xs {isSqlite
+          ? 'badge-warning font-bold'
+          : 'badge-ghost'} font-mono text-[9px]"
+      >
         {isSqlite ? "SQLite DO (Embedded DB)" : "Standard Key-Value"}
       </span>
     </div>

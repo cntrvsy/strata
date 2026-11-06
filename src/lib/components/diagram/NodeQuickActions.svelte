@@ -10,8 +10,6 @@
   import {
     FileCode,
     Copy,
-    Plus,
-    SlidersHorizontal,
     Trash2,
     Check,
     Focus,
@@ -98,87 +96,94 @@
       return;
     }
     toast.info("Delete Code in Your Editor", {
-      description: "To prevent accidental code loss, delete the declaration in your editor. Cirrus will update instantly.",
+      description:
+        "To prevent accidental code loss, delete the declaration in your editor. Cirrus will update instantly.",
     });
   }
 </script>
 
 {#if selected}
-<NodeToolbar
-  isVisible={selected}
-  position={Position.Top}
-  offset={10}
-  align="center"
-  class="z-50!"
->
-  <div
-    class="flex items-center gap-0.5 bg-base-100/95 border border-base-300 shadow-xl px-1 py-0.5 rounded-xl text-base-content select-none animate-in fade-in zoom-in-95 duration-100"
-    role="toolbar"
-    aria-label="Node quick actions"
+  <NodeToolbar
+    isVisible={selected}
+    position={Position.Top}
+    offset={10}
+    align="center"
+    class="z-50!"
   >
-    {#if nodeType === "identity"}
-      <!-- Provider External Documentation -->
-      <button
-        type="button"
-        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-info hover:bg-info/10 transition-colors tooltip tooltip-bottom"
-        data-tip="Provider Docs"
-        onclick={handleOpenDocs}
-        title="Provider Docs"
-      >
-        <ExternalLink class="w-3.5 h-3.5" />
-      </button>
-    {:else}
-      <!-- Jump to Code in VS Code / Cursor -->
+    <div
+      class="flex items-center gap-0.5 bg-base-100/95 border border-base-300 shadow-xl px-1 py-0.5 rounded-xl text-base-content select-none animate-in fade-in zoom-in-95 duration-100"
+      role="toolbar"
+      aria-label="Node quick actions"
+    >
+      {#if nodeType === "identity"}
+        <!-- Provider External Documentation -->
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-info hover:bg-info/10 transition-colors tooltip tooltip-bottom"
+          data-tip="Provider Docs"
+          onclick={handleOpenDocs}
+          title="Provider Docs"
+        >
+          <ExternalLink class="w-3.5 h-3.5" />
+        </button>
+      {:else}
+        <!-- Jump to Code in VS Code / Cursor -->
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
+          data-tip="Open in Editor (Double-click)"
+          onclick={handleOpenEditor}
+          title="Open in Editor (Double-click)"
+        >
+          <FileCode class="w-3.5 h-3.5" />
+        </button>
+      {/if}
+
+      <!-- Copy Code / Snippet -->
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-        data-tip="Open in Editor (Double-click)"
-        onclick={handleOpenEditor}
-        title="Open in Editor (Double-click)"
+        data-tip={copied ? "Copied!" : "Copy Snippet"}
+        onclick={handleCopySnippet}
+        title="Copy Snippet"
       >
-        <FileCode class="w-3.5 h-3.5" />
+        {#if copied}
+          <Check class="w-3.5 h-3.5 text-success" />
+        {:else}
+          <Copy class="w-3.5 h-3.5" />
+        {/if}
       </button>
-    {/if}
 
-    <!-- Copy Code / Snippet -->
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-      data-tip={copied ? "Copied!" : "Copy Snippet"}
-      onclick={handleCopySnippet}
-      title="Copy Snippet"
-    >
-      {#if copied}
-        <Check class="w-3.5 h-3.5 text-success" />
-      {:else}
-        <Copy class="w-3.5 h-3.5" />
-      {/if}
-    </button>
-
-    <!-- Isolate / Focus Subgraph -->
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-square rounded-lg transition-colors tooltip tooltip-bottom {schemaState.isFocusLocked && schemaState.focusLockedNodeId === nodeId ? 'text-primary bg-primary/15' : 'text-base-content/75 hover:text-primary hover:bg-primary/10'}"
-      data-tip={schemaState.isFocusLocked && schemaState.focusLockedNodeId === nodeId ? "Unlock Subgraph (F)" : "Isolate Subgraph (F)"}
-      onclick={() => schemaState.toggleFocusLock(nodeId)}
-      title="Isolate Subgraph (F)"
-    >
-      <Focus class="w-3.5 h-3.5" />
-    </button>
-
-    <!-- Delete Entity (Sandbox Mode Only) -->
-    {#if schemaState.isSandboxMode && nodeType !== "identity"}
-      <div class="w-px h-3 bg-base-300 mx-0.5"></div>
+      <!-- Isolate / Focus Subgraph -->
       <button
         type="button"
-        class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
-        data-tip="Delete (Sandbox)"
-        onclick={handleDelete}
-        title="Delete (Sandbox)"
+        class="btn btn-ghost btn-xs btn-square rounded-lg transition-colors tooltip tooltip-bottom {schemaState.isFocusLocked &&
+        schemaState.focusLockedNodeId === nodeId
+          ? 'text-primary bg-primary/15'
+          : 'text-base-content/75 hover:text-primary hover:bg-primary/10'}"
+        data-tip={schemaState.isFocusLocked &&
+        schemaState.focusLockedNodeId === nodeId
+          ? "Unlock Subgraph (F)"
+          : "Isolate Subgraph (F)"}
+        onclick={() => schemaState.toggleFocusLock(nodeId)}
+        title="Isolate Subgraph (F)"
       >
-        <Trash2 class="w-3.5 h-3.5" />
+        <Focus class="w-3.5 h-3.5" />
       </button>
-    {/if}
-  </div>
-</NodeToolbar>
+
+      <!-- Delete Entity (Sandbox Mode Only) -->
+      {#if schemaState.isSandboxMode && nodeType !== "identity"}
+        <div class="w-px h-3 bg-base-300 mx-0.5"></div>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
+          data-tip="Delete (Sandbox)"
+          onclick={handleDelete}
+          title="Delete (Sandbox)"
+        >
+          <Trash2 class="w-3.5 h-3.5" />
+        </button>
+      {/if}
+    </div>
+  </NodeToolbar>
 {/if}

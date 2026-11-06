@@ -24,10 +24,12 @@
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
 
-  const { node, onDismiss } = $props<{
+  interface IdentityInspectorProps {
     node: any;
     onDismiss: () => void;
-  }>();
+  }
+
+  const { node, onDismiss }: IdentityInspectorProps = $props();
 
   const data = $derived(node?.data || {});
   const provider = $derived<"clerk" | "workos">(data.provider || "clerk");

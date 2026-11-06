@@ -8,7 +8,6 @@
 <script lang="ts">
   import {
     RefreshCw,
-    FileText,
     Database,
     Layers,
     Cpu,
@@ -17,7 +16,6 @@
     TriangleAlert,
     CircleAlert,
     Wrench,
-    X,
     Lightbulb,
     CircleX,
     Crosshair,
@@ -182,8 +180,6 @@
         </div>
       </div>
     </div>
-
-
 
     <!-- Audit Issues & Configuration Mismatches -->
     {#if (schemaState.filePath || schemaState.isSandboxMode) && schemaState.totalAuditCount > 0}
@@ -445,7 +441,6 @@
               <span class="opacity-60">Active Edges</span>
               <span class="font-bold text-primary">{stats.relations}</span>
             </div>
-
           </div>
 
           <div

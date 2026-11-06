@@ -22,7 +22,8 @@
     TriangleAlert,
   } from "lucide-svelte";
 
-  const { id, data, selected, dragging } = $props<{
+  interface KVNamespaceNodeProps {
+    id?: string;
     data: {
       label: string;
       columns?: Array<{
@@ -58,8 +59,9 @@
     };
     selected?: boolean;
     dragging?: boolean;
-    id?: string;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: KVNamespaceNodeProps = $props();
 
   const nodeId = $derived(id || data.label);
 

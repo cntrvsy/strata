@@ -7,7 +7,16 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal, FileCode } from "lucide-svelte";
+  import {
+    Trash2,
+    Focus,
+    ShieldCheck,
+    Sparkles,
+    ExternalLink,
+    Copy,
+    SlidersHorizontal,
+    FileCode,
+  } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
   interface ContextMenuProps {
@@ -21,7 +30,16 @@
     onAction: (action: string, data?: any) => void;
   }
 
-  const { x, y, type, targetId, nodeType, nodeData, onClose, onAction }: ContextMenuProps = $props();
+  const {
+    x,
+    y,
+    type,
+    targetId,
+    nodeType,
+    nodeData,
+    onClose,
+    onAction,
+  }: ContextMenuProps = $props();
 
   let menuElement = $state<HTMLDivElement | null>(null);
 
@@ -60,7 +78,11 @@
         class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-60 border-b border-base-300/40 mb-1 leading-none text-base-content flex items-center justify-between"
       >
         <span>{nodeData?.title || targetId}</span>
-        <span class="badge badge-xs {nodeData?.provider === 'clerk' ? 'badge-secondary' : 'badge-accent'} text-[8px] py-0.5">IdP</span>
+        <span
+          class="badge badge-xs {nodeData?.provider === 'clerk'
+            ? 'badge-secondary'
+            : 'badge-accent'} text-[8px] py-0.5">IdP</span
+        >
       </div>
       <button
         class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
@@ -108,7 +130,16 @@
         class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-40 border-b border-base-300/40 mb-1 leading-none text-base-content/70 flex items-center justify-between"
       >
         <span>{targetId}</span>
-        <span class="badge badge-xs {nodeData?.target === 'do' ? 'badge-secondary' : nodeData?.target === 'kv' ? 'badge-warning' : nodeData?.target === 'r2' ? 'badge-info' : 'badge-neutral'} text-[8px] uppercase">{nodeData?.target || 'd1'}</span>
+        <span
+          class="badge badge-xs {nodeData?.target === 'do'
+            ? 'badge-secondary'
+            : nodeData?.target === 'kv'
+              ? 'badge-warning'
+              : nodeData?.target === 'r2'
+                ? 'badge-info'
+                : 'badge-neutral'} text-[8px] uppercase"
+          >{nodeData?.target || "d1"}</span
+        >
       </div>
       <button
         class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
