@@ -8,7 +8,7 @@
 [![Svelte 5](https://img.shields.io/badge/Svelte-5.0-orange.svg)](https://svelte.dev)
 [![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg)](https://v2.tauri.app)
 [![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-v0.45.2-brightgreen.svg)](https://orm.drizzle.team)
-[![Tests Passing](https://img.shields.io/badge/Tests-223%20passed-success.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/Tests-230%20passed-success.svg)](tests/)
 
 _Single Source of Truth • AST-Driven • Local-First • Zero Git Noise • Zero Lock-In_
 
@@ -52,9 +52,17 @@ Unlike traditional database diagram tools that rely on sidecar JSON files, hidde
 ### Cloudflare Architecture Support
 
 - **Cloudflare D1**: Full visual design for relational SQL tables, column types, primary keys, and foreign keys.
-- **KV Namespaces**: Map key-value schemas with explicit value types, TTL (with 60s minimum guard), and metadata attributes.
-- **Durable Objects (DO)**: Define embedded state objects, class targets, and interface methods.
-- **R2 Storage Buckets**: Configure bucket bindings, CORS policies, public access flags, and folder structure targets.
+- **KV Namespaces**: Map key-value schemas with explicit value types, TTL (with 60s minimum guard), and metadata attributes. Inferred directly from `@strata-layout` or Wrangler configurations.
+- **Durable Objects (DO)**: Define embedded state objects, class targets, and interface methods. Supports reading live class methods from worker entrypoints or DO class files via `@strata-layout { "path": ... }`.
+- **R2 Storage Buckets**: Configure bucket bindings, CORS policies, public access flags, and folder structure targets (`"folders": { "builds": "application/zip" }`).
+
+### High-Performance Architecture Engine
+
+- **Single-Pass AST Discovery**: Comment-stripping pre-scanner discovers module imports/re-exports and external DO/R2/KV paths before AST creation.
+- **SourceFile Content Deduplication**: Prevents duplicate AST allocations across aliased domain imports and barrel re-exports.
+- **Parallel & Cached I/O**: `tsconfig.json`, `wrangler.jsonc`, and workspace root lookups are directory-cached and fetched with concurrent async I/O.
+- **Instant Layout Persistence**: Dragging canvas cards patches `@strata-layout` coordinates directly to disk without full AST re-parsing.
+- **Compositor-Thread CSS Animations**: Pure `opacity` and `transform` CSS transitions with Svelte Flow node containment (`contain: layout style;`), eliminating layout reflows during high-density graph exploration.
 
 ### Two-Tier Relationship Engine
 
@@ -89,7 +97,20 @@ In modular setups (`schema/index.ts`), node coordinates are consolidated into a 
  *   "users": { "x": 100, "y": 150 },
  *   "posts": { "x": 520, "y": 150 },
  *   "comments": { "x": 520, "y": 480 },
- *   "__clerk_identity__": { "x": -250, "y": 150 }
+ *   "__clerk_identity__": { "x": -250, "y": 150 },
+ *   "GAMES_BUCKET": {
+ *     "x": 1825,
+ *     "y": 950,
+ *     "folders": { "builds": "application/zip" },
+ *     "relations": [{ "to": "posts" }]
+ *   },
+ *   "TELEMETRY_BUFFER": {
+ *     "x": 1320,
+ *     "y": 1443,
+ *     "path": "../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts",
+ *     "class": "TelemetrySessionDO",
+ *     "relations": [{ "to": "posts" }, { "to": "GAMES_BUCKET" }]
+ *   }
  * }
  */
 export * from "./users";
@@ -204,7 +225,7 @@ Strata maintains a strict suite of unit, AST, type diagnostic, and E2E browser t
 # Run Svelte & TypeScript type diagnostic checks
 npm run check
 
-# Run Vitest unit & AST parser test suite (223 tests across 17 files)
+# Run Vitest unit & AST parser test suite (230 tests across 17 files)
 npm test
 
 # Run Playwright end-to-end UI tests (16 tests)

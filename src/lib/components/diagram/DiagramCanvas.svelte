@@ -390,7 +390,7 @@
           type="button"
           class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
           onclick={() => schemaState.clearFocusLock()}
-          title="Clear Focus Lock (Esc)"
+          aria-label="Clear Focus Lock (Esc)"
         >
           ✕ Exit Focus
         </button>
@@ -411,7 +411,7 @@
           type="button"
           class="badge badge-sm badge-ghost border-base-300 hover:border-error hover:bg-error/10 hover:text-error text-[10px] font-mono transition-colors cursor-pointer"
           onclick={() => (schemaState.activeFilter = null)}
-          title="Clear Filter"
+          aria-label="Clear Filter"
         >
           ✕ Clear
         </button>

@@ -172,7 +172,7 @@
             <button
               class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
               onclick={dismiss}
-              title="Close Inspector"
+              aria-label="Close Inspector"
             >
               <X class="w-4 h-4 opacity-60" />
             </button>

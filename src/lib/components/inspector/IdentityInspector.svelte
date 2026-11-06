@@ -174,7 +174,7 @@ export const organizations = sqliteTable("organizations", {
     <button
       class="btn btn-ghost btn-xs btn-circle hover:bg-base-200"
       onclick={onDismiss}
-      title="Close Inspector"
+      aria-label="Close Inspector"
       data-testid="identity-inspector-close"
     >
       <X class="w-4 h-4 opacity-60" />
