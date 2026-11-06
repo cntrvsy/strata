@@ -571,4 +571,143 @@ export function detectPackageWrapper(code: string, filePath?: string): PackageWr
 	};
 }
 
+/**
+ * Strips line and block comments from TypeScript source code while preserving string literals.
+ * Used by the fast import/export pre-scanner so commented-out imports are never fetched.
+ */
+function stripCommentsPreservingStrings(code: string): string {
+	let out = '';
+	let inString = false;
+	let quoteChar = '';
+	let i = 0;
+
+	while (i < code.length) {
+		const char = code[i];
+		const nextChar = code[i + 1];
+
+		if (inString) {
+			out += char;
+			if (char === '\\') {
+				out += nextChar || '';
+				i += 2;
+				continue;
+			}
+			if (char === quoteChar) {
+				inString = false;
+			}
+			i++;
+			continue;
+		}
+
+		if (char === '"' || char === "'" || char === '`') {
+			inString = true;
+			quoteChar = char;
+			out += char;
+			i++;
+			continue;
+		}
+
+		if (char === '/' && nextChar === '/') {
+			i += 2;
+			while (i < code.length && code[i] !== '\n' && code[i] !== '\r') i++;
+			continue;
+		}
+
+		if (char === '/' && nextChar === '*') {
+			i += 2;
+			while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) i++;
+			i += 2;
+			continue;
+		}
+
+		out += char;
+		i++;
+	}
+
+	return out;
+}
+
+/**
+ * Fast zero-AST pre-scanner that extracts external module imports/re-exports and @strata/@strata-layout
+ * file paths without instantiating a throwaway ts-morph Project.
+ */
+export function scanExternalReferencesFast(
+	code: string,
+	paths?: Record<string, string[]>,
+	tsconfigPath?: string,
+	filePath?: string
+): {
+	externalImports: { filePath: string; importNames: string[] }[];
+	externalPaths: string[];
+} {
+	const externalImports: { filePath: string; importNames: string[] }[] = [];
+	const externalPathsSet = new Set<string>();
+
+	// 1. Extract external paths from @strata-layout / @cirrus-layout manifest
+	const manifest = extractStrataLayoutManifest(code);
+	if (manifest) {
+		for (const meta of Object.values(manifest)) {
+			if (meta && typeof (meta as any).path === 'string' && (meta as any).path) {
+				externalPathsSet.add((meta as any).path);
+			}
+		}
+	}
+
+	// 2. Extract external paths from inline /** @strata { ... } */ JSDoc blocks
+	const jsdocMatches = code.matchAll(/\/\*\*[\s\S]*?\*\//g);
+	for (const match of jsdocMatches) {
+		const extracted = extractStrataMetadata(match[0]);
+		if (extracted?.data?.path && typeof extracted.data.path === 'string') {
+			externalPathsSet.add(extracted.data.path);
+		}
+	}
+
+	// 3. Strip comments and scan active import / export declarations
+	const uncommented = stripCommentsPreservingStrings(code);
+	const resolveSpec = (specifier: string): string | null => {
+		const isRel = specifier.startsWith('.') || specifier.startsWith('..');
+		if (isRel) {
+			return filePath ? resolveRelativePath(filePath, specifier) : specifier;
+		}
+		if (paths && tsconfigPath) {
+			return resolvePathAlias(specifier, paths, tsconfigPath);
+		}
+		return null;
+	};
+
+	const parseNamedList = (clause: string): string[] => {
+		const braceMatch = clause.match(/\{([\s\S]*?)\}/);
+		if (!braceMatch) return ['*'];
+		const names: string[] = [];
+		for (const part of braceMatch[1].split(',')) {
+			const cleaned = part.replace(/\btype\b/g, '').trim();
+			if (!cleaned) continue;
+			const asParts = cleaned.split(/\s+as\s+/);
+			const finalName = (asParts[1] || asParts[0]).trim();
+			if (finalName) names.push(finalName);
+		}
+		return names.length > 0 ? names : ['*'];
+	};
+
+	const stmtRegex = /\b(import|export)\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
+	for (const match of uncommented.matchAll(stmtRegex)) {
+		const clause = match[2].trim();
+		if (clause.startsWith('type ') && !clause.includes('{')) continue;
+		const specifier = match[3].trim();
+		const resolved = resolveSpec(specifier);
+		if (resolved) {
+			externalImports.push({
+				filePath: resolved,
+				importNames: parseNamedList(clause)
+			});
+		}
+	}
+
+	return {
+		externalImports,
+		externalPaths: Array.from(externalPathsSet)
+	};
+}
+
+
 

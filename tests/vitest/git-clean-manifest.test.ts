@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseSchema } from '../../src/lib/parser/core';
+import { scanExternalReferencesFast } from '../../src/lib/parser/helpers';
 import {
   extractStrataLayoutManifest,
   updateLayoutManifestInSchema,
@@ -695,6 +696,138 @@ export * from './telemetry';`;
     // Ensure no dummy code was added
     expect(afterAdd).not.toContain('export const ISITFUN_KV');
     expect(afterAdd).not.toContain('sqliteTable');
+  });
+
+  it('should pre-scan modular barrel re-exports and @strata-layout DO paths without instantiating ts-morph and spawn inferred non-SQL bindings', () => {
+    const barrelIndex = `/**
+ * @strata-layout {
+ *   "gameBuilds": { "x": 2290, "y": 948 },
+ *   "telemetrySessions": { "x": 1776, "y": 1355 },
+ *   "GAMES_BUCKET": {
+ *     "x": 1825,
+ *     "y": 950,
+ *     "public": false,
+ *     "cors": true,
+ *     "folders": {
+ *       "builds": "application/zip",
+ *       "telemetry-logs": "application/json"
+ *     },
+ *     "relations": [
+ *       { "to": "gameBuilds" }
+ *     ]
+ *   },
+ *   "TELEMETRY_BUFFER": {
+ *     "x": 1320,
+ *     "y": 1443,
+ *     "path": "../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts",
+ *     "class": "TelemetrySessionDO",
+ *     "methods": ["fetch", "alarm"],
+ *     "relations": [
+ *       { "to": "telemetrySessions" },
+ *       { "to": "GAMES_BUCKET" }
+ *     ]
+ *   },
+ *   "ISITFUN_KV": {
+ *     "x": 50,
+ *     "y": 50,
+ *     "schema": {
+ *       "sessionToken": "string",
+ *       "rateLimit": { "type": "number", "ttl": 60 }
+ *     }
+ *   },
+ *   "DRIFTER_CONTROL": {
+ *     "x": 310,
+ *     "y": 50,
+ *     "schema": {
+ *       "drifterFlag": "boolean",
+ *       "killSwitch": "boolean"
+ *     }
+ *   }
+ * }
+ */
+
+// export * from './commented-out';
+export * from './builds';
+export * from './telemetry';
+`;
+
+    const scanned = scanExternalReferencesFast(
+      barrelIndex,
+      undefined,
+      undefined,
+      '/repo/packages/db/src/schema/index.ts'
+    );
+
+    expect(scanned.externalImports).toEqual([
+      { filePath: '/repo/packages/db/src/schema/builds.ts', importNames: ['*'] },
+      { filePath: '/repo/packages/db/src/schema/telemetry.ts', importNames: ['*'] }
+    ]);
+    expect(scanned.externalPaths).toEqual([
+      '../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts'
+    ]);
+
+    const buildsCode = `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const gameBuilds = sqliteTable("game_builds", {
+        id: text("id").primaryKey()
+      });
+    `;
+    const telemetryCode = `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const telemetrySessions = sqliteTable("telemetry_sessions", {
+        id: text("id").primaryKey()
+      });
+    `;
+    const doCode = `
+      export class TelemetrySessionDO {
+        async flushBatch(sessionId: string): Promise<number> { return 1; }
+        async alarm(): Promise<void> {}
+      }
+    `;
+
+    const externalFilesMap = new Map<string, string>([
+      ['./builds', buildsCode],
+      ['/repo/packages/db/src/schema/builds.ts', buildsCode],
+      ['./telemetry', telemetryCode],
+      ['/repo/packages/db/src/schema/telemetry.ts', telemetryCode],
+      ['../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts', doCode],
+      ['/repo/apps/api/src/durable-objects/TelemetrySessionDO.ts', doCode],
+      ['__correction__../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts', '../../../apps/api/src/durable-objects/TelemetrySessionDO.ts']
+    ]);
+
+    const parsed = parseSchema(
+      barrelIndex,
+      externalFilesMap,
+      undefined,
+      undefined,
+      '/repo/packages/db/src/schema/index.ts'
+    );
+
+    expect(parsed.success).toBe(true);
+    const nodeIds = parsed.nodes.map(n => n.id);
+    expect(nodeIds).toContain('gameBuilds');
+    expect(nodeIds).toContain('telemetrySessions');
+    expect(nodeIds).toContain('GAMES_BUCKET');
+    expect(nodeIds).toContain('TELEMETRY_BUFFER');
+    expect(nodeIds).toContain('ISITFUN_KV');
+    expect(nodeIds).toContain('DRIFTER_CONTROL');
+
+    const doNode = parsed.nodes.find(n => n.id === 'TELEMETRY_BUFFER');
+    expect(doNode?.type).toBe('do');
+    expect(doNode?.position).toEqual({ x: 1320, y: 1443 });
+    expect((doNode?.data as any)?.methods?.map((m: any) => m.name)).toContain('flushBatch(sessionId: string)');
+
+    const r2Node = parsed.nodes.find(n => n.id === 'GAMES_BUCKET');
+    expect(r2Node?.type).toBe('r2');
+    expect((r2Node?.data as any)?.folders).toHaveLength(2);
+
+    const kvNode = parsed.nodes.find(n => n.id === 'ISITFUN_KV');
+    expect(kvNode?.type).toBe('kv');
+    expect((kvNode?.data as any)?.patterns).toHaveLength(2);
+
+    expect(parsed.edges.some(e => e.source === 'GAMES_BUCKET' && e.target === 'gameBuilds')).toBe(true);
+    expect(parsed.edges.some(e => e.source === 'TELEMETRY_BUFFER' && e.target === 'telemetrySessions')).toBe(true);
+    expect(parsed.edges.some(e => e.source === 'TELEMETRY_BUFFER' && e.target === 'GAMES_BUCKET')).toBe(true);
   });
 });
 

@@ -135,6 +135,20 @@
   }
 
 
+  let dragRafId: number | null = null;
+  let pendingDragCoords: { x: number; y: number } | null = null;
+
+  function scheduleDragCoordUpdate(x: number, y: number) {
+    pendingDragCoords = { x: Math.round(x), y: Math.round(y) };
+    if (dragRafId !== null) return;
+    dragRafId = requestAnimationFrame(() => {
+      dragRafId = null;
+      if (pendingDragCoords) {
+        schemaState.activeCoordinates = pendingDragCoords;
+      }
+    });
+  }
+
   let contextMenu = $state<{
     x: number;
     y: number;
@@ -317,10 +331,7 @@
     zoomActivationKey="Control"
     onnodedrag={({ targetNode }) => {
       if (targetNode) {
-        schemaState.activeCoordinates = {
-          x: Math.round(targetNode.position.x),
-          y: Math.round(targetNode.position.y),
-        };
+        scheduleDragCoordUpdate(targetNode.position.x, targetNode.position.y);
       }
     }}
     onselectionchange={({ nodes }: { nodes: any[] }) => {

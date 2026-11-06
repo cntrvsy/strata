@@ -136,7 +136,7 @@
     data.columns.length - columnsToDisplay.length,
   );
   const nodeAuditIssues = $derived(
-    schemaState.auditIssues.filter((i) => i.symbolName === data.label),
+    schemaState.getNodeAuditIssues(data.label),
   );
   const hasAuditError = $derived(
     nodeAuditIssues.some(
@@ -156,9 +156,14 @@
   );
 
   const updateNodeInternals = useUpdateNodeInternals();
+  let didMount = false;
   $effect(() => {
     const _c = schemaState.compactMode;
     const _l = data.columns?.length;
+    if (!didMount) {
+      didMount = true;
+      return;
+    }
     tick().then(() => {
       updateNodeInternals(nodeId);
     });
@@ -174,7 +179,7 @@
 />
 
 <div
-  class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
+  class="relative group/node min-w-55 transition-[opacity,transform] duration-150 {opacityClass}"
   data-testid="table-node"
   data-table-name={data.label}
   role="button"
@@ -201,7 +206,7 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected
+    class="bg-base-100 border rounded-box overflow-hidden transition-colors duration-150 border-t-4 {config.borderTop} {selected
       ? `border-${config.color} ring-2 ring-${config.color}/30`
       : `border-base-300 ${config.border}`} {dragging
       ? 'shadow-2xl scale-[1.02]'
@@ -294,7 +299,7 @@
         {@const isFk = col.isReferences}
         {@const isColActive = schemaState.highlightGraph.isColumnHighlighted(nodeId, col.name)}
         <div
-          class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk
+          class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-colors duration-150 group/row {isPk
             ? 'bg-amber-500/5'
             : ''} {isFk ? 'bg-secondary/5' : ''} {isColActive
             ? 'bg-primary/20 ring-1 ring-primary/60 font-semibold shadow-xs'

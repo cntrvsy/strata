@@ -114,6 +114,7 @@
       {@const config =
         targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
       {@const moduleInfo = data.moduleInfo}
+      {@const nodeIssues = schemaState.getNodeAuditIssues(selectedNode.id)}
 
       <div
         class="w-full h-full max-h-full bg-base-100 border-l border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-right-8 duration-300"
@@ -180,10 +181,7 @@
         </div>
 
         <!-- JSDoc Audit Warnings (if any) -->
-        {#if schemaState.auditIssues.some((i) => i.symbolName === selectedNode.id)}
-          {@const nodeIssues = schemaState.auditIssues.filter(
-            (i) => i.symbolName === selectedNode.id,
-          )}
+        {#if nodeIssues.length > 0}
           <div
             class="mx-5 mt-4 p-3 rounded-box bg-warning/10 border border-warning/20 flex flex-col gap-2"
           >

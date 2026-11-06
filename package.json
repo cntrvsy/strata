@@ -1,6 +1,6 @@
 {
   "name": "strata",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "Visual Architecture Canvas & ERD Studio for Drizzle ORM and Cloudflare Edge",
   "type": "module",
   "scripts": {

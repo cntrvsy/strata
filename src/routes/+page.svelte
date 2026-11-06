@@ -86,7 +86,6 @@
   });
 
   async function onnodedragstop() {
-    schemaState.nodes = [...schemaState.nodes];
     schemaState.machine.send("EDIT");
 
     clearTimeout(saveTimeout);

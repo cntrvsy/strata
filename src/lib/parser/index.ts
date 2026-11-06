@@ -16,7 +16,8 @@ export {
 	getRelativeImportSpecifier,
 	cleanUnusedImports,
 	detectPackageWrapper,
-	findCorrectedRelativePath
+	findCorrectedRelativePath,
+	scanExternalReferencesFast
 } from './helpers';
 
 export { 

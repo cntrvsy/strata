@@ -103,6 +103,7 @@
   }
 </script>
 
+{#if selected}
 <NodeToolbar
   isVisible={selected}
   position={Position.Top}
@@ -111,7 +112,7 @@
   class="z-50!"
 >
   <div
-    class="flex items-center gap-0.5 bg-base-100/95 backdrop-blur-md border border-base-300 shadow-xl px-1 py-0.5 rounded-xl text-base-content select-none animate-in fade-in zoom-in-95 duration-100"
+    class="flex items-center gap-0.5 bg-base-100/95 border border-base-300 shadow-xl px-1 py-0.5 rounded-xl text-base-content select-none animate-in fade-in zoom-in-95 duration-100"
     role="toolbar"
     aria-label="Node quick actions"
   >
@@ -180,3 +181,4 @@
     {/if}
   </div>
 </NodeToolbar>
+{/if}

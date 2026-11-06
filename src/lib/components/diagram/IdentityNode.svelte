@@ -142,7 +142,7 @@ export const workosUsers = sqliteTable("workosUsers", {
 />
 
 <div
-  class="relative group/identity min-w-64 max-w-72 transition-all duration-300 {opacityClass}"
+  class="relative group/identity min-w-64 max-w-72 transition-[opacity,transform] duration-150 {opacityClass}"
   data-testid="identity-node"
   data-provider={data.provider}
   role="button"
@@ -165,7 +165,7 @@ export const workosUsers = sqliteTable("workosUsers", {
   }}
 >
   <div
-    class="bg-base-100/95 backdrop-blur-md border rounded-box overflow-hidden shadow-xl transition-all duration-200 {config.border} {selected
+    class="bg-base-100 border rounded-box overflow-hidden shadow-xl transition-colors duration-150 {config.border} {selected
       ? `ring-2 ${config.glow}`
       : ''}"
   >
@@ -223,7 +223,7 @@ export const workosUsers = sqliteTable("workosUsers", {
           {#each data.boundTables as bound}
             {@const isBoundActive = schemaState.highlightGraph.isColumnHighlighted(bound.tableId, bound.colName)}
             <div
-              class="flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono border transition-all {isBoundActive
+              class="flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono border transition-colors duration-150 {isBoundActive
                 ? 'bg-primary/20 border-primary/60 font-semibold ring-1 ring-primary/40'
                 : 'bg-base-200/60 border-base-300/40'}"
             >
