@@ -19,7 +19,7 @@ import {
 	extractStrataMetadata,
 	pluralizeIdentifier
 } from './helpers';
-export { extractStrataLayoutManifest } from './helpers';
+export { extractStrataLayoutManifest, extractCirrusLayoutManifest } from './helpers';
 import { PlatformService } from '#lib/services/platform';
 
 /**
@@ -43,14 +43,16 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 					const metadata = extracted.data || {};
 					metadata.x = Math.round(x);
 					metadata.y = Math.round(y);
-					doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(metadata)}`));
+					const tag = /@strata\b/.test(extracted.rawMatch) ? '@strata' : '@cirrus';
+					doc.replaceWithText(text.replace(extracted.rawMatch, `${tag} ${JSON.stringify(metadata)}`));
 					strataFound = true;
 					break;
 				}
 			}
 
 			if (!strataFound) {
-				statement.addJsDoc({ description: `\n * @strata { "x": ${Math.round(x)}, "y": ${Math.round(y)} }\n ` });
+				const defaultTag = /@strata\b/.test(code) ? '@strata' : '@cirrus';
+				statement.addJsDoc({ description: `\n * ${defaultTag} { "x": ${Math.round(x)}, "y": ${Math.round(y)} }\n ` });
 			}
 		}
 	}
@@ -58,9 +60,9 @@ export function updateNodePositionInSchema(code: string, tableName: string, x: n
 }
 
 /**
- * Batches updates to node positions inside the consolidated @strata-layout manifest.
+ * Batches updates to node positions inside the consolidated layout manifest.
  * Ensures domain code (and table declarations in monoliths) remain 100% clean of Git diffs.
- * Strips legacy inline @strata coordinate comments if present.
+ * Strips legacy inline coordinate comments if present.
  */
 export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): string {
 	const positionsMap: Record<string, { x: number; y: number }> = {};
@@ -68,9 +70,9 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 		positionsMap[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
 	}
 
-	// If there are legacy inline @strata comments on variables, strip their coordinate properties
+	// If there are legacy inline coordinate comments on variables, strip their coordinate properties
 	let cleanCode = code;
-	if (/@strata\s+{/.test(code)) {
+	if (/@(?:cirrus|strata)\s+{/.test(code)) {
 		try {
 			const { sourceFile: sf } = createIsolatedProject('cleanup_schema.ts', code);
 			let modified = false;
@@ -90,9 +92,9 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 						delete meta.y;
 
 						if (Object.keys(meta).length === 0) {
-							// Check if the JSDoc only contained @strata
-							const docWithoutStrata = text.replace(extracted.rawMatch, '').trim();
-							const innerClean = docWithoutStrata.replace(/^\/\*\*|\*\/$/g, '').replace(/^\s*\*\s?/gm, '').trim();
+							// Check if the JSDoc only contained the annotation tag
+							const docWithoutTag = text.replace(extracted.rawMatch, '').trim();
+							const innerClean = docWithoutTag.replace(/^\/\*\*|\*\/$/g, '').replace(/^\s*\*\s?/gm, '').trim();
 							if (innerClean.length === 0) {
 								doc.remove();
 							} else {
@@ -100,7 +102,8 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 							}
 							modified = true;
 						} else if (hadX || hadY) {
-							doc.replaceWithText(text.replace(extracted.rawMatch, `@strata ${JSON.stringify(meta)}`));
+							const tag = /@strata\b/.test(extracted.rawMatch) ? '@strata' : '@cirrus';
+							doc.replaceWithText(text.replace(extracted.rawMatch, `${tag} ${JSON.stringify(meta)}`));
 							modified = true;
 						}
 					}
@@ -111,7 +114,7 @@ export function updateAllNodePositionsInSchema(code: string, nodes: Node[]): str
 				cleanCode = sf.getFullText();
 			}
 		} catch (err) {
-			console.warn('[Strata] Failed to strip legacy inline @strata comments:', err);
+			console.warn('[Cirrus] Failed to strip legacy inline @cirrus/@strata comments:', err);
 		}
 	}
 
@@ -217,12 +220,12 @@ export async function addColumnToSchema(
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) {
-		if (/@strata-layout\s+{/.test(code)) {
-			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+		if (/@(?:cirrus|strata)-layout\s+{/.test(code)) {
+			const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			let manifest: Record<string, any> = {};
 			if (match) {
 				try {
-					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					manifest = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch {}
 			}
 			if (manifest[tableName]) {
@@ -247,25 +250,26 @@ export async function addColumnToSchema(
 		const jsDocs = statement.getJsDocs();
 		for (const doc of jsDocs) {
 			const text = doc.getText();
-			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			const match = text.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				const tag = match[1];
 				let strata: any = null;
 				try {
-					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch (e) {
-					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+					console.warn(`[Cirrus] Invalid JSON in @${tag} metadata:`, e);
 				}
 
 				if (strata) {
 					if (strata.target === 'kv') {
 						if (!strata.schema) strata.schema = {};
 						strata.schema[columnName] = type === 'text' ? 'string' : type;
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'r2') {
 						if (!strata.folders) strata.folders = {};
 						strata.folders[columnName] = type || '*/*';
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'do') {
 						if (schemaFilePath && schemaFilePath !== 'schema.ts' && !schemaFilePath.startsWith('temp_') && strata.path && strata.class) {
@@ -458,13 +462,13 @@ export function addEdgeToSchema(
 
 	// --- Synthetic Relations (KV/DO/R2 or explicit synthetic links) ---
 	if (isSynthetic) {
-		// 1. If @strata-layout exists, store synthetic relations in the manifest
-		if (/@strata-layout\s+{/.test(code)) {
-			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+		// 1. If layout manifest exists, store synthetic relations in the manifest
+		if (/@(?:cirrus|strata)-layout\s+{/.test(code)) {
+			const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			let manifest: Record<string, any> = {};
 			if (match) {
 				try {
-					const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+					const cleanJson = match[2].replace(/^\s*\*\s?/gm, '');
 					manifest = JSON.parse(cleanJson);
 				} catch {}
 			}
@@ -477,18 +481,19 @@ export function addEdgeToSchema(
 			return code;
 		}
 
-		// 2. If source declaration has an existing inline @strata tag and no manifest exists, update it
+		// 2. If source declaration has an existing inline tag and no manifest exists, update it
 		const jsDoc = sourceDecl?.getVariableStatement()?.getJsDocs()[0];
 		if (jsDoc) {
 			const fullText = jsDoc.getFullText();
-			const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			const match = fullText.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				const tag = match[1];
 				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					const strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 					if (!strata.relations) strata.relations = [];
 					if (!strata.relations.some((r: any) => r.to === target)) {
 						strata.relations.push({ to: target });
-						jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						jsDoc.replaceWithText(fullText.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 					}
 					return sf.getFullText();
 				} catch (e) { console.error(e); }
@@ -626,12 +631,13 @@ export function removeTableFromSchema(code: string, tableName: string): string {
 export function removeEdgeFromSchema(code: string, source: string, target: string, name?: string): string {
 	let workingCode = code;
 
-	// Check if this relation exists in @strata-layout manifest
-	if (/@strata-layout\s+{/.test(workingCode)) {
-		const match = workingCode.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	// Check if this relation exists in layout manifest
+	if (/@(?:cirrus|strata)-layout\s+{/.test(workingCode)) {
+		const match = workingCode.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 		if (match) {
+			const tag = match[1];
 			try {
-				const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+				const cleanJson = match[2].replace(/^\s*\*\s?/gm, '');
 				const manifest = JSON.parse(cleanJson);
 				if (manifest[source]?.relations && Array.isArray(manifest[source].relations)) {
 					const beforeLen = manifest[source].relations.length;
@@ -646,7 +652,7 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 					}
 				}
 			} catch (err) {
-				console.warn('[Strata] Failed to remove relation from @strata-layout:', err);
+				console.warn(`[Cirrus] Failed to remove relation from @${tag}-layout:`, err);
 			}
 		}
 	}
@@ -665,16 +671,17 @@ export function removeEdgeFromSchema(code: string, source: string, target: strin
 			const jsDoc = sourceDecl.getVariableStatement()?.getJsDocs()[0];
 			if (jsDoc) {
 				const fullText = jsDoc.getFullText();
-				const match = fullText.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				const match = fullText.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 				if (match) {
+					const tag = match[1];
 					try {
-						const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						const strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 						if (strata.relations && Array.isArray(strata.relations)) {
 							strata.relations = strata.relations.filter((r: any) => r.to !== target);
 							if (strata.relations.length === 0) {
 								delete strata.relations;
 							}
-							jsDoc.replaceWithText(fullText.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+							jsDoc.replaceWithText(fullText.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						}
 					} catch (e) { console.error(e); }
 				}
@@ -756,12 +763,12 @@ export async function removeColumnFromSchema(
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) {
-		if (/@strata-layout\s+{/.test(code)) {
-			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+		if (/@(?:cirrus|strata)-layout\s+{/.test(code)) {
+			const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			let manifest: Record<string, any> = {};
 			if (match) {
 				try {
-					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					manifest = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch {}
 			}
 			if (manifest[tableName]) {
@@ -790,24 +797,25 @@ export async function removeColumnFromSchema(
 		const jsDocs = statement.getJsDocs();
 		for (const doc of jsDocs) {
 			const text = doc.getText();
-			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			const match = text.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				const tag = match[1];
 				let strata: any = null;
 				try {
-					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch (e) {
-					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+					console.warn(`[Cirrus] Invalid JSON in @${tag} metadata:`, e);
 				}
 
 				if (strata) {
 					if (strata.target === 'kv' && strata.schema) {
 						delete strata.schema[columnName];
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'r2' && strata.folders) {
 						const cleanKey = columnName.endsWith('/') ? columnName.slice(0, -1) : columnName;
 						delete strata.folders[cleanKey];
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'do') {
 						let methodName = columnName.trim();
@@ -932,13 +940,14 @@ export async function renameColumnInSchema(
 		const jsDocs = statement.getJsDocs();
 		for (const doc of jsDocs) {
 			const text = doc.getText();
-			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			const match = text.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				const tag = match[1];
 				let strata: any = null;
 				try {
-					strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch (e) {
-					console.warn('[Strata] Invalid JSON in @strata metadata:', e);
+					console.warn(`[Cirrus] Invalid JSON in @${tag} metadata:`, e);
 				}
 
 				if (strata) {
@@ -946,7 +955,7 @@ export async function renameColumnInSchema(
 						const type = strata.schema[oldColName];
 						delete strata.schema[oldColName];
 						strata.schema[newColName] = type;
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} else if (strata.target === 'r2' && strata.folders) {
 						const cleanOldKey = oldColName.endsWith('/') ? oldColName.slice(0, -1) : oldColName;
@@ -955,7 +964,7 @@ export async function renameColumnInSchema(
 							const mime = strata.folders[cleanOldKey];
 							delete strata.folders[cleanOldKey];
 							strata.folders[cleanNewKey] = mime;
-							doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+							doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 							return sf.getFullText();
 						}
 					} else if (strata.target === 'do') {
@@ -972,7 +981,7 @@ export async function renameColumnInSchema(
 							try {
 								fileContent = await PlatformService.readText(resolvedPath);
 							} catch (e) {
-								console.warn(`[Strata] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
+								console.warn(`[Cirrus] External file not found at ${resolvedPath}, falling back to inline JSDoc methods:`, e);
 							}
 
 							if (fileContent !== null) {
@@ -986,7 +995,7 @@ export async function renameColumnInSchema(
 										return sf.getFullText();
 									}
 								} catch (err: any) {
-									console.error(`[Strata] Failed to rename DO method in ${resolvedPath}:`, err);
+									console.error(`[Cirrus] Failed to rename DO method in ${resolvedPath}:`, err);
 									throw new Error(`Failed to write to external file "${resolvedPath}". Please verify that it is not locked by another process or write-protected.`);
 								}
 							}
@@ -995,7 +1004,7 @@ export async function renameColumnInSchema(
 							const idx = strata.methods.indexOf(oldMethodName);
 							if (idx !== -1) {
 								strata.methods[idx] = newMethodName;
-								doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+								doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 								return sf.getFullText();
 							}
 						}
@@ -1240,12 +1249,12 @@ export function updateTableMetadataInSchema(
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
 	const decl = sf.getVariableDeclaration(tableName);
 	if (!decl) {
-		if (/@strata-layout\s+{/.test(code)) {
-			const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+		if (/@(?:cirrus|strata)-layout\s+{/.test(code)) {
+			const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			let manifest: Record<string, any> = {};
 			if (match) {
 				try {
-					manifest = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					manifest = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 				} catch {}
 			}
 			const existingEntry = manifest[tableName] || { x: 100, y: 100 };
@@ -1267,10 +1276,11 @@ export function updateTableMetadataInSchema(
 		const jsDocs = statement.getJsDocs();
 		for (const doc of jsDocs) {
 			const text = doc.getText();
-			const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+			const match = text.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 			if (match) {
+				const tag = match[1];
 				try {
-					const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+					const strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 					
 					if (metadata.public !== undefined) {
 						if (metadata.public) {
@@ -1317,7 +1327,7 @@ export function updateTableMetadataInSchema(
 						strata.folders = metadata.folders;
 					}
 
-					doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+					doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 					return sf.getFullText();
 				} catch (e) {}
 			}
@@ -1331,7 +1341,7 @@ export function updateTableMetadataInSchema(
  */
 export function updateProjectConfigInSchema(code: string, config: { wranglerPath?: string }): string {
 	const { project, sourceFile: sf } = createIsolatedProject('schema.ts', code);
-	const decl = sf.getVariableDeclaration('strataConfig');
+	const decl = sf.getVariableDeclaration('cirrusConfig') || sf.getVariableDeclaration('strataConfig');
 	
 	const strataVal = {
 		target: 'project',
@@ -1345,26 +1355,29 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 			if (jsDocs.length > 0) {
 				const doc = jsDocs[0];
 				const text = doc.getText();
-				const match = text.match(/@strata\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+				const match = text.match(/@(cirrus|strata)\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 				if (match) {
+					const tag = match[1];
 					try {
-						const strata = JSON.parse(match[1].replace(/^\s*\*\s?/gm, ''));
+						const strata = JSON.parse(match[2].replace(/^\s*\*\s?/gm, ''));
 						strata.wranglerPath = config.wranglerPath;
-						doc.replaceWithText(text.replace(match[0], `@strata ${JSON.stringify(strata)}`));
+						doc.replaceWithText(text.replace(match[0], `@${tag} ${JSON.stringify(strata)}`));
 						return sf.getFullText();
 					} catch (e) {}
 				}
-				doc.replaceWithText(`*\n * @strata ${JSON.stringify(strataVal)}\n `);
+				const defaultTag = /@strata\b/.test(code) ? '@strata' : '@cirrus';
+				doc.replaceWithText(`*\n * ${defaultTag} ${JSON.stringify(strataVal)}\n `);
 				return sf.getFullText();
 			} else {
+				const defaultTag = /@strata\b/.test(code) ? '@strata' : '@cirrus';
 				statement.addJsDoc({
-					description: `\n * @strata ${JSON.stringify(strataVal)}\n `
+					description: `\n * ${defaultTag} ${JSON.stringify(strataVal)}\n `
 				});
 				return sf.getFullText();
 			}
 		}
 	} else {
-		// Store in @strata-layout manifest under __config__ without creating dummy JS variable!
+		// Store in layout manifest under __config__ without creating dummy JS variable!
 		return updateLayoutManifestInSchema(code, {
 			__config__: {
 				wranglerPath: config.wranglerPath
@@ -1375,7 +1388,7 @@ export function updateProjectConfigInSchema(code: string, config: { wranglerPath
 }
 
 /**
- * Updates or creates the consolidated @strata-layout JSDoc manifest in the root schema file.
+ * Updates or creates the consolidated @cirrus-layout (or @strata-layout) JSDoc manifest in the root schema file.
  * This keeps domain files (users.ts, posts.ts) 100% clean in Git diffs when dragging nodes.
  */
 export function updateLayoutManifestInSchema(
@@ -1383,12 +1396,13 @@ export function updateLayoutManifestInSchema(
 	positions: Record<string, { x: number; y: number }>,
 	pruneMissing: boolean = false
 ): string {
-	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 	
 	if (match) {
+		const tag = match[1];
 		let currentManifest: Record<string, { x: number; y: number }> = {};
 		try {
-			const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+			const cleanJson = match[2].replace(/^\s*\*\s?/gm, '');
 			currentManifest = JSON.parse(cleanJson);
 		} catch {}
 
@@ -1415,7 +1429,7 @@ export function updateLayoutManifestInSchema(
 			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
 			.join('\n');
 
-		return code.replace(match[0], `@strata-layout ${formattedJson}`);
+		return code.replace(match[0], `@${tag}-layout ${formattedJson}`);
 	} else {
 		// Prepend manifest at the top of the root file, safely preserving shebangs or directives
 		const formattedJson = JSON.stringify(positions, null, 2)
@@ -1423,7 +1437,8 @@ export function updateLayoutManifestInSchema(
 			.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
 			.join('\n');
 
-		const manifestComment = `/**\n * @strata-layout ${formattedJson}\n */\n\n`;
+		const tag = /@cirrus\b/.test(code) ? 'cirrus' : 'strata';
+		const manifestComment = `/**\n * @${tag}-layout ${formattedJson}\n */\n\n`;
 
 		const shebangMatch = code.match(/^(#!.*?\n)/);
 		const directiveMatch = code.match(/^(?:#!.*?\n)?((?:["'][^"']+["'];?\s*\n)+)/);
@@ -1444,13 +1459,14 @@ export function updateLayoutManifestInSchema(
 }
 
 /**
- * Removes a table from the consolidated @strata-layout manifest if present.
+ * Removes a table from the consolidated @cirrus-layout or @strata-layout manifest if present.
  */
 export function removeTableFromLayoutManifest(code: string, tableName: string): string {
-	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 	if (!match) return code;
+	const tag = match[1];
 	try {
-		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const cleanJson = match[2].replace(/^\s*\*\s?/gm, '');
 		const manifest = JSON.parse(cleanJson);
 		if (tableName in manifest) {
 			delete manifest[tableName];
@@ -1458,20 +1474,21 @@ export function removeTableFromLayoutManifest(code: string, tableName: string): 
 				.split('\n')
 				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
 				.join('\n');
-			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+			return code.replace(match[0], `@${tag}-layout ${formattedJson}`);
 		}
 	} catch {}
 	return code;
 }
 
 /**
- * Renames a table key in the consolidated @strata-layout manifest if present.
+ * Renames a table key in the consolidated @cirrus-layout or @strata-layout manifest if present.
  */
 export function renameTableInLayoutManifest(code: string, oldName: string, newName: string): string {
-	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 	if (!match) return code;
+	const tag = match[1];
 	try {
-		const cleanJson = match[1].replace(/^\s*\*\s?/gm, '');
+		const cleanJson = match[2].replace(/^\s*\*\s?/gm, '');
 		const manifest = JSON.parse(cleanJson);
 		if (oldName in manifest) {
 			manifest[newName] = manifest[oldName];
@@ -1480,7 +1497,7 @@ export function renameTableInLayoutManifest(code: string, oldName: string, newNa
 				.split('\n')
 				.map((line, idx) => (idx === 0 ? line : ` * ${line}`))
 				.join('\n');
-			return code.replace(match[0], `@strata-layout ${formattedJson}`);
+			return code.replace(match[0], `@${tag}-layout ${formattedJson}`);
 		}
 	} catch {}
 	return code;

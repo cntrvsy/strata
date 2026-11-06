@@ -130,8 +130,17 @@ export function parseSchema(
 		// Extract @strata-layout manifest if present in the root file
 		const manifestDetails = extractStrataLayoutManifestDetails(code);
 		const layoutManifest = manifestDetails.manifest;
-		if (layoutManifest && (layoutManifest as any).__config__?.wranglerPath) {
-			wranglerPath = (layoutManifest as any).__config__.wranglerPath;
+		if (layoutManifest) {
+			if ((layoutManifest as any).__config__?.wranglerPath) {
+				wranglerPath = (layoutManifest as any).__config__.wranglerPath;
+			}
+			for (const meta of Object.values(layoutManifest)) {
+				if (meta && typeof (meta as any).path === 'string' && (meta as any).path) {
+					if (!externalPaths.includes((meta as any).path)) {
+						externalPaths.push((meta as any).path);
+					}
+				}
+			}
 		}
 		if (manifestDetails.error) {
 			auditIssues.push({
@@ -422,15 +431,28 @@ export function parseSchema(
 
 		// Process external files if provided
 		if (externalFilesMap && typeof (externalFilesMap as any).entries === 'function') {
-			// Populate all files from externalFilesMap into the project
-			for (const [fPath, content] of externalFilesMap.entries()) {
-				const tempName = `temp_${fPath.replace(/[\/.]/g, '_')}.ts`;
-				if (!project.getSourceFile(tempName)) {
-					try {
-						const extSf = project.createSourceFile(tempName, content, { overwrite: true });
-						tempSourceFiles.push(extSf);
-					} catch (e) {}
+			// Deduplicate external files by content so aliased + resolved keys in externalFilesMap
+			// only instantiate a single ts-morph SourceFile per module.
+			const contentToSourceFile = new Map<string, SourceFile>();
+			let extFileCounter = 0;
+
+			const getOrCreateExternalSourceFile = (keyHint: string, content: string): SourceFile | undefined => {
+				const existing = contentToSourceFile.get(content);
+				if (existing) return existing;
+				const tempName = `temp_ext_${extFileCounter++}_${keyHint.split(/[/\\]/).pop()?.replace(/[^a-zA-Z0-9_]/g, '_') || 'mod'}.ts`;
+				try {
+					const extSf = project.createSourceFile(tempName, content, { overwrite: true });
+					tempSourceFiles.push(extSf);
+					contentToSourceFile.set(content, extSf);
+					return extSf;
+				} catch {
+					return undefined;
 				}
+			};
+
+			for (const [fPath, content] of externalFilesMap.entries()) {
+				if (fPath.startsWith('__correction__')) continue;
+				getOrCreateExternalSourceFile(fPath, content);
 			}
 
 			// Process imports
@@ -438,12 +460,8 @@ export function parseSchema(
 				const externalContent = getMapFileContent(externalFilesMap, extImp.filePath);
 				if (externalContent) {
 					try {
-						const tempName = `temp_${extImp.filePath.replace(/[\/.]/g, '_')}.ts`;
-						let extSf = project.getSourceFile(tempName);
-						if (!extSf) {
-							extSf = project.createSourceFile(tempName, externalContent, { overwrite: true });
-							tempSourceFiles.push(extSf);
-						}
+						const extSf = getOrCreateExternalSourceFile(extImp.filePath, externalContent);
+						if (!extSf) continue;
 						const targetDecls: VariableDeclaration[] = [];
 						if (extImp.importNames.includes('*')) {
 							for (const d of extSf.getVariableDeclarations()) {
@@ -762,8 +780,104 @@ export function parseSchema(
 				}
 			}
 			for (const [nodeId, meta] of Object.entries(layoutManifest)) {
-				if (meta && Array.isArray((meta as any).relations)) {
-					for (const rel of (meta as any).relations) {
+				const entry = meta as any;
+				if (!entry || typeof entry !== 'object') continue;
+				const inferredTarget: 'kv' | 'do' | 'r2' | undefined =
+					entry.target === 'kv' || entry.target === 'do' || entry.target === 'r2'
+						? entry.target
+						: entry.folders
+							? 'r2'
+							: entry.class || entry.methods || entry.path
+								? 'do'
+								: entry.schema
+									? 'kv'
+									: undefined;
+
+				if (inferredTarget && !nodes.some(n => n.id === nodeId)) {
+					let cols: any[] = [];
+					if (inferredTarget === 'kv' && entry.schema) {
+						cols = Object.entries(entry.schema).map(([k, v]: [string, any]) => ({
+							name: k,
+							definition: typeof v === 'object' && v?.type ? String(v.type) : String(v || 'string'),
+							ttl: typeof v === 'object' && v?.ttl ? Number(v.ttl) : undefined,
+							metadata: typeof v === 'object' && v?.metadata ? String(v.metadata) : undefined,
+							isPk: false,
+							notNull: false,
+							isReferences: false
+						}));
+					} else if (inferredTarget === 'r2' && entry.folders) {
+						cols = Object.entries(entry.folders).map(([k, v]: [string, any]) => ({
+							name: k.endsWith('/') ? k : `${k}/`,
+							definition: String(v),
+							isPk: false,
+							notNull: false,
+							isReferences: false
+						}));
+					} else if (inferredTarget === 'do') {
+						if (entry.path) {
+							const doContent = getMapFileContent(externalFilesMap, entry.path);
+							if (doContent) {
+								try {
+									const doSf = project.createSourceFile(`temp_manifest_do_${nodeId}.ts`, doContent, { overwrite: true });
+									tempSourceFiles.push(doSf);
+									const classDecl = (entry.class ? doSf.getClass(entry.class) : undefined) || doSf.getClasses()[0];
+									if (classDecl) {
+										cols = classDecl.getMethods()
+											.filter(m => m.getScope() === 'public' || !m.getScope())
+											.map(m => {
+												const paramStr = m.getParameters().map(p => p.getText()).join(', ');
+												const retType = m.getReturnTypeNode()?.getText() || 'any';
+												return {
+													name: `${m.getName()}(${paramStr})`,
+													definition: retType,
+													isPk: false,
+													notNull: false,
+													isReferences: false
+												};
+											});
+									}
+								} catch {}
+							}
+						}
+						if (cols.length === 0 && Array.isArray(entry.methods)) {
+							cols = entry.methods.map((m: any) =>
+								typeof m === 'string'
+									? { name: m.endsWith(')') ? m : `${m}()`, definition: 'method', isPk: false, notNull: false, isReferences: false }
+									: m
+							);
+						}
+					}
+
+					const pos = {
+						x: typeof entry.x === 'number' ? Math.round(entry.x) : 100,
+						y: typeof entry.y === 'number' ? Math.round(entry.y) : 100
+					};
+
+					nodes.push({
+						id: nodeId,
+						type: inferredTarget,
+						data: {
+							label: nodeId,
+							columns: cols,
+							methods: inferredTarget === 'do' ? cols : undefined,
+							patterns: inferredTarget === 'kv' ? cols : undefined,
+							folders: inferredTarget === 'r2' ? cols : undefined,
+							target: inferredTarget,
+							strata: {
+								target: inferredTarget,
+								x: pos.x,
+								y: pos.y,
+								binding: nodeId,
+								...entry
+							},
+							isExternal: true
+						},
+						position: pos
+					});
+				}
+
+				if (Array.isArray(entry.relations)) {
+					for (const rel of entry.relations) {
 						if (rel && rel.to) {
 							addEdgeIfUnique(edges, nodeId, rel.to, true, 'synthetic');
 						}

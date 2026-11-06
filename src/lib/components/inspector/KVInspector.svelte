@@ -6,30 +6,44 @@
   Output: Key patterns, types, TTL, and metadata breakdown.
 -->
 <script lang="ts">
-  import { Zap, Clock, Tag } from "lucide-svelte";
+  import { Clock, Tag } from "lucide-svelte";
 
-  let { tableName, data, isReadOnly } = $props<{
+  interface KVInspectorProps {
     tableName: string;
     data: any;
     isReadOnly: boolean;
-  }>();
+  }
+
+  let { tableName, data, isReadOnly }: KVInspectorProps = $props();
 
   const columns = $derived(data?.columns || []);
 </script>
 
 <div class="flex flex-col gap-2">
-  <div class="p-2.5 rounded-box bg-accent/10 border border-accent/20 text-accent flex items-center justify-between text-[10px] mb-1">
+  <div
+    class="p-2.5 rounded-box bg-accent/10 border border-accent/20 text-accent flex items-center justify-between text-[10px] mb-1"
+  >
     <div class="flex flex-col gap-0.5">
-      <span class="font-bold uppercase tracking-wider text-[9.5px]">Cloudflare KV Namespace</span>
-      <span class="text-base-content/75 font-mono text-[9px]">Worker Access: env.{tableName}.get(key)</span>
+      <span class="font-bold uppercase tracking-wider text-[9.5px]"
+        >Cloudflare KV Namespace</span
+      >
+      <span class="text-base-content/75 font-mono text-[9px]"
+        >Worker Access: env.{tableName}.get(key)</span
+      >
     </div>
     <span class="text-[10px] opacity-70 font-mono">wrangler.jsonc</span>
   </div>
 
   {#if data.strata?.id}
-    <div class="bg-base-200/50 p-3 rounded-box border border-base-300/70 flex flex-col gap-1">
-      <span class="text-[9px] font-black uppercase tracking-widest opacity-40">Namespace ID</span>
-      <div class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/85 break-all select-all">
+    <div
+      class="bg-base-200/50 p-3 rounded-box border border-base-300/70 flex flex-col gap-1"
+    >
+      <span class="text-[9px] font-black uppercase tracking-widest opacity-40"
+        >Namespace ID</span
+      >
+      <div
+        class="p-2 rounded-field bg-base-100 border border-base-300 font-mono text-[11px] text-base-content/85 break-all select-all"
+      >
         {data.strata.id}
       </div>
     </div>
@@ -87,4 +101,3 @@
     {/each}
   {/if}
 </div>
-

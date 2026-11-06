@@ -98,6 +98,22 @@ textarea,
   .svelte-flow__node {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Isolate node layout/style recalculation without paint clipping so connection handles remain visible */
+    contain: layout style;
+  }
+
+  /* Pause idle 60Hz SVG stroke-dashoffset animations unless the edge is actively highlighted */
+  .svelte-flow__edge.animated path:not(.strata-active-edge) {
+    animation: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .svelte-flow__node,
+    .svelte-flow__edge path {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
   }
 
   .svelte-flow__handle {

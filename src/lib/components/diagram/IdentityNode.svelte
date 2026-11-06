@@ -9,18 +9,10 @@
   import { Handle, Position } from "@xyflow/svelte";
   import { schemaState } from "#lib/state";
   import NodeQuickActions from "./NodeQuickActions.svelte";
-  import {
-    FingerprintPattern,
-    Building2,
-    Sparkles,
-    ArrowUpRight,
-    Link2,
-    Copy,
-    Check,
-  } from "lucide-svelte";
+  import { FingerprintPattern, Building2, Link2 } from "lucide-svelte";
   import { toast } from "svelte-sonner";
 
-  const { id, data, selected, dragging } = $props<{
+  interface IdentityNodeProps {
     id?: string;
     data: {
       provider: "clerk" | "workos";
@@ -31,10 +23,15 @@
     };
     selected?: boolean;
     dragging?: boolean;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: IdentityNodeProps = $props();
 
   const nodeId = $derived(
-    id || (data.provider === "clerk" ? "__clerk_identity__" : "__workos_identity__"),
+    id ||
+      (data.provider === "clerk"
+        ? "__clerk_identity__"
+        : "__workos_identity__"),
   );
 
   const matchesFilter = $derived(
@@ -112,7 +109,7 @@ export const workosUsers = sqliteTable("workosUsers", {
   lastName: text("last_name"),
   createdAt: integer("created_at", { mode: "timestamp" }),
   updatedAt: integer("updated_at", { mode: "timestamp" })
-});`
+});`,
   );
 
   let copied = $state(false);
@@ -122,7 +119,7 @@ export const workosUsers = sqliteTable("workosUsers", {
       await navigator.clipboard.writeText(snippet);
       copied = true;
       toast.success(`Copied ${mirrorTableName} Schema Snippet`, {
-        description: "Paste into your schema file in VS Code or Cursor."
+        description: "Paste into your schema file in VS Code or Cursor.",
       });
       setTimeout(() => {
         copied = false;
@@ -133,14 +130,10 @@ export const workosUsers = sqliteTable("workosUsers", {
   }
 </script>
 
-<NodeQuickActions
-  {nodeId}
-  nodeType="identity"
-  {selected}
-/>
+<NodeQuickActions {nodeId} nodeType="identity" {selected} />
 
 <div
-  class="relative group/identity min-w-64 max-w-72 transition-all duration-300 {opacityClass}"
+  class="relative group/identity min-w-64 max-w-72 transition-[opacity,transform] duration-150 {opacityClass}"
   data-testid="identity-node"
   data-provider={data.provider}
   role="button"
@@ -150,8 +143,7 @@ export const workosUsers = sqliteTable("workosUsers", {
     if (!dragging) schemaState.hoveredNodeId = nodeId;
   }}
   onmouseleave={() => {
-    if (schemaState.hoveredNodeId === nodeId)
-      schemaState.hoveredNodeId = null;
+    if (schemaState.hoveredNodeId === nodeId) schemaState.hoveredNodeId = null;
   }}
   ondblclick={() => {
     schemaState.activeInspectorNodeId = nodeId;
@@ -163,7 +155,7 @@ export const workosUsers = sqliteTable("workosUsers", {
   }}
 >
   <div
-    class="bg-base-100/95 backdrop-blur-md border rounded-box overflow-hidden shadow-xl transition-all duration-200 {config.border} {selected
+    class="bg-base-100 border rounded-box overflow-hidden shadow-xl transition-colors duration-150 {config.border} {selected
       ? `ring-2 ${config.glow}`
       : ''}"
   >
@@ -188,11 +180,22 @@ export const workosUsers = sqliteTable("workosUsers", {
               External IdP
             </span>
             {#if highlightStatus === "upstream"}
-              <span class="badge badge-xs badge-primary font-mono text-[8px] px-1 py-0 shadow-xs" title="Upstream dependency: referenced by active table">↑ upstream</span>
+              <span
+                class="badge badge-xs badge-primary font-mono text-[8px] px-1 py-0 shadow-xs"
+                title="Upstream dependency: referenced by active table"
+                >↑ upstream</span
+              >
             {:else if highlightStatus === "downstream"}
-              <span class="badge badge-xs badge-secondary font-mono text-[8px] px-1 py-0 shadow-xs" title="Downstream dependent: references active table">↓ dependent</span>
+              <span
+                class="badge badge-xs badge-secondary font-mono text-[8px] px-1 py-0 shadow-xs"
+                title="Downstream dependent: references active table"
+                >↓ dependent</span
+              >
             {:else if highlightStatus === "transitive"}
-              <span class="badge badge-xs badge-ghost border-base-300 font-mono text-[8px] px-1 py-0 opacity-80" title="2-hop transitive connection">2-hop</span>
+              <span
+                class="badge badge-xs badge-ghost border-base-300 font-mono text-[8px] px-1 py-0 opacity-80"
+                title="2-hop transitive connection">2-hop</span
+              >
             {/if}
           </div>
           <p class="text-[10px] text-base-content/60 leading-tight mt-0.5">
@@ -219,9 +222,13 @@ export const workosUsers = sqliteTable("workosUsers", {
       {#if data.boundTables && data.boundTables.length > 0}
         <div class="space-y-1 max-h-28 overflow-y-auto pr-1">
           {#each data.boundTables as bound}
-            {@const isBoundActive = schemaState.highlightGraph.isColumnHighlighted(bound.tableId, bound.colName)}
+            {@const isBoundActive =
+              schemaState.highlightGraph.isColumnHighlighted(
+                bound.tableId,
+                bound.colName,
+              )}
             <div
-              class="flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono border transition-all {isBoundActive
+              class="flex items-center justify-between px-2 py-1 rounded text-[10px] font-mono border transition-colors duration-150 {isBoundActive
                 ? 'bg-primary/20 border-primary/60 font-semibold ring-1 ring-primary/40'
                 : 'bg-base-200/60 border-base-300/40'}"
             >
@@ -237,34 +244,6 @@ export const workosUsers = sqliteTable("workosUsers", {
           No schema tables currently reference this identity provider.
         </p>
       {/if}
-
-      <!-- Actions -->
-      <div class="pt-2 border-t border-base-300/60 flex flex-col gap-1.5">
-        <button
-          type="button"
-          class="btn btn-xs btn-outline btn-primary w-full gap-1.5 font-sans font-semibold text-[10px] shadow-sm hover:scale-[1.01] transition-transform"
-          onclick={handleCopySnippet}
-          title="Copy local D1 mirror table schema snippet"
-        >
-          {#if copied}
-            <Check class="w-3 h-3 text-success" />
-            <span>Copied {mirrorTableName}!</span>
-          {:else}
-            <Copy class="w-3 h-3" />
-            <span>Copy {mirrorTableName} Schema</span>
-          {/if}
-        </button>
-
-        <a
-          href={config.docsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-xs btn-ghost w-full gap-1 text-[10px] text-base-content/60 hover:text-base-content"
-        >
-          <span>Webhook Sync Docs</span>
-          <ArrowUpRight class="w-2.5 h-2.5" />
-        </a>
-      </div>
     </div>
   </div>
 

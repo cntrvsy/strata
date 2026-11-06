@@ -254,22 +254,23 @@ export interface ExtractedStrataMetadata {
 }
 
 /**
- * Robustly extracts balanced JSDoc @strata JSON metadata from text using a character stack parser.
+ * Robustly extracts balanced JSDoc @cirrus or @strata JSON metadata from text using a character stack parser.
  * Handles nested objects, arrays, string quotes, escaped characters, and multi-line JSDoc comment asterisks.
  */
 export function extractStrataMetadata(text: string): ExtractedStrataMetadata | null {
-	const match = /@strata(?!\w|-)/.exec(text);
+	const match = /@(cirrus|strata)(?!\w|-)/.exec(text);
 	if (!match) return null;
+	const tag = match[1];
 	const strataIdx = match.index;
 
 	const startBraceIdx = text.indexOf('{', strataIdx);
 	if (startBraceIdx === -1) {
 		return {
-			rawMatch: '@strata',
+			rawMatch: `@${tag}`,
 			jsonStr: '',
 			data: null,
 			issue: {
-				message: 'Malformed @strata JSDoc: Missing opening bracket `{`',
+				message: `Malformed @${tag} JSDoc: Missing opening bracket \`{\``,
 				code: 'JSDOC_SYNTAX_ERROR'
 			}
 		};
@@ -319,7 +320,7 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 			jsonStr: rawMatch,
 			data: null,
 			issue: {
-				message: 'Malformed @strata JSDoc: Unclosed closing bracket `}`',
+				message: `Malformed @${tag} JSDoc: Unclosed closing bracket \`}\``,
 				code: 'JSDOC_SYNTAX_ERROR'
 			}
 		};
@@ -339,7 +340,7 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 				jsonStr: cleanJson,
 				data,
 				issue: {
-					message: `Unrecognized storage target "${data.target}". Strata supports: 'd1', 'kv', 'do', 'r2', 'project', or 'schema'.`,
+					message: `Unrecognized storage target "${data.target}". Cirrus supports: 'd1', 'kv', 'do', 'r2', 'project', or 'schema'.`,
 					code: 'INVALID_TARGET'
 				}
 			};
@@ -358,13 +359,13 @@ export function extractStrataMetadata(text: string): ExtractedStrataMetadata | n
 				jsonStr: cleanJson,
 				data: softRepaired,
 				issue: {
-					message: 'JSDoc @strata syntax formatting issue (single quotes or trailing commas auto-repaired)',
+					message: `JSDoc @${tag} syntax formatting issue (single quotes or trailing commas auto-repaired)`,
 					code: 'JSDOC_SYNTAX_ERROR'
 				}
 			};
 		}
 
-		console.warn('[Strata] Failed to parse @strata JSON payload:', cleanJson, e);
+		console.warn(`[Cirrus] Failed to parse @${tag} JSON payload:`, cleanJson, e);
 		return {
 			rawMatch,
 			jsonStr: cleanJson,
@@ -398,34 +399,41 @@ export interface StrataLayoutManifestResult {
 }
 
 /**
- * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file,
+ * Extracts consolidated layout positions from @cirrus-layout or @strata-layout JSDoc in the schema file,
  * returning both the parsed manifest and any parsing diagnostics.
  */
 export function extractStrataLayoutManifestDetails(code: string): StrataLayoutManifestResult {
-	const match = code.match(/@strata-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
+	const match = code.match(/@(cirrus|strata)-layout\s+({[\s\S]*?})(?=\s*\n?\s*\*?\s*@|\s*\n?\s*\*?\s*\/|\s*$)/);
 	if (!match) return { manifest: null };
-	const rawJson = match[1];
+	const tag = match[1];
+	const rawJson = match[2];
 	const cleanJson = rawJson.replace(/^\s*\*\s?/gm, '');
 	try {
 		return { manifest: JSON.parse(cleanJson), rawMatch: match[0] };
 	} catch (err: any) {
 		const softRepaired = trySoftRepairJson(cleanJson);
 		if (softRepaired) return { manifest: softRepaired, rawMatch: match[0] };
-		console.warn('[Strata] Failed to parse @strata-layout manifest:', err);
+		console.warn(`[Cirrus] Failed to parse @${tag}-layout manifest:`, err);
 		return {
 			manifest: null,
-			error: `Malformed @strata-layout JSON manifest: ${err?.message || String(err)}`,
+			error: `Malformed @${tag}-layout JSON manifest: ${err?.message || String(err)}`,
 			rawMatch: match[0]
 		};
 	}
 }
 
 /**
- * Extracts consolidated layout positions from @strata-layout JSDoc in the schema file.
+ * Extracts consolidated layout positions from @cirrus-layout or @strata-layout JSDoc in the schema file.
  */
 export function extractStrataLayoutManifest(code: string): Record<string, { x: number; y: number; [key: string]: any }> | null {
 	return extractStrataLayoutManifestDetails(code).manifest;
 }
+
+export const extractCirrusMetadata = extractStrataMetadata;
+export const extractCirrusLayoutManifest = extractStrataLayoutManifest;
+export const extractCirrusLayoutManifestDetails = extractStrataLayoutManifestDetails;
+export type CirrusLayoutManifestResult = StrataLayoutManifestResult;
+export type ExtractedCirrusMetadata = ExtractedStrataMetadata;
 
 /**
  * Calculates the relative TypeScript module import specifier from one file to another.
@@ -562,5 +570,144 @@ export function detectPackageWrapper(code: string, filePath?: string): PackageWr
 		drizzleConfigPath
 	};
 }
+
+/**
+ * Strips line and block comments from TypeScript source code while preserving string literals.
+ * Used by the fast import/export pre-scanner so commented-out imports are never fetched.
+ */
+function stripCommentsPreservingStrings(code: string): string {
+	let out = '';
+	let inString = false;
+	let quoteChar = '';
+	let i = 0;
+
+	while (i < code.length) {
+		const char = code[i];
+		const nextChar = code[i + 1];
+
+		if (inString) {
+			out += char;
+			if (char === '\\') {
+				out += nextChar || '';
+				i += 2;
+				continue;
+			}
+			if (char === quoteChar) {
+				inString = false;
+			}
+			i++;
+			continue;
+		}
+
+		if (char === '"' || char === "'" || char === '`') {
+			inString = true;
+			quoteChar = char;
+			out += char;
+			i++;
+			continue;
+		}
+
+		if (char === '/' && nextChar === '/') {
+			i += 2;
+			while (i < code.length && code[i] !== '\n' && code[i] !== '\r') i++;
+			continue;
+		}
+
+		if (char === '/' && nextChar === '*') {
+			i += 2;
+			while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) i++;
+			i += 2;
+			continue;
+		}
+
+		out += char;
+		i++;
+	}
+
+	return out;
+}
+
+/**
+ * Fast zero-AST pre-scanner that extracts external module imports/re-exports and @strata/@strata-layout
+ * file paths without instantiating a throwaway ts-morph Project.
+ */
+export function scanExternalReferencesFast(
+	code: string,
+	paths?: Record<string, string[]>,
+	tsconfigPath?: string,
+	filePath?: string
+): {
+	externalImports: { filePath: string; importNames: string[] }[];
+	externalPaths: string[];
+} {
+	const externalImports: { filePath: string; importNames: string[] }[] = [];
+	const externalPathsSet = new Set<string>();
+
+	// 1. Extract external paths from @strata-layout / @cirrus-layout manifest
+	const manifest = extractStrataLayoutManifest(code);
+	if (manifest) {
+		for (const meta of Object.values(manifest)) {
+			if (meta && typeof (meta as any).path === 'string' && (meta as any).path) {
+				externalPathsSet.add((meta as any).path);
+			}
+		}
+	}
+
+	// 2. Extract external paths from inline /** @strata { ... } */ JSDoc blocks
+	const jsdocMatches = code.matchAll(/\/\*\*[\s\S]*?\*\//g);
+	for (const match of jsdocMatches) {
+		const extracted = extractStrataMetadata(match[0]);
+		if (extracted?.data?.path && typeof extracted.data.path === 'string') {
+			externalPathsSet.add(extracted.data.path);
+		}
+	}
+
+	// 3. Strip comments and scan active import / export declarations
+	const uncommented = stripCommentsPreservingStrings(code);
+	const resolveSpec = (specifier: string): string | null => {
+		const isRel = specifier.startsWith('.') || specifier.startsWith('..');
+		if (isRel) {
+			return filePath ? resolveRelativePath(filePath, specifier) : specifier;
+		}
+		if (paths && tsconfigPath) {
+			return resolvePathAlias(specifier, paths, tsconfigPath);
+		}
+		return null;
+	};
+
+	const parseNamedList = (clause: string): string[] => {
+		const braceMatch = clause.match(/\{([\s\S]*?)\}/);
+		if (!braceMatch) return ['*'];
+		const names: string[] = [];
+		for (const part of braceMatch[1].split(',')) {
+			const cleaned = part.replace(/\btype\b/g, '').trim();
+			if (!cleaned) continue;
+			const asParts = cleaned.split(/\s+as\s+/);
+			const finalName = (asParts[1] || asParts[0]).trim();
+			if (finalName) names.push(finalName);
+		}
+		return names.length > 0 ? names : ['*'];
+	};
+
+	const stmtRegex = /\b(import|export)\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
+	for (const match of uncommented.matchAll(stmtRegex)) {
+		const clause = match[2].trim();
+		if (clause.startsWith('type ') && !clause.includes('{')) continue;
+		const specifier = match[3].trim();
+		const resolved = resolveSpec(specifier);
+		if (resolved) {
+			externalImports.push({
+				filePath: resolved,
+				importNames: parseNamedList(clause)
+			});
+		}
+	}
+
+	return {
+		externalImports,
+		externalPaths: Array.from(externalPathsSet)
+	};
+}
+
 
 

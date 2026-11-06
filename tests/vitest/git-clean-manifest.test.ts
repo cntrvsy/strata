@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseSchema } from '../../src/lib/parser/core';
+import { scanExternalReferencesFast } from '../../src/lib/parser/helpers';
 import {
   extractStrataLayoutManifest,
   updateLayoutManifestInSchema,
@@ -38,7 +39,7 @@ describe('Git-Clean Layout Manifest & Workspace Ingestion (Phase 5)', () => {
     };
 
     const withManifest = updateLayoutManifestInSchema(rootCode, positions);
-    expect(withManifest).toContain('@strata-layout');
+    expect(withManifest).toMatch(/@(cirrus|strata)-layout/);
     expect(withManifest).toContain('"users"');
     expect(withManifest).toContain('"posts"');
 
@@ -92,6 +93,76 @@ describe('Git-Clean Layout Manifest & Workspace Ingestion (Phase 5)', () => {
     expect(postsNode?.position.y).toBe(250);
   });
 
+  it('should apply @cirrus-layout manifest coordinates to modular nodes on parse (dual compatibility)', () => {
+    const rootWithManifest = `
+      /**
+       * @cirrus-layout {
+       *   "users": { "x": 180, "y": 280 },
+       *   "posts": { "x": 720, "y": 280 }
+       * }
+       */
+      export * from './users';
+      export * from './posts';
+    `;
+
+    const usersContent = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const users = sqliteTable("users", { id: integer("id").primaryKey() });
+    `;
+
+    const postsContent = `
+      import { sqliteTable, integer } from "drizzle-orm/sqlite-core";
+      export const posts = sqliteTable("posts", { id: integer("id").primaryKey() });
+    `;
+
+    const externalMap = new Map<string, string>();
+    externalMap.set('/project/db/users.ts', usersContent);
+    externalMap.set('/project/db/posts.ts', postsContent);
+
+    const result = parseSchema(rootWithManifest, externalMap, undefined, undefined, '/project/db/index.ts');
+    expect(result.success).toBe(true);
+
+    const usersNode = result.nodes.find(n => n.id === 'users');
+    const postsNode = result.nodes.find(n => n.id === 'posts');
+
+    expect(usersNode?.position.x).toBe(180);
+    expect(usersNode?.position.y).toBe(280);
+    expect(postsNode?.position.x).toBe(720);
+    expect(postsNode?.position.y).toBe(280);
+  });
+
+  it('should preserve existing @strata-layout tag when updating layout in legacy repositories', () => {
+    const legacyCode = `
+      /**
+       * @strata-layout {
+       *   "users": { "x": 100, "y": 100 }
+       * }
+       */
+      export * from './users';
+    `;
+
+    const updated = updateLayoutManifestInSchema(legacyCode, { users: { x: 250, y: 350 } });
+    expect(updated).toContain('@strata-layout');
+    expect(updated).not.toContain('@cirrus-layout');
+    expect(updated).toContain('"x": 250');
+  });
+
+  it('should preserve existing @cirrus-layout tag when updating layout in modernized repositories', () => {
+    const modernCode = `
+      /**
+       * @cirrus-layout {
+       *   "users": { "x": 100, "y": 100 }
+       * }
+       */
+      export * from './users';
+    `;
+
+    const updated = updateLayoutManifestInSchema(modernCode, { users: { x: 300, y: 400 } });
+    expect(updated).toContain('@cirrus-layout');
+    expect(updated).not.toContain('@strata-layout');
+    expect(updated).toContain('"x": 300');
+  });
+
   it('should update layout manifest in index.ts and leave domain files 100% clean in Git on node drag/save', async () => {
     const barrelRoot = `
       export * from './users';
@@ -135,9 +206,9 @@ export const posts = sqliteTable("posts", {
     // Save diagram positions
     await schemaState.saveToFile();
 
-    // Verify index.ts received the @strata-layout manifest
+    // Verify index.ts received the layout manifest
     expect(writtenFiles['/project/db/index.ts']).toBeDefined();
-    expect(writtenFiles['/project/db/index.ts']).toContain('@strata-layout');
+    expect(writtenFiles['/project/db/index.ts']).toMatch(/@(cirrus|strata)-layout/);
     expect(writtenFiles['/project/db/index.ts']).toContain('"x": 300');
 
     // CRITICAL: Verify users.ts and posts.ts were NEVER written to (0 Git diffs!)
@@ -318,7 +389,7 @@ export const posts = sqliteTable("posts", {
     ];
 
     const updated = updateAllNodePositionsInSchema(code, nodes);
-    expect(updated).toContain('@strata-layout');
+    expect(updated).toMatch(/@(cirrus|strata)-layout/);
     expect(updated).toContain('__clerk_identity__');
 
     const manifest = extractStrataLayoutManifest(updated);
@@ -443,7 +514,7 @@ export const posts = sqliteTable("posts", {
     const codeWithDirective = `"use server";\n\nimport { sqliteTable, integer } from "drizzle-orm/sqlite-core";\nexport const users = sqliteTable("users", { id: integer("id") });`;
     const updated = updateLayoutManifestInSchema(codeWithDirective, { users: { x: 100, y: 200 } });
     
-    expect(updated.startsWith('"use server";\n\n/**\n * @strata-layout')).toBe(true);
+    expect(updated).toMatch(/^"use server";\n\n\/\*\*[\s\S]*?@(cirrus|strata)-layout/);
     expect(updated).toContain('"users"');
   });
 
@@ -460,8 +531,9 @@ export const posts = sqliteTable("posts", {
     ] as any;
 
     const saved = updateAllNodePositionsInSchema(monolith, nodes);
-    expect(saved).toContain('@strata-layout');
+    expect(saved).toMatch(/@(cirrus|strata)-layout/);
     expect(saved).not.toContain('@strata {');
+    expect(saved).not.toContain('@cirrus {');
     
     // Declarations remain pure Drizzle code
     expect(saved).toContain('export const users = sqliteTable("users"');
@@ -624,6 +696,138 @@ export * from './telemetry';`;
     // Ensure no dummy code was added
     expect(afterAdd).not.toContain('export const ISITFUN_KV');
     expect(afterAdd).not.toContain('sqliteTable');
+  });
+
+  it('should pre-scan modular barrel re-exports and @strata-layout DO paths without instantiating ts-morph and spawn inferred non-SQL bindings', () => {
+    const barrelIndex = `/**
+ * @strata-layout {
+ *   "gameBuilds": { "x": 2290, "y": 948 },
+ *   "telemetrySessions": { "x": 1776, "y": 1355 },
+ *   "GAMES_BUCKET": {
+ *     "x": 1825,
+ *     "y": 950,
+ *     "public": false,
+ *     "cors": true,
+ *     "folders": {
+ *       "builds": "application/zip",
+ *       "telemetry-logs": "application/json"
+ *     },
+ *     "relations": [
+ *       { "to": "gameBuilds" }
+ *     ]
+ *   },
+ *   "TELEMETRY_BUFFER": {
+ *     "x": 1320,
+ *     "y": 1443,
+ *     "path": "../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts",
+ *     "class": "TelemetrySessionDO",
+ *     "methods": ["fetch", "alarm"],
+ *     "relations": [
+ *       { "to": "telemetrySessions" },
+ *       { "to": "GAMES_BUCKET" }
+ *     ]
+ *   },
+ *   "ISITFUN_KV": {
+ *     "x": 50,
+ *     "y": 50,
+ *     "schema": {
+ *       "sessionToken": "string",
+ *       "rateLimit": { "type": "number", "ttl": 60 }
+ *     }
+ *   },
+ *   "DRIFTER_CONTROL": {
+ *     "x": 310,
+ *     "y": 50,
+ *     "schema": {
+ *       "drifterFlag": "boolean",
+ *       "killSwitch": "boolean"
+ *     }
+ *   }
+ * }
+ */
+
+// export * from './commented-out';
+export * from './builds';
+export * from './telemetry';
+`;
+
+    const scanned = scanExternalReferencesFast(
+      barrelIndex,
+      undefined,
+      undefined,
+      '/repo/packages/db/src/schema/index.ts'
+    );
+
+    expect(scanned.externalImports).toEqual([
+      { filePath: '/repo/packages/db/src/schema/builds.ts', importNames: ['*'] },
+      { filePath: '/repo/packages/db/src/schema/telemetry.ts', importNames: ['*'] }
+    ]);
+    expect(scanned.externalPaths).toEqual([
+      '../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts'
+    ]);
+
+    const buildsCode = `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const gameBuilds = sqliteTable("game_builds", {
+        id: text("id").primaryKey()
+      });
+    `;
+    const telemetryCode = `
+      import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+      export const telemetrySessions = sqliteTable("telemetry_sessions", {
+        id: text("id").primaryKey()
+      });
+    `;
+    const doCode = `
+      export class TelemetrySessionDO {
+        async flushBatch(sessionId: string): Promise<number> { return 1; }
+        async alarm(): Promise<void> {}
+      }
+    `;
+
+    const externalFilesMap = new Map<string, string>([
+      ['./builds', buildsCode],
+      ['/repo/packages/db/src/schema/builds.ts', buildsCode],
+      ['./telemetry', telemetryCode],
+      ['/repo/packages/db/src/schema/telemetry.ts', telemetryCode],
+      ['../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts', doCode],
+      ['/repo/apps/api/src/durable-objects/TelemetrySessionDO.ts', doCode],
+      ['__correction__../../../../apps/api/src/durable-objects/TelemetrySessionDO.ts', '../../../apps/api/src/durable-objects/TelemetrySessionDO.ts']
+    ]);
+
+    const parsed = parseSchema(
+      barrelIndex,
+      externalFilesMap,
+      undefined,
+      undefined,
+      '/repo/packages/db/src/schema/index.ts'
+    );
+
+    expect(parsed.success).toBe(true);
+    const nodeIds = parsed.nodes.map(n => n.id);
+    expect(nodeIds).toContain('gameBuilds');
+    expect(nodeIds).toContain('telemetrySessions');
+    expect(nodeIds).toContain('GAMES_BUCKET');
+    expect(nodeIds).toContain('TELEMETRY_BUFFER');
+    expect(nodeIds).toContain('ISITFUN_KV');
+    expect(nodeIds).toContain('DRIFTER_CONTROL');
+
+    const doNode = parsed.nodes.find(n => n.id === 'TELEMETRY_BUFFER');
+    expect(doNode?.type).toBe('do');
+    expect(doNode?.position).toEqual({ x: 1320, y: 1443 });
+    expect((doNode?.data as any)?.methods?.map((m: any) => m.name)).toContain('flushBatch(sessionId: string)');
+
+    const r2Node = parsed.nodes.find(n => n.id === 'GAMES_BUCKET');
+    expect(r2Node?.type).toBe('r2');
+    expect((r2Node?.data as any)?.folders).toHaveLength(2);
+
+    const kvNode = parsed.nodes.find(n => n.id === 'ISITFUN_KV');
+    expect(kvNode?.type).toBe('kv');
+    expect((kvNode?.data as any)?.patterns).toHaveLength(2);
+
+    expect(parsed.edges.some(e => e.source === 'GAMES_BUCKET' && e.target === 'gameBuilds')).toBe(true);
+    expect(parsed.edges.some(e => e.source === 'TELEMETRY_BUFFER' && e.target === 'telemetrySessions')).toBe(true);
+    expect(parsed.edges.some(e => e.source === 'TELEMETRY_BUFFER' && e.target === 'GAMES_BUCKET')).toBe(true);
   });
 });
 

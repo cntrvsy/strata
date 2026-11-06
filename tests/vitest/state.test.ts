@@ -185,7 +185,7 @@ describe('SchemaState FSM & Reactivity', () => {
 
     // Verify written to /mock/schema.ts directly via @strata-layout manifest (Git-clean!)
     expect(writtenFiles['/mock/schema.ts']).toBeDefined();
-    expect(writtenFiles['/mock/schema.ts']).toContain('@strata-layout');
+    expect(writtenFiles['/mock/schema.ts']).toMatch(/@(cirrus|strata)-layout/);
     expect(writtenFiles['/mock/schema.ts']).toContain('"x": 500');
     expect(writtenFiles['/mock/schema.ts']).toContain('"y": 600');
 

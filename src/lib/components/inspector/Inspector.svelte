@@ -11,7 +11,6 @@
     Cpu,
     Zap,
     X,
-    Heart,
     HardDrive,
     Wrench,
     TriangleAlert,
@@ -89,7 +88,7 @@
     const ok = await PlatformService.writeClipboard(drizzleSnippet);
     if (ok) {
       copied = true;
-      toast.success(`Copied "${selectedNode?.id || ''}" snippet`);
+      toast.success(`Copied "${selectedNode?.id || ""}" snippet`);
       setTimeout(() => {
         copied = false;
       }, 2000);
@@ -114,6 +113,7 @@
       {@const config =
         targetConfig[(data.target as keyof typeof targetConfig) || "d1"]}
       {@const moduleInfo = data.moduleInfo}
+      {@const nodeIssues = schemaState.getNodeAuditIssues(selectedNode.id)}
 
       <div
         class="w-full h-full max-h-full bg-base-100 border-l border-base-300 flex flex-col min-h-0 overflow-hidden animate-in slide-in-from-right-8 duration-300"
@@ -154,6 +154,7 @@
           <div class="flex items-center gap-1 shrink-0">
             <button
               class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 text-primary"
+              data-testid="inspector-open-in-editor"
               onclick={() => {
                 const targetFile =
                   moduleInfo?.sourceFilePath ||
@@ -179,10 +180,7 @@
         </div>
 
         <!-- JSDoc Audit Warnings (if any) -->
-        {#if schemaState.auditIssues.some((i) => i.symbolName === selectedNode.id)}
-          {@const nodeIssues = schemaState.auditIssues.filter(
-            (i) => i.symbolName === selectedNode.id,
-          )}
+        {#if nodeIssues.length > 0}
           <div
             class="mx-5 mt-4 p-3 rounded-box bg-warning/10 border border-warning/20 flex flex-col gap-2"
           >
@@ -306,9 +304,13 @@
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           {#if isSource}
-                            <ArrowRight class="w-3.5 h-3.5 text-primary shrink-0" />
+                            <ArrowRight
+                              class="w-3.5 h-3.5 text-primary shrink-0"
+                            />
                           {:else}
-                            <ArrowLeft class="w-3.5 h-3.5 text-secondary shrink-0" />
+                            <ArrowLeft
+                              class="w-3.5 h-3.5 text-secondary shrink-0"
+                            />
                           {/if}
                           <span
                             class="font-bold text-xs text-base-content font-mono"

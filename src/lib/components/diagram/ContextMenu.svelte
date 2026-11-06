@@ -7,9 +7,19 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Trash2, FilePen, Focus, ShieldCheck, Sparkles, ExternalLink, Copy, SlidersHorizontal } from "lucide-svelte";
+  import {
+    Trash2,
+    Focus,
+    ShieldCheck,
+    Sparkles,
+    ExternalLink,
+    Copy,
+    SlidersHorizontal,
+    FileCode,
+  } from "lucide-svelte";
+  import { schemaState } from "#lib/state";
 
-  const { x, y, type, targetId, nodeType, nodeData, onClose, onAction } = $props<{
+  interface ContextMenuProps {
     x: number;
     y: number;
     type: "canvas" | "node";
@@ -18,7 +28,18 @@
     nodeData?: any;
     onClose: () => void;
     onAction: (action: string, data?: any) => void;
-  }>();
+  }
+
+  const {
+    x,
+    y,
+    type,
+    targetId,
+    nodeType,
+    nodeData,
+    onClose,
+    onAction,
+  }: ContextMenuProps = $props();
 
   let menuElement = $state<HTMLDivElement | null>(null);
 
@@ -57,7 +78,11 @@
         class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-60 border-b border-base-300/40 mb-1 leading-none text-base-content flex items-center justify-between"
       >
         <span>{nodeData?.title || targetId}</span>
-        <span class="badge badge-xs {nodeData?.provider === 'clerk' ? 'badge-secondary' : 'badge-accent'} text-[8px] py-0.5">IdP</span>
+        <span
+          class="badge badge-xs {nodeData?.provider === 'clerk'
+            ? 'badge-secondary'
+            : 'badge-accent'} text-[8px] py-0.5">IdP</span
+        >
       </div>
       <button
         class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
@@ -105,46 +130,91 @@
         class="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider opacity-40 border-b border-base-300/40 mb-1 leading-none text-base-content/70 flex items-center justify-between"
       >
         <span>{targetId}</span>
-        <span class="badge badge-xs {nodeData?.target === 'do' ? 'badge-secondary' : nodeData?.target === 'kv' ? 'badge-warning' : nodeData?.target === 'r2' ? 'badge-info' : 'badge-neutral'} text-[8px] uppercase">{nodeData?.target || 'd1'}</span>
+        <span
+          class="badge badge-xs {nodeData?.target === 'do'
+            ? 'badge-secondary'
+            : nodeData?.target === 'kv'
+              ? 'badge-warning'
+              : nodeData?.target === 'r2'
+                ? 'badge-info'
+                : 'badge-neutral'} text-[8px] uppercase"
+          >{nodeData?.target || "d1"}</span
+        >
       </div>
       <button
-        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
+        class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
         onclick={() => {
           onAction("open_in_editor", targetId);
           onClose();
         }}
       >
-        <ExternalLink class="w-3.5 h-3.5 opacity-75 text-primary" />
-        Open in Editor
+        <span class="flex items-center gap-2.5">
+          <FileCode class="w-3.5 h-3.5 opacity-75 text-primary" />
+          <span>Open in Editor</span>
+        </span>
+        <kbd class="kbd kbd-xs text-[9px] opacity-60">2× Click</kbd>
       </button>
       <button
-        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
-        onclick={() => {
-          onAction("inspect_node", targetId);
-          onClose();
-        }}
-      >
-        <SlidersHorizontal class="w-3.5 h-3.5 opacity-60 text-secondary" />
-        Inspect Architecture
-      </button>
-      <button
-        class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
+        class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
         onclick={() => {
           onAction("copy_drizzle_code", targetId);
           onClose();
         }}
       >
-        <Copy class="w-3.5 h-3.5 opacity-60 text-info" />
-        {#if nodeData?.target === "do"}
-          Copy DO Interface
-        {:else if nodeData?.target === "kv"}
-          Copy KV Interface
-        {:else if nodeData?.target === "r2"}
-          Copy R2 Interface
-        {:else}
-          Copy Drizzle Code
-        {/if}
+        <span class="flex items-center gap-2.5">
+          <Copy class="w-3.5 h-3.5 opacity-60 text-info" />
+          <span>
+            {#if nodeData?.target === "do"}
+              Copy DO Interface
+            {:else if nodeData?.target === "kv"}
+              Copy KV Interface
+            {:else if nodeData?.target === "r2"}
+              Copy R2 Interface
+            {:else}
+              Copy Drizzle Snippet
+            {/if}
+          </span>
+        </span>
       </button>
+      <button
+        class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
+        onclick={() => {
+          onAction("toggle_focus", targetId);
+          onClose();
+        }}
+      >
+        <span class="flex items-center gap-2.5">
+          <Focus class="w-3.5 h-3.5 opacity-60 text-primary" />
+          <span>Focus Subgraph</span>
+        </span>
+        <kbd class="kbd kbd-xs text-[9px] opacity-60">F</kbd>
+      </button>
+      <button
+        class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
+        onclick={() => {
+          onAction("inspect_node", targetId);
+          onClose();
+        }}
+      >
+        <span class="flex items-center gap-2.5">
+          <SlidersHorizontal class="w-3.5 h-3.5 opacity-60 text-secondary" />
+          <span>Inspect Architecture</span>
+        </span>
+        <kbd class="kbd kbd-xs text-[9px] opacity-60">↵</kbd>
+      </button>
+      {#if schemaState.isSandboxMode}
+        <div class="h-px bg-base-300/40 my-1"></div>
+        <button
+          class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-error/10 transition-all text-left font-semibold text-error"
+          onclick={() => {
+            onAction("delete_sandbox", targetId);
+            onClose();
+          }}
+        >
+          <Trash2 class="w-3.5 h-3.5 opacity-70" />
+          <span>Delete (Sandbox)</span>
+        </button>
+      {/if}
     {/if}
   {:else if type === "canvas"}
     <button

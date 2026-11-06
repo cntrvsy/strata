@@ -22,7 +22,8 @@
     TriangleAlert,
   } from "lucide-svelte";
 
-  const { id, data, selected, dragging } = $props<{
+  interface KVNamespaceNodeProps {
+    id?: string;
     data: {
       label: string;
       columns?: Array<{
@@ -58,8 +59,9 @@
     };
     selected?: boolean;
     dragging?: boolean;
-    id?: string;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: KVNamespaceNodeProps = $props();
 
   const nodeId = $derived(id || data.label);
 
@@ -92,7 +94,7 @@
   );
 
   const nodeAuditIssues = $derived(
-    schemaState.auditIssues.filter((i) => i.symbolName === data.label),
+    schemaState.getNodeAuditIssues(data.label),
   );
   const hasAuditError = $derived(
     nodeAuditIssues.some(
@@ -116,8 +118,13 @@
   }
 
   const updateNodeInternals = useUpdateNodeInternals();
+  let didMount = false;
   $effect(() => {
     const _p = patternsToDisplay.length;
+    if (!didMount) {
+      didMount = true;
+      return;
+    }
     tick().then(() => {
       updateNodeInternals(nodeId);
     });
@@ -133,7 +140,7 @@
 />
 
 <div
-  class="relative group/node min-w-60 max-w-80 transition-all duration-300 {opacityClass}"
+  class="relative group/node min-w-60 max-w-80 transition-[opacity,transform] duration-150 {opacityClass}"
   data-testid="kv-node"
   data-node-name={data.label}
   role="button"
@@ -153,7 +160,7 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 border-t-warning {selected
+    class="bg-base-100 border rounded-box overflow-hidden transition-colors duration-150 border-t-4 border-t-warning {selected
       ? 'border-warning ring-2 ring-warning/30'
       : 'border-base-300 hover:border-warning/50'} {dragging
       ? 'shadow-2xl scale-[1.02]'
@@ -243,7 +250,7 @@
       {:else}
         {#each patternsToDisplay as pattern (pattern.name)}
           <div
-            class="relative px-3 py-1.5 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-all group/row"
+            class="relative px-3 py-1.5 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-colors duration-150 group/row"
           >
             <!-- Row Handles for Pattern-Level Targeting -->
             <Handle

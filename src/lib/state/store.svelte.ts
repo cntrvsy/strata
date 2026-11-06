@@ -123,25 +123,52 @@ export function parseCleanJson(text: string): any {
 	return JSON.parse(out);
 }
 
+const tsconfigDirCache = new Map<string, string | null>();
+const workspaceRootDirCache = new Map<string, string>();
+const wranglerConfigDirCache = new Map<string, string | null>();
+
+export function clearProjectDiscoveryCaches() {
+	tsconfigDirCache.clear();
+	workspaceRootDirCache.clear();
+	wranglerConfigDirCache.clear();
+}
+
 /**
  * Dynamically resolves tsconfig paths from the workspace by walking up directories.
  * Resolves extended configurations as well (e.g. SvelteKit extends).
  */
 async function loadTsconfigPaths(basePath: string): Promise<{ paths: Record<string, string[]>; path: string } | null> {
-	let currentDir = basePath.replace(/\\/g, '/').split('/');
+	const currentDir = basePath.replace(/\\/g, '/').split('/');
 	currentDir.pop(); // Remove filename
+	const baseDirKey = currentDir.join('/');
 	
 	let tsconfigPath = '';
 	let tsconfig: any = null;
-	while (currentDir.length > 0) {
-		const checkPath = currentDir.join('/') + '/tsconfig.json';
+
+	const cachedTsconfigPath = tsconfigDirCache.get(baseDirKey);
+	if (cachedTsconfigPath) {
 		try {
-			const content = await PlatformService.readText(checkPath);
+			const content = await PlatformService.readText(cachedTsconfigPath);
 			tsconfig = parseCleanJson(content);
-			tsconfigPath = checkPath;
-			break;
+			tsconfigPath = cachedTsconfigPath;
 		} catch {
-			currentDir.pop();
+			tsconfigDirCache.delete(baseDirKey);
+		}
+	}
+
+	if (!tsconfig) {
+		const searchDir = [...currentDir];
+		while (searchDir.length > 0) {
+			const checkPath = searchDir.join('/') + '/tsconfig.json';
+			try {
+				const content = await PlatformService.readText(checkPath);
+				tsconfig = parseCleanJson(content);
+				tsconfigPath = checkPath;
+				tsconfigDirCache.set(baseDirKey, checkPath);
+				break;
+			} catch {
+				searchDir.pop();
+			}
 		}
 	}
 	
@@ -172,7 +199,7 @@ async function loadTsconfigPaths(basePath: string): Promise<{ paths: Record<stri
 }
 
 /**
- * Loads external schemas asynchronously based on import path declarations.
+ * Loads external schemas asynchronously and concurrently based on import path declarations.
  */
 async function loadExternalSchemas(
 	basePath: string, 
@@ -180,52 +207,62 @@ async function loadExternalSchemas(
 	externalPaths: string[] = []
 ): Promise<Map<string, string>> {
 	const externalFilesMap = new Map<string, string>();
-	for (const imp of externalImports) {
-		const resolvedPath = resolveRelativePath(basePath, imp.filePath);
-		try {
-			const extRaw = await PlatformService.readText(resolvedPath);
-			externalFilesMap.set(imp.filePath, extRaw);
-			externalFilesMap.set(resolvedPath, extRaw);
-		} catch (err: any) {
-			console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
-			toast.error(`Failed to read import: ${imp.filePath}`, {
-				description: err?.message || "File not found or unreadable."
-			});
-		}
-	}
-	for (const p of externalPaths) {
-		if (externalFilesMap.has(p)) continue;
-		const resolvedPath = resolveRelativePath(basePath, p);
-		try {
-			const extRaw = await PlatformService.readText(resolvedPath);
-			externalFilesMap.set(p, extRaw);
-			externalFilesMap.set(resolvedPath, extRaw);
-		} catch (err: any) {
-			// Non-blocking fallback: Check if path depth was miscalculated in a monorepo
-			let resolvedFallback = false;
+
+	await Promise.all(
+		externalImports.map(async (imp) => {
+			const resolvedPath = resolveRelativePath(basePath, imp.filePath);
 			try {
-				const cleanSubPath = p.replace(/^(\.\.?\/)+/, '');
-				if (cleanSubPath) {
-					const workspaceRoot = await findWorkspaceRoot(basePath);
-					const candidate = `${workspaceRoot}/${cleanSubPath}`;
-					const extRaw = await PlatformService.readText(candidate);
-					if (extRaw) {
-						externalFilesMap.set(p, extRaw);
-						externalFilesMap.set(candidate, extRaw);
-						const correctedRel = getRelativeImportSpecifier(basePath, candidate);
-						if (correctedRel) {
-							externalFilesMap.set('__correction__' + p, correctedRel);
+				const extRaw = await PlatformService.readText(resolvedPath);
+				externalFilesMap.set(imp.filePath, extRaw);
+				externalFilesMap.set(resolvedPath, extRaw);
+			} catch (err: any) {
+				console.warn(`[Strata] Failed to read external import at ${resolvedPath}:`, err);
+				toast.error(`Failed to read import: ${imp.filePath}`, {
+					description: err?.message || "File not found or unreadable."
+				});
+			}
+		})
+	);
+
+	const remainingPaths = externalPaths.filter((p) => !externalFilesMap.has(p));
+	if (remainingPaths.length > 0) {
+		await Promise.all(
+			remainingPaths.map(async (p) => {
+				if (externalFilesMap.has(p)) return;
+				const resolvedPath = resolveRelativePath(basePath, p);
+				try {
+					const extRaw = await PlatformService.readText(resolvedPath);
+					externalFilesMap.set(p, extRaw);
+					externalFilesMap.set(resolvedPath, extRaw);
+				} catch {
+					// Non-blocking fallback: Check if path depth was miscalculated in a monorepo
+					let resolvedFallback = false;
+					try {
+						const cleanSubPath = p.replace(/^(\.\.?\/)+/, '');
+						if (cleanSubPath) {
+							const workspaceRoot = await findWorkspaceRoot(basePath);
+							const candidate = `${workspaceRoot}/${cleanSubPath}`;
+							const extRaw = await PlatformService.readText(candidate);
+							if (extRaw) {
+								externalFilesMap.set(p, extRaw);
+								externalFilesMap.set(candidate, extRaw);
+								const correctedRel = getRelativeImportSpecifier(basePath, candidate);
+								if (correctedRel) {
+									externalFilesMap.set('__correction__' + p, correctedRel);
+								}
+								resolvedFallback = true;
+							}
 						}
-						resolvedFallback = true;
+					} catch {}
+
+					if (!resolvedFallback) {
+						console.warn(`[Strata] External asset not found at ${resolvedPath}`);
 					}
 				}
-			} catch {}
-
-			if (!resolvedFallback) {
-				console.warn(`[Strata] External asset not found at ${resolvedPath}`);
-			}
-		}
+			})
+		);
 	}
+
 	return externalFilesMap;
 }
 
@@ -528,14 +565,20 @@ async function resolveDurableObjectClassFromEntrypoint(
 async function findWorkspaceRoot(filePath: string): Promise<string> {
 	const normalized = filePath.replace(/\\/g, '/');
 	const lastSlash = normalized.lastIndexOf('/');
-	let currentDir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
+	const baseDir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
+	const cached = workspaceRootDirCache.get(baseDir);
+	if (cached) return cached;
 
+	let currentDir = baseDir;
 	let fallbackProjectRoot = currentDir;
 	for (let depth = 0; depth < 12; depth++) {
 		for (const marker of ['.git', 'pnpm-workspace.yaml']) {
 			try {
 				const exists = await PlatformService.readText(currentDir + '/' + marker);
-				if (exists) return currentDir;
+				if (exists) {
+					workspaceRootDirCache.set(baseDir, currentDir);
+					return currentDir;
+				}
 			} catch {}
 		}
 
@@ -545,7 +588,10 @@ async function findWorkspaceRoot(filePath: string): Promise<string> {
 				const parsed = parseCleanJson(pkgContent);
 				if (parsed && (parsed.workspaces || parsed.private)) {
 					fallbackProjectRoot = currentDir;
-					if (parsed.workspaces) return currentDir;
+					if (parsed.workspaces) {
+						workspaceRootDirCache.set(baseDir, currentDir);
+						return currentDir;
+					}
 				}
 			}
 		} catch {}
@@ -554,6 +600,7 @@ async function findWorkspaceRoot(filePath: string): Promise<string> {
 		if (pSlash <= 0) break;
 		currentDir = currentDir.substring(0, pSlash);
 	}
+	workspaceRootDirCache.set(baseDir, fallbackProjectRoot);
 	return fallbackProjectRoot;
 }
 
@@ -576,6 +623,24 @@ async function findProjectRoot(filePath: string): Promise<string> {
 	return dir;
 }
 
+async function resolveDoBindingsConcurrently(
+	bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[],
+	wranglerDir: string,
+	mainEntry: string | undefined
+) {
+	const doBindings = bindings.filter(b => b.type === 'do' && b.extra?.class);
+	if (doBindings.length === 0) return;
+	await Promise.all(
+		doBindings.map(async (b) => {
+			const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, mainEntry, b.extra.class);
+			if (resolvedDO) {
+				b.extra.path = resolvedDO.filePath;
+				b.extra.methods = resolvedDO.methods;
+			}
+		})
+	);
+}
+
 async function discoverWranglerBindings(filePath: string, customWranglerPath?: string): Promise<{
 	bindings: { type: 'kv' | 'do' | 'r2'; name: string; extra: any }[];
 	configFilePath: string | null;
@@ -583,7 +648,7 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 	if (!filePath) return { bindings: [], configFilePath: null };
 	const normalized = filePath.replace(/\\/g, '/');
 	const lastSlash = normalized.lastIndexOf('/');
-	let dir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
+	const dir = lastSlash >= 0 ? normalized.substring(0, lastSlash) : normalized;
 	
 	// If the user specified a custom path, try to resolve it first
 	if (customWranglerPath) {
@@ -593,21 +658,33 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 			if (content) {
 				const parsed = parseWranglerContent(customWranglerPath, content);
 				const wranglerDir = fullPath.substring(0, fullPath.lastIndexOf('/'));
-				for (const b of parsed.bindings) {
-					if (b.type === 'do' && b.extra?.class) {
-						const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
-						if (resolvedDO) {
-							b.extra.path = resolvedDO.filePath;
-							b.extra.methods = resolvedDO.methods;
-						}
-					}
-				}
+				await resolveDoBindingsConcurrently(parsed.bindings, wranglerDir, parsed.main);
 				return {
 					bindings: parsed.bindings,
 					configFilePath: fullPath
 				};
 			}
 		} catch (e) {}
+	}
+
+	// Fast path: check cached wrangler config file path for this directory
+	const cachedWranglerPath = wranglerConfigDirCache.get(dir);
+	if (cachedWranglerPath) {
+		try {
+			const content = await PlatformService.readText(cachedWranglerPath);
+			if (content) {
+				const name = cachedWranglerPath.substring(cachedWranglerPath.lastIndexOf('/') + 1);
+				const parsed = parseWranglerContent(name, content);
+				const wranglerDir = cachedWranglerPath.substring(0, cachedWranglerPath.lastIndexOf('/'));
+				await resolveDoBindingsConcurrently(parsed.bindings, wranglerDir, parsed.main);
+				return {
+					bindings: parsed.bindings,
+					configFilePath: cachedWranglerPath
+				};
+			}
+		} catch {
+			wranglerConfigDirCache.delete(dir);
+		}
 	}
 
 	// Dynamic upward traversal to look for wrangler files
@@ -618,17 +695,10 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 			try {
 				const content = await PlatformService.readText(candidate);
 				if (content) {
+					wranglerConfigDirCache.set(dir, candidate);
 					const parsed = parseWranglerContent(name, content);
 					const wranglerDir = candidate.substring(0, candidate.lastIndexOf('/'));
-					for (const b of parsed.bindings) {
-						if (b.type === 'do' && b.extra?.class) {
-							const resolvedDO = await resolveDurableObjectClassFromEntrypoint(wranglerDir, parsed.main, b.extra.class);
-							if (resolvedDO) {
-								b.extra.path = resolvedDO.filePath;
-								b.extra.methods = resolvedDO.methods;
-							}
-						}
-					}
+					await resolveDoBindingsConcurrently(parsed.bindings, wranglerDir, parsed.main);
 					return {
 						bindings: parsed.bindings,
 						configFilePath: candidate
@@ -636,9 +706,9 @@ async function discoverWranglerBindings(filePath: string, customWranglerPath?: s
 				}
 			} catch (e) {}
 		}
-		const lastSlash = currentDir.lastIndexOf('/');
-		if (lastSlash <= 0) break;
-		currentDir = currentDir.substring(0, lastSlash);
+		const pSlash = currentDir.lastIndexOf('/');
+		if (pSlash <= 0) break;
+		currentDir = currentDir.substring(0, pSlash);
 	}
 	return { bindings: [], configFilePath: null };
 }
@@ -682,14 +752,29 @@ export class SchemaState {
 	get activeInspectorNodeId() { return uiState.activeInspectorNodeId; }
 	set activeInspectorNodeId(val: string | null) { uiState.activeInspectorNodeId = val; }
 
-	/** Convenient getter to retrieve the active inspector node object */
-	get activeInspectorNode() {
+	/** O(1) lookup map of nodes by id and label */
+	#nodesById = $derived.by(() => {
+		const map = new Map<string, (typeof this.nodes)[number]>();
+		for (const n of this.nodes) {
+			map.set(n.id, n);
+			const lbl = (n.data as any)?.label;
+			if (lbl && !map.has(lbl)) map.set(lbl, n);
+		}
+		return map;
+	});
+
+	/** Convenient memoized rune to retrieve the active inspector node object */
+	#activeInspectorNode = $derived.by(() => {
 		if (!this.activeInspectorNodeId) return undefined;
-		return this.nodes.find(n => n.id === this.activeInspectorNodeId || (n.data as any)?.label === this.activeInspectorNodeId);
+		return this.#nodesById.get(this.activeInspectorNodeId);
+	});
+
+	get activeInspectorNode() {
+		return this.#activeInspectorNode;
 	}
 
 	get selectedNode() {
-		return this.activeInspectorNode;
+		return this.#activeInspectorNode;
 	}
 
 	/** Selection coordinates of the currently active/dragged node */
@@ -723,9 +808,9 @@ export class SchemaState {
 
 	/**
 	 * Single reactive derived memo for graph highlights.
-	 * Analyzes hover, selection, and focus lock to compute O(1) status lookups.
+	 * Analyzes hover, selection, and focus lock once per state change to compute O(1) status lookups.
 	 */
-	get highlightGraph(): HighlightGraph {
+	#highlightGraph = $derived.by((): HighlightGraph => {
 		const isLocked = uiState.isFocusLocked && !!uiState.focusLockedNodeId;
 		const lockedNodeId = isLocked ? uiState.focusLockedNodeId : null;
 		const hoveredCol = uiState.hoveredCol;
@@ -769,10 +854,10 @@ export class SchemaState {
 			nodeStatus.set(id, 'self');
 		}
 
-		// Helper to resolve standard or custom target column name
+		// Helper to resolve standard or custom target column name in O(1)
 		const getColFromTarget = (targetId: string, handle?: string | null): string => {
 			if (handle && handle !== 'target') return handle;
-			const targetNode = this.nodes.find(n => n.id === targetId || (n.data as any)?.label === targetId);
+			const targetNode = this.#nodesById.get(targetId);
 			const pk = (targetNode?.data as any)?.columns?.find((c: any) => c.isPk)?.name;
 			return pk || 'id';
 		};
@@ -869,6 +954,10 @@ export class SchemaState {
 			highlightMode: uiState.highlightMode,
 			connectedCount: nodeStatus.size - activeSet.size
 		};
+	});
+
+	get highlightGraph(): HighlightGraph {
+		return this.#highlightGraph;
 	}
 
 
@@ -1000,14 +1089,34 @@ export class SchemaState {
 	/** List of JSDoc and AST audit issues */
 	auditIssues = $state<AuditIssue[]>([]);
 
+	/** O(1) pre-indexed lookup of audit issues by symbolName */
+	#auditIssuesBySymbol = $derived.by(() => {
+		const map = new Map<string, AuditIssue[]>();
+		for (const issue of this.auditIssues) {
+			if (!issue.symbolName) continue;
+			const list = map.get(issue.symbolName);
+			if (list) {
+				list.push(issue);
+			} else {
+				map.set(issue.symbolName, [issue]);
+			}
+		}
+		return map;
+	});
+
+	/** Returns all audit issues targeting a specific node/symbol in O(1) */
+	getNodeAuditIssues(symbolName: string): AuditIssue[] {
+		return this.#auditIssuesBySymbol.get(symbolName) || [];
+	}
+
 	/** Detected package wrapper details if opened file is not the schema barrel */
 	packageWrapperInfo = $state<PackageWrapperInfo | null>(null);
 
 	/** The list of bindings parsed from wrangler.toml */
 	wranglerBindings = $state<{ type: 'kv' | 'do' | 'r2'; name: string; extra?: any }[]>([]);
 
-	/** Warnings about configuration mismatches between schema and wrangler bindings */
-	get validationWarnings() {
+	/** Memoized warnings about configuration mismatches between schema and wrangler bindings */
+	#validationWarnings = $derived.by(() => {
 		const warnings: string[] = [];
 		const kvNodes = this.nodes.filter(n => (n.data as any)?.target === 'kv');
 		const doNodes = this.nodes.filter(n => (n.data as any)?.target === 'do');
@@ -1036,7 +1145,7 @@ export class SchemaState {
 			const strata = (n.data as any)?.strata;
 			if (strata && strata.relations && strata.relations.length > 0) {
 				for (const rel of strata.relations) {
-					const exists = this.nodes.some(node => node.id === rel.to) || this.wranglerBindings.some(b => b.name === rel.to);
+					const exists = this.#nodesById.has(rel.to) || this.wranglerBindings.some(b => b.name === rel.to);
 					if (!exists) {
 						warnings.push(`Table "${n.id}" points to a missing synthetic relation target "${rel.to}".`);
 					}
@@ -1045,33 +1154,46 @@ export class SchemaState {
 		}
 
 		return warnings;
+	});
+
+	get validationWarnings() {
+		return this.#validationWarnings;
 	}
+
+	/** Memoized counts of audit issues */
+	#auditErrorCount = $derived(this.auditIssues.filter(i => i.severity === 'error' || i.severity === 'critical').length);
+	#auditWarningCount = $derived(this.auditIssues.filter(i => i.severity === 'warning').length + this.#validationWarnings.length);
+	#totalAuditCount = $derived(this.auditIssues.length + this.#validationWarnings.length);
 
 	/** Total count of audit issues (errors + warnings) */
 	get totalAuditCount() {
-		return this.auditIssues.length + this.validationWarnings.length;
+		return this.#totalAuditCount;
 	}
 
 	/** Count of critical/error audit issues */
 	get auditErrorCount() {
-		return this.auditIssues.filter(i => i.severity === 'error' || i.severity === 'critical').length;
+		return this.#auditErrorCount;
 	}
 
 	/** Count of warning audit issues */
 	get auditWarningCount() {
-		return this.auditIssues.filter(i => i.severity === 'warning').length + this.validationWarnings.length;
+		return this.#auditWarningCount;
 	}
 
-	/** Whether the schema is a multi-file/modular project (e.g. schema/index.ts re-exporting domain files) */
-	get isModular(): boolean {
+	/** Memoized check whether the schema is a multi-file/modular project */
+	#isModular = $derived.by((): boolean => {
 		return this.externalFilesMap.size > 0 || this.nodes.some(n => {
 			const mi = (n.data as any)?.moduleInfo;
 			return mi && !mi.isRootFile;
 		});
+	});
+
+	get isModular(): boolean {
+		return this.#isModular;
 	}
 
-	/** Returns available domain module files in the current modular project */
-	get availableModules(): { name: string; filePath: string }[] {
+	/** Memoized list of available domain module files in the current modular project */
+	#availableModules = $derived.by((): { name: string; filePath: string }[] => {
 		const modules = new Map<string, string>();
 		for (const n of this.nodes) {
 			const mi = (n.data as any)?.moduleInfo;
@@ -1090,6 +1212,10 @@ export class SchemaState {
 			}
 		}
 		return Array.from(modules.entries()).map(([filePath, name]) => ({ filePath, name }));
+	});
+
+	get availableModules(): { name: string; filePath: string }[] {
+		return this.#availableModules;
 	}
 
 	/**
@@ -1178,22 +1304,22 @@ export class SchemaState {
 	}
 
 	private async parseAndApply(code: string): Promise<boolean> {
-		const { parseSchema } = await import("../parser");
+		const { parseSchema, scanExternalReferencesFast } = await import("../parser");
 		
 		const tsconfigInfo = this.filePath ? await loadTsconfigPaths(this.filePath) : null;
 		const tsconfigPaths = tsconfigInfo?.paths;
 		const tsconfigPath = tsconfigInfo?.path;
 
-		// 1. Initial parse to find external imports & paths
-		const initialResult = parseSchema(code, undefined, tsconfigPaths, tsconfigPath);
+		// 1. Fast pre-scan (without instantiating ts-morph) to discover external imports & @strata paths
+		const scannedRefs = scanExternalReferencesFast(code, tsconfigPaths, tsconfigPath, this.filePath || undefined);
 		let externalFilesMap = new Map<string, string>();
 		
-		if (this.filePath && ((initialResult.externalImports && initialResult.externalImports.length > 0) || (initialResult.externalPaths && initialResult.externalPaths.length > 0))) {
-			externalFilesMap = await loadExternalSchemas(this.filePath, initialResult.externalImports, initialResult.externalPaths);
+		if (this.filePath && (scannedRefs.externalImports.length > 0 || scannedRefs.externalPaths.length > 0)) {
+			externalFilesMap = await loadExternalSchemas(this.filePath, scannedRefs.externalImports, scannedRefs.externalPaths);
 		}
 		this.externalFilesMap = externalFilesMap;
 
-		// 2. Final parse with external file contents mapped
+		// 2. Single-pass AST parse with external file contents mapped
 		const result = parseSchema(code, externalFilesMap, tsconfigPaths, tsconfigPath, this.filePath || undefined);
 		this.auditIssues = result.auditIssues || [];
 		
@@ -1306,11 +1432,22 @@ export class SchemaState {
 			// Also spawn nodes for any non-SQL targets declared in layoutManifest that aren't in wranglerBindings or finalNodes
 			if (result.layoutManifest) {
 				for (const [nodeId, manifestEntry] of Object.entries(result.layoutManifest)) {
-					const target = (manifestEntry as any)?.target;
-					if (target && (target === 'kv' || target === 'do' || target === 'r2') && !finalNodes.some(n => n.id === nodeId)) {
+					const entry = manifestEntry as any;
+					if (!entry || typeof entry !== 'object') continue;
+					const target: 'kv' | 'do' | 'r2' | undefined =
+						entry.target === 'kv' || entry.target === 'do' || entry.target === 'r2'
+							? entry.target
+							: entry.folders
+								? 'r2'
+								: entry.class || entry.methods || entry.path
+									? 'do'
+									: entry.schema
+										? 'kv'
+										: undefined;
+					if (target && !finalNodes.some(n => n.id === nodeId)) {
 						let cols: any[] = [];
-						if (target === 'kv' && (manifestEntry as any).schema) {
-							cols = Object.entries((manifestEntry as any).schema).map(([k, v]: [string, any]) => ({
+						if (target === 'kv' && entry.schema) {
+							cols = Object.entries(entry.schema).map(([k, v]: [string, any]) => ({
 								name: k,
 								definition: typeof v === 'object' && v?.type ? String(v.type) : String(v || 'string'),
 								ttl: typeof v === 'object' ? v?.ttl : undefined,
@@ -1319,10 +1456,10 @@ export class SchemaState {
 								notNull: false,
 								isReferences: false
 							}));
-						} else if (target === 'do' && (manifestEntry as any).methods) {
-							cols = (manifestEntry as any).methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m);
-						} else if (target === 'r2' && (manifestEntry as any).folders) {
-							cols = Object.entries((manifestEntry as any).folders).map(([k, v]: [string, any]) => ({
+						} else if (target === 'do' && entry.methods) {
+							cols = entry.methods.map((m: any) => typeof m === 'string' ? { name: m, definition: 'method', isPk: false, notNull: false, isReferences: false } : m);
+						} else if (target === 'r2' && entry.folders) {
+							cols = Object.entries(entry.folders).map(([k, v]: [string, any]) => ({
 								name: k.endsWith('/') ? k : `${k}/`,
 								definition: String(v),
 								isPk: false,
@@ -1330,8 +1467,8 @@ export class SchemaState {
 								isReferences: false
 							}));
 						}
-						const pos = typeof (manifestEntry as any).x === 'number' && typeof (manifestEntry as any).y === 'number'
-							? { x: Math.round((manifestEntry as any).x), y: Math.round((manifestEntry as any).y) }
+						const pos = typeof entry.x === 'number' && typeof entry.y === 'number'
+							? { x: Math.round(entry.x), y: Math.round(entry.y) }
 							: { x: 100, y: 100 };
 						finalNodes.push({
 							id: nodeId,
@@ -1348,7 +1485,7 @@ export class SchemaState {
 									x: pos.x,
 									y: pos.y,
 									binding: nodeId,
-									...manifestEntry
+									...entry
 								},
 								isExternal: true
 							},
@@ -1421,25 +1558,29 @@ export class SchemaState {
 			try {
 				const raw = await PlatformService.readText(this.filePath);
 
-				// Check if any external modular file has changed on disk compared to cached contents
+				// Check if any external modular file has changed on disk compared to cached contents in parallel
 				let hasExternalChanges = false;
 				if (this.externalFilesMap.size > 0 && this.filePath) {
-					const checked = new Set<string>();
+					const activeFilePath = this.filePath;
+					const checked = new Map<string, string>();
 					for (const [p, cachedContent] of this.externalFilesMap.entries()) {
-						const resolved = resolveRelativePath(this.filePath, p);
-						if (checked.has(resolved)) continue;
-						checked.add(resolved);
-						try {
-							const diskContent = await PlatformService.readText(resolved);
-							if (diskContent !== cachedContent) {
-								hasExternalChanges = true;
-								break;
-							}
-						} catch {
-							hasExternalChanges = true;
-							break;
+						if (p.startsWith('__correction__')) continue;
+						const resolved = resolveRelativePath(activeFilePath, p);
+						if (!checked.has(resolved)) {
+							checked.set(resolved, cachedContent);
 						}
 					}
+					const results = await Promise.all(
+						Array.from(checked.entries()).map(async ([resolved, cachedContent]) => {
+							try {
+								const diskContent = await PlatformService.readText(resolved);
+								return diskContent !== cachedContent;
+							} catch {
+								return true;
+							}
+						})
+					);
+					hasExternalChanges = results.some(Boolean);
 				}
 
 				if (raw === this.rawCode && !hasExternalChanges && this.isValid) {
@@ -1907,9 +2048,18 @@ export class SchemaState {
 	}
 
 	/**
-	 * Deletes a column from a table in the schema and syncs to disk.
+	/**
+	 * Deletes a column from a table in the schema (Sandbox only).
+	 * In disk mode, displays an informative toast directing user to editor.
 	 */
 	async deleteColumn(tableName: string, colName: string) {
+		if (!this.isSandboxMode) {
+			toast.info("Delete Field in Your Editor", {
+				description: `To prevent cascade breakages, delete field "${colName}" on "${tableName}" in your editor.`
+			});
+			return;
+		}
+
 		const targetNode = this.nodes.find(n => n.id === tableName);
 		const target = targetNode?.data?.target || 'd1';
 
@@ -1923,38 +2073,28 @@ export class SchemaState {
 			return this.deleteFolder(tableName, colName);
 		}
 
-		const targetFile = this.getTargetFilePath(tableName);
-		const { removeColumnFromSchema } = await import("../parser");
-		await this.executeSchemaMutation("Column delete", (code) => 
-			removeColumnFromSchema(code, tableName, colName, targetFile),
-			targetFile
-		);
+		if (targetNode?.data?.columns) {
+			targetNode.data.columns = targetNode.data.columns.filter((c: any) => c.name !== colName);
+			this.nodes = [...this.nodes];
+		}
 	}
 
 	/**
-	 * Deletes an entire table/entity from the schema and syncs to disk.
+	 * Deletes an entire table/entity from the schema (Sandbox only).
+	 * In disk mode, displays an informative toast directing user to editor.
 	 */
 	async deleteTable(tableName: string) {
-		const node = this.nodes.find(n => n.id === tableName);
-		const target = (node?.data as any)?.target || 'd1';
-		const targetFile = this.getTargetFilePath(tableName);
-
-		if (this.isSandboxMode || !this.filePath) {
-			this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		if (!this.isSandboxMode) {
+			toast.info("Delete Code in Your Editor", {
+				description: `To prevent accidental code loss, delete "${tableName}" in your editor. Strata will update instantly.`
+			});
+			return;
 		}
 
-		const { removeTableFromSchema, removeTableFromLayoutManifest } = await import("../parser");
-		await this.executeSchemaMutation("Table delete", (code) => 
-			removeTableFromSchema(code, tableName),
-			targetFile
-		);
-		if (this.filePath && targetFile !== this.filePath && this.rawCode.includes('@strata-layout')) {
-			const updatedRootCode = removeTableFromLayoutManifest(this.rawCode, tableName);
-			if (updatedRootCode !== this.rawCode) {
-				this.rawCode = updatedRootCode;
-				await PlatformService.writeText(this.filePath, updatedRootCode);
-			}
-		}
+		this.wranglerBindings = this.wranglerBindings.filter(b => b.name !== tableName);
+		this.nodes = this.nodes.filter(n => n.id !== tableName);
+		this.edges = this.edges.filter(e => e.source !== tableName && e.target !== tableName);
+
 		if (this.activeInspectorNodeId === tableName) {
 			this.activeInspectorNodeId = null;
 		}
@@ -2019,12 +2159,7 @@ export class SchemaState {
 	async saveToFile() {
 		if (this.isSandboxMode) {
 			const { updateAllNodePositionsInSchema, updateLayoutManifestInSchema } = await import("../parser");
-			const isModular = this.externalFilesMap.size > 0 || this.nodes.some(n => {
-				const info = (n.data as any)?.moduleInfo;
-				return info && !info.isRootFile;
-			});
-
-			if (isModular || this.rawCode.includes('@strata-layout')) {
+			if (this.isModular || this.rawCode.includes('@strata-layout')) {
 				const positionsMap: Record<string, { x: number; y: number }> = {};
 				for (const node of this.nodes) {
 					positionsMap[node.id] = {
@@ -2037,6 +2172,13 @@ export class SchemaState {
 				this.rawCode = updateAllNodePositionsInSchema(this.rawCode, this.nodes);
 			}
 
+			for (const node of this.nodes) {
+				if ((node.data as any)?.strata) {
+					(node.data as any).strata.x = Math.round(node.position.x);
+					(node.data as any).strata.y = Math.round(node.position.y);
+				}
+			}
+
 			this.machine.send("SUCCESS");
 			this.isRecentlySaved = true;
 			setTimeout(() => (this.isRecentlySaved = false), 1500);
@@ -2044,17 +2186,62 @@ export class SchemaState {
 		}
 
 		if (!this.filePath || this.machine.current === "BUSY") return;
+
+		// Fast path: when schema is valid, persist layout coordinates directly without full AST re-parse
+		if (this.isValid) {
+			await this.queue.enqueue(async () => {
+				if (!this.filePath) return;
+				this.machine.send("SAVE");
+				try {
+					const { updateAllNodePositionsInSchema, updateLayoutManifestInSchema } = await import("../parser");
+					let currentCode = this.rawCode;
+					if (this.isModular || currentCode.includes('@strata-layout')) {
+						const positionsMap: Record<string, { x: number; y: number }> = {};
+						for (const node of this.nodes) {
+							positionsMap[node.id] = {
+								x: Math.round(node.position.x),
+								y: Math.round(node.position.y)
+							};
+						}
+						currentCode = updateLayoutManifestInSchema(currentCode, positionsMap, true);
+					} else {
+						currentCode = updateAllNodePositionsInSchema(currentCode, this.nodes);
+					}
+
+					this.ignoreNextWatch = true;
+					this.lastWriteTime = Date.now();
+					await PlatformService.writeText(this.filePath, currentCode);
+					this.rawCode = currentCode;
+
+					for (const node of this.nodes) {
+						if ((node.data as any)?.strata) {
+							(node.data as any).strata.x = Math.round(node.position.x);
+							(node.data as any).strata.y = Math.round(node.position.y);
+						}
+					}
+
+					this.machine.send("SUCCESS");
+				} catch (e: any) {
+					this.ignoreNextWatch = false;
+					this.error = e.message;
+					this.errorType = 'disk';
+					this.machine.send("FAIL");
+					toast.error("Save failed", {
+						description: e.message || String(e)
+					});
+				}
+			});
+
+			this.isRecentlySaved = true;
+			setTimeout(() => (this.isRecentlySaved = false), 1500);
+			return;
+		}
 		
 		await this.executeSchemaMutation("Save", async (code) => {
 			let currentCode = code;
 			const { updateAllNodePositionsInSchema, updateLayoutManifestInSchema } = await import("../parser");
-			
-			const isModular = this.externalFilesMap.size > 0 || this.nodes.some(n => {
-				const info = (n.data as any)?.moduleInfo;
-				return info && !info.isRootFile;
-			});
 
-			if (isModular || currentCode.includes('@strata-layout')) {
+			if (this.isModular || currentCode.includes('@strata-layout')) {
 				const positionsMap: Record<string, { x: number; y: number }> = {};
 				for (const node of this.nodes) {
 					positionsMap[node.id] = {
@@ -2450,6 +2637,7 @@ export class SchemaState {
 		this.filePath = null;
 		this.rawCode = '';
 		this.externalFilesMap.clear();
+		clearProjectDiscoveryCaches();
 		this.isValid = true;
 		this.error = null;
 		this.errorLoc = null;

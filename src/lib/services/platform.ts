@@ -5,6 +5,7 @@
  * Expects: File paths or write content.
  * Output: Raw file text or Tauri shell trigger actions.
  */
+import { invoke } from "@tauri-apps/api/core";
 
 export interface StructuredPlatformError extends Error {
 	kind: 'file_not_found' | 'permission_denied' | 'file_locked' | 'io' | 'wrangler_config' | 'unknown';
@@ -103,7 +104,6 @@ export class PlatformService {
 	static async readText(path: string): Promise<string> {
 		if (!this.isTauri()) throw new Error("Tauri API unavailable in web browser");
 		try {
-			const { invoke } = await import("@tauri-apps/api/core");
 			return await invoke("read_schema_file", { path });
 		} catch (err) {
 			throw normalizePlatformError(err, path);
@@ -113,7 +113,6 @@ export class PlatformService {
 	static async writeText(path: string, content: string): Promise<void> {
 		if (!this.isTauri()) throw new Error("Tauri API unavailable in web browser");
 		try {
-			const { invoke } = await import("@tauri-apps/api/core");
 			await invoke("write_schema_file", { path, content });
 		} catch (err) {
 			throw normalizePlatformError(err, path);

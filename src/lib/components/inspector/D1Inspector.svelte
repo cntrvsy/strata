@@ -8,11 +8,13 @@
 <script lang="ts">
   import { Key, Link } from "lucide-svelte";
 
-  let { tableName, data, isReadOnly } = $props<{
+  interface D1InspectorProps {
     tableName: string;
     data: any;
     isReadOnly: boolean;
-  }>();
+  }
+
+  let { tableName, data, isReadOnly }: D1InspectorProps = $props();
 
   const columns = $derived(data?.columns || []);
 </script>

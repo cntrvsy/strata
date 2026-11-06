@@ -100,6 +100,11 @@ export interface StrataEdgeData {
 export type StrataNode = Node<StrataNodeData>;
 export type StrataEdge = Edge<StrataEdgeData>;
 
+export type CirrusNodeData = StrataNodeData;
+export type CirrusEdgeData = StrataEdgeData;
+export type CirrusNode = StrataNode;
+export type CirrusEdge = StrataEdge;
+
 export interface ParseResult {
 	success: boolean;
 	nodes: StrataNode[];

@@ -16,7 +16,6 @@
     Key,
     Zap,
     Cpu,
-    Trash2,
     HardDrive,
     CircleX,
     TriangleAlert,
@@ -24,7 +23,7 @@
     ShieldCheck,
   } from "lucide-svelte";
 
-  const { id, data, selected, dragging } = $props<{
+  interface TableNodeProps {
     id?: string;
     data: {
       label: string;
@@ -44,7 +43,9 @@
     };
     selected?: boolean;
     dragging?: boolean;
-  }>();
+  }
+
+  const { id, data, selected, dragging }: TableNodeProps = $props();
 
   const nodeId = $derived(id || data.label);
 
@@ -135,7 +136,7 @@
     data.columns.length - columnsToDisplay.length,
   );
   const nodeAuditIssues = $derived(
-    schemaState.auditIssues.filter((i) => i.symbolName === data.label),
+    schemaState.getNodeAuditIssues(data.label),
   );
   const hasAuditError = $derived(
     nodeAuditIssues.some(
@@ -155,9 +156,14 @@
   );
 
   const updateNodeInternals = useUpdateNodeInternals();
+  let didMount = false;
   $effect(() => {
     const _c = schemaState.compactMode;
     const _l = data.columns?.length;
+    if (!didMount) {
+      didMount = true;
+      return;
+    }
     tick().then(() => {
       updateNodeInternals(nodeId);
     });
@@ -170,13 +176,10 @@
   {selected}
   targetFile={data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath}
   line={(data as any).line}
-  onAddField={() => {
-    schemaState.activeInspectorNodeId = nodeId;
-  }}
 />
 
 <div
-  class="relative group/node min-w-55 transition-all duration-300 {opacityClass}"
+  class="relative group/node min-w-55 transition-[opacity,transform] duration-150 {opacityClass}"
   data-testid="table-node"
   data-table-name={data.label}
   role="button"
@@ -203,7 +206,7 @@
   }}
 >
   <div
-    class="bg-base-100 border rounded-box overflow-hidden transition-all duration-200 border-t-4 {config.borderTop} {selected
+    class="bg-base-100 border rounded-box overflow-hidden transition-colors duration-150 border-t-4 {config.borderTop} {selected
       ? `border-${config.color} ring-2 ring-${config.color}/30`
       : `border-base-300 ${config.border}`} {dragging
       ? 'shadow-2xl scale-[1.02]'
@@ -296,7 +299,7 @@
         {@const isFk = col.isReferences}
         {@const isColActive = schemaState.highlightGraph.isColumnHighlighted(nodeId, col.name)}
         <div
-          class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-all group/row {isPk
+          class="relative px-3 py-2 rounded-field flex items-center justify-between hover:bg-base-200/50 transition-colors duration-150 group/row {isPk
             ? 'bg-amber-500/5'
             : ''} {isFk ? 'bg-secondary/5' : ''} {isColActive
             ? 'bg-primary/20 ring-1 ring-primary/60 font-semibold shadow-xs'
@@ -370,31 +373,13 @@
 
           <div class="flex items-center gap-1.5">
             <span
-              class="text-[10px] opacity-40 font-mono group-hover/row:opacity-0 transition-opacity bg-base-200 px-1.5 py-0.5 rounded-field uppercase leading-none"
+              class="text-[10px] opacity-40 font-mono bg-base-200 px-1.5 py-0.5 rounded-field uppercase leading-none"
             >
               {col.definition
                 .split("(")[0]
                 .replace("text", "txt")
                 .replace("integer", "int")}
             </span>
-            {#if data.target === "d1" || !data.target}
-              <button
-                class="absolute right-2 opacity-0 group-hover/row:opacity-100 btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 transition-all"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  schemaState.promptConfirm({
-                    title: "Delete Column",
-                    message: `Are you sure you want to delete column "${col.name}" from table "${data.label}"? This change will be saved to disk.`,
-                    confirmLabel: "Delete Column",
-                    isDanger: true,
-                    onConfirm: () => schemaState.deleteColumn(data.label, col.name),
-                  });
-                }}
-                title="Delete Field"
-              >
-                <Trash2 class="w-3 h-3" />
-              </button>
-            {/if}
           </div>
         </div>
       {/each}

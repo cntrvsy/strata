@@ -92,7 +92,7 @@ export async function startStrataTour() {
 				popover: {
 					title: "Git-Clean Layout Guarantee",
 					description:
-						"Drag cards freely. In modular schemas, visual coordinates live in the <code>@strata-layout</code> root manifest, keeping domain files (<code>users.ts</code>, <code>posts.ts</code>) 100% clean of Git merge conflicts.",
+						"Drag cards freely. In modular schemas, visual coordinates live in the root layout manifest (<code>@cirrus-layout</code> or <code>@strata-layout</code>), keeping domain files (<code>users.ts</code>, <code>posts.ts</code>) 100% clean of Git merge conflicts.",
 					side: "top",
 					align: "start"
 				}
@@ -132,3 +132,5 @@ export async function startStrataTour() {
 
 	driverObj.drive();
 }
+
+export const startCirrusTour = startStrataTour;

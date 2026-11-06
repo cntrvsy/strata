@@ -98,7 +98,7 @@ describe('Connection Safety Guard', () => {
 
 		// Target is external binding SESSIONS_KV not declared in code
 		const result = addEdgeToSchema(code, 'users', 'SESSIONS_KV');
-		expect(result).toContain('@strata-layout');
+		expect(result).toMatch(/@(cirrus|strata)-layout/);
 		expect(result).toContain('"to": "SESSIONS_KV"');
 		// Table definition must remain 100% clean
 		expect(result).toContain('export const users = sqliteTable("users", { id: integer("id").primaryKey() });');
@@ -112,7 +112,7 @@ describe('Connection Safety Guard', () => {
 		`;
 
 		const result = addEdgeToSchema(code, 'auditLogs', 'users', undefined, 'synthetic');
-		expect(result).toContain('@strata-layout');
+		expect(result).toMatch(/@(cirrus|strata)-layout/);
 		expect(result).toContain('"to": "users"');
 		expect(result).not.toContain('relations(');
 		expect(result).toContain('export const auditLogs = sqliteTable("auditLogs", { id: integer("id").primaryKey() });');

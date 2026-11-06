@@ -98,7 +98,7 @@
   {@const srcCol = (data as any)?.sourceCol || (typeof label === "string" ? label : undefined)}
   <EdgeLabel x={finalX} y={finalY}>
     <div
-      class="flex items-center gap-1.5 bg-base-100/95 backdrop-blur-xs border border-base-300 px-2 py-0.5 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/85 whitespace-nowrap shadow-xs hover:border-primary/50 transition-all cursor-pointer group/edge {isGraphActive && isEdgeActive ? 'ring-2 ring-primary/40 border-primary shadow-md' : ''}"
+      class="flex items-center gap-1.5 bg-base-100/95 border border-base-300 px-2 py-0.5 rounded-lg select-none text-[10px] font-bold tracking-tight text-base-content/85 whitespace-nowrap shadow-xs hover:border-primary/50 transition-colors duration-150 cursor-pointer group/edge {isGraphActive && isEdgeActive ? 'ring-2 ring-primary/40 border-primary shadow-md' : ''}"
       style={typeof labelStyle === "string" ? labelStyle : undefined}
       title={tooltip}
       role="button"
