@@ -275,7 +275,15 @@ export class PlatformService {
 	}
 
 	static async openInEditor(filePath: string, line?: number): Promise<void> {
-		if (!filePath) return;
+		if (!filePath) {
+			try {
+				const { toast } = await import("svelte-sonner");
+				toast.info("Sandbox Mode Active", {
+					description: "No local disk file associated with this entity. Open or create a schema on disk to pair with your editor.",
+				});
+			} catch {}
+			return;
+		}
 		if (this.isTauri()) {
 			const targetLine = line && line > 0 ? line : 1;
 			const preferredEditor = typeof localStorage !== 'undefined'

@@ -144,8 +144,9 @@ export const workosUsers = sqliteTable("workosUsers", {
   onmouseleave={() => {
     if (schemaState.hoveredNodeId === nodeId) schemaState.hoveredNodeId = null;
   }}
-  ondblclick={() => {
-    schemaState.activeInspectorNodeId = nodeId;
+  ondblclick={(e) => {
+    e.stopPropagation();
+    schemaState.toggleZoomNode(nodeId);
   }}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {

@@ -116,12 +116,80 @@
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
       e.preventDefault();
       showSearchPalette = true;
+    } else if (e.key === "/" && !isInput && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      showSearchPalette = true;
     } else if (e.key === "?" && !isInput) {
       e.preventDefault();
       schemaState.showHelpModal = true;
+    } else if (e.key === "0" && !isInput && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      schemaState.zoomOutToDiagram();
+    } else if (e.key === "Enter" && !isInput) {
+      const selectedNode = schemaState.nodes.find((n) => n.selected);
+      if (selectedNode) {
+        e.preventDefault();
+        schemaState.activeInspectorNodeId = selectedNode.id;
+      }
+    } else if (
+      e.key.toLowerCase() === "e" &&
+      !isInput &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      const selectedNode = schemaState.nodes.find((n) => n.selected);
+      if (selectedNode) {
+        e.preventDefault();
+        schemaState.activeInspectorNodeId = selectedNode.id;
+        if (schemaState.isSandboxMode) {
+          import("svelte-sonner").then(({ toast }) => {
+            toast.info("Sandbox Mode Active", {
+              description: `Inspecting "${selectedNode.id}". Open a schema file on disk to jump straight to source code.`,
+            });
+          });
+        } else {
+          const targetFile =
+            (selectedNode.data as any)?.strata?.path ||
+            (selectedNode.data as any)?.moduleInfo?.sourceFilePath ||
+            schemaState.getTargetFilePath(selectedNode.id) ||
+            schemaState.filePath;
+          const line = (selectedNode.data as any)?.line;
+          if (targetFile) {
+            PlatformService.openInEditor(targetFile, line);
+          }
+        }
+      }
+    } else if (
+      e.key.toLowerCase() === "c" &&
+      !isInput &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      const selectedNode = schemaState.nodes.find((n) => n.selected);
+      if (selectedNode) {
+        e.preventDefault();
+        const snippet = schemaState.getTableDefinitionSnippet(selectedNode.id);
+        if (snippet) {
+          PlatformService.writeClipboard(snippet).then((ok) => {
+            import("svelte-sonner").then(({ toast }) => {
+              if (ok) {
+                toast.success(`Copied "${selectedNode.id}" snippet`, {
+                  description: "Ready to paste into your codebase.",
+                });
+              } else {
+                toast.error("Failed to copy snippet to clipboard");
+              }
+            });
+          });
+        }
+      }
     } else if (e.key === "Escape") {
       if (showSearchPalette) {
         showSearchPalette = false;
+      } else if (schemaState.zoomedNodeId) {
+        schemaState.zoomOutToDiagram();
       } else if (schemaState.activeInspectorNodeId) {
         schemaState.activeInspectorNodeId = null;
       }
@@ -135,7 +203,7 @@
         } else {
           import("svelte-sonner").then(({ toast }) => {
             toast.info("Delete Code in Your Editor", {
-              description: `To prevent accidental code loss, delete "${selectedNode.id}" in your editor. Press Enter to jump directly to it.`,
+              description: `To prevent accidental code loss, delete "${selectedNode.id}" in your editor. Press E to jump directly to it.`,
             });
           });
         }

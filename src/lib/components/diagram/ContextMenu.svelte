@@ -16,6 +16,8 @@
     Copy,
     SlidersHorizontal,
     FileCode,
+    ZoomIn,
+    ZoomOut,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
 
@@ -144,16 +146,36 @@
       <button
         class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
         onclick={() => {
-          onAction("open_in_editor", targetId);
+          onAction("zoom_node", targetId);
           onClose();
         }}
       >
         <span class="flex items-center gap-2.5">
-          <FileCode class="w-3.5 h-3.5 opacity-75 text-primary" />
-          <span>Open in Editor</span>
+          {#if schemaState.zoomedNodeId === targetId}
+            <ZoomOut class="w-3.5 h-3.5 opacity-75 text-primary" />
+            <span>Reset Zoom</span>
+          {:else}
+            <ZoomIn class="w-3.5 h-3.5 opacity-75 text-primary" />
+            <span>Zoom to Node</span>
+          {/if}
         </span>
         <kbd class="kbd kbd-xs text-[9px] opacity-60">2× Click</kbd>
       </button>
+      {#if !schemaState.isSandboxMode}
+        <button
+          class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/85"
+          onclick={() => {
+            onAction("open_in_editor", targetId);
+            onClose();
+          }}
+        >
+          <span class="flex items-center gap-2.5">
+            <FileCode class="w-3.5 h-3.5 opacity-75 text-primary" />
+            <span>Open in Editor</span>
+          </span>
+          <kbd class="kbd kbd-xs text-[9px] opacity-60">E</kbd>
+        </button>
+      {/if}
       <button
         class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
         onclick={() => {
@@ -175,6 +197,7 @@
             {/if}
           </span>
         </span>
+        <kbd class="kbd kbd-xs text-[9px] opacity-60">C</kbd>
       </button>
       <button
         class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
@@ -218,14 +241,17 @@
     {/if}
   {:else if type === "canvas"}
     <button
-      class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
+      class="flex items-center justify-between px-3 py-2 text-xs hover:bg-base-200/60 transition-all text-left font-semibold text-base-content/80"
       onclick={() => {
         onAction("fit_view");
         onClose();
       }}
     >
-      <Focus class="w-3.5 h-3.5 opacity-60 text-info" />
-      Fit View
+      <span class="flex items-center gap-2.5">
+        <Focus class="w-3.5 h-3.5 opacity-60 text-info" />
+        <span>Fit View</span>
+      </span>
+      <kbd class="kbd kbd-xs text-[9px] opacity-60">2× Click / 0</kbd>
     </button>
   {/if}
 </div>

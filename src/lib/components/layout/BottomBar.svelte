@@ -470,7 +470,19 @@
       </div>
     {/if}
 
-    <!-- Application Version Badge -->
+    <!-- Author Attribution & Application Version Badge -->
+    <div class="h-3 w-px bg-base-300/80"></div>
+    <button
+      type="button"
+      onclick={() => PlatformService.openExternal("https://frstudios.co.ke")}
+      class="flex items-center gap-1 text-[9.5px] text-base-content/55 hover:text-base-content transition-colors cursor-pointer group/credit"
+      aria-label="Made with love by FR Studios (frstudios.co.ke)"
+    >
+      <span>Made with</span>
+      <span class="inline-block group-hover/credit:scale-110 transition-transform">❤️</span>
+      <span>by</span>
+      <span class="font-bold text-base-content/80 group-hover/credit:text-primary underline decoration-base-content/25 group-hover/credit:decoration-primary underline-offset-2 transition-colors">FR Studios</span>
+    </button>
     <div class="h-3 w-px bg-base-300/80"></div>
     <span
       class="text-[9px] font-mono px-1.5 py-0.5 rounded-field bg-primary/10 text-primary font-bold"

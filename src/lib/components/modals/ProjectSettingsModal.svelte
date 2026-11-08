@@ -20,6 +20,7 @@
     LoaderCircle,
     Lightbulb,
     Sparkles,
+    Check,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { PlatformService } from "#lib/services/platform";
@@ -28,11 +29,17 @@
   let preferredEditor = $state(
     (typeof localStorage !== "undefined" && localStorage.getItem("strata_preferred_editor")) || "auto"
   );
+  let editorSavedFeedback = $state(false);
   let isDetecting = $state(false);
 
   $effect(() => {
     if (typeof localStorage !== "undefined" && preferredEditor) {
       localStorage.setItem("strata_preferred_editor", preferredEditor);
+      editorSavedFeedback = true;
+      const t = setTimeout(() => {
+        editorSavedFeedback = false;
+      }, 1800);
+      return () => clearTimeout(t);
     }
   });
 
@@ -597,12 +604,22 @@
 
       <!-- Preferred Code Editor -->
       <div class="flex flex-col gap-2 pt-2 border-t border-base-300/60">
-        <label
-          for="editor-preference-select"
-          class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/80 block"
-        >
-          Preferred Code Editor
-        </label>
+        <div class="flex items-center justify-between">
+          <label
+            for="editor-preference-select"
+            class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/80 block"
+          >
+            Preferred Code Editor
+          </label>
+          {#if editorSavedFeedback}
+            <span
+              class="flex items-center gap-1 text-[10px] text-success font-medium animate-in fade-in duration-150"
+            >
+              <Check class="w-3 h-3" />
+              <span>Saved</span>
+            </span>
+          {/if}
+        </div>
         <select
           id="editor-preference-select"
           bind:value={preferredEditor}
@@ -615,21 +632,33 @@
           <option value="system">System Default Application</option>
         </select>
         <span class="text-[10px] text-base-content/60 leading-normal">
-          Clicking table files or double-clicking nodes will jump straight to the declaration line in this editor.
+          Clicking table files or double-clicking nodes will jump straight to the declaration line in this editor. Saved automatically.
         </span>
       </div>
 
       <div class="mt-2 flex flex-col gap-3">
-        <button
-          type="submit"
-          class="btn btn-primary rounded-field w-full shadow-sm font-bold"
-        >
-          Save Configuration
-        </button>
-        <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
-          This will update the <code>strataConfig</code> object in your
-          <code>schema.ts</code>.
-        </p>
+        {#if schemaState.isSandboxMode}
+          <button
+            type="button"
+            class="btn btn-neutral rounded-field w-full shadow-sm font-bold"
+            onclick={() => (schemaState.showProjectSettingsModal = false)}
+          >
+            Done
+          </button>
+          <p class="text-[10px] text-center opacity-50 leading-relaxed px-4">
+            Editor preferences are saved immediately. Open a local file on disk to bind a <code>wrangler.toml</code>.
+          </p>
+        {:else}
+          <button
+            type="submit"
+            class="btn btn-primary rounded-field w-full shadow-sm font-bold"
+          >
+            Save Wrangler Configuration
+          </button>
+          <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
+            This will update the <code>@strata-layout</code> manifest in your schema.
+          </p>
+        {/if}
       </div>
     </form>
   </div>
