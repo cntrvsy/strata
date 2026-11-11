@@ -7,9 +7,35 @@
  *   "organizations": { "x": 620, "y": 140 },
  *   "memberships": { "x": 620, "y": 560 },
  *   "subscriptions": { "x": 620, "y": 940 },
- *   "TenantRateLimiterDO": { "x": 1120, "y": 140, "relations": [{ "to": "organizations" }] },
- *   "API_KEY_CACHE_KV": { "x": 1120, "y": 560, "relations": [{ "to": "memberships" }] },
- *   "TENANT_ASSETS_R2": { "x": 1120, "y": 940, "relations": [{ "to": "organizations" }] }
+ *   "TenantRateLimiterDO": {
+ *     "x": 1120,
+ *     "y": 140,
+ *     "path": "./src/do/TenantRateLimiterDO.ts",
+ *     "class": "TenantRateLimiterDO",
+ *     "methods": ["consumeToken", "getRemainingQuota", "resetRateLimit"],
+ *     "relations": [{ "to": "organizations" }]
+ *   },
+ *   "API_KEY_CACHE_KV": {
+ *     "x": 1120,
+ *     "y": 560,
+ *     "schema": {
+ *       "orgId": "string",
+ *       "scope": "string",
+ *       "rateLimit": "number"
+ *     },
+ *     "relations": [{ "to": "memberships" }]
+ *   },
+ *   "TENANT_ASSETS_R2": {
+ *     "x": 1120,
+ *     "y": 940,
+ *     "public": true,
+ *     "cors": true,
+ *     "folders": {
+ *       "logos": "image/*",
+ *       "exports": "text/csv"
+ *     },
+ *     "relations": [{ "to": "organizations" }]
+ *   }
  * }
  */
 import { sqliteTable, integer, text, uniqueIndex } from "drizzle-orm/sqlite-core";

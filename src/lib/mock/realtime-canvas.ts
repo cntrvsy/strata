@@ -1,11 +1,41 @@
 /**
  * @strata-layout {
- *   "canvasDocuments": { "x": 100, "y": 140 },
- *   "documentRevisions": { "x": 560, "y": 140 },
- *   "documentAssets": { "x": 560, "y": 520 },
- *   "DocumentRoomDO": { "x": 1040, "y": 140, "relations": [{ "to": "canvasDocuments" }] },
- *   "USER_PRESENCE_KV": { "x": 100, "y": 520, "relations": [{ "to": "canvasDocuments" }] },
- *   "CANVAS_SNAPSHOTS_R2": { "x": 1040, "y": 520, "relations": [{ "to": "documentRevisions" }] }
+ *   "workspaces": { "x": 100, "y": 140 },
+ *   "canvasDocuments": { "x": 560, "y": 140 },
+ *   "documentRevisions": { "x": 560, "y": 520 },
+ *   "DocumentRoomDO": {
+ *     "x": 1040,
+ *     "y": 140,
+ *     "path": "./src/do/DocumentRoomDO.ts",
+ *     "class": "DocumentRoomDO",
+ *     "methods": ["handleWebSocketUpgrade", "applyCrdtUpdate", "broadcastCursorMovement", "persistSnapshotToR2"],
+ *     "relations": [{ "to": "canvasDocuments" }]
+ *   },
+ *   "USER_PRESENCE_KV": {
+ *     "x": 100,
+ *     "y": 520,
+ *     "ttl": 300,
+ *     "schema": {
+ *       "userId": "string",
+ *       "documentId": "string",
+ *       "cursorX": "number",
+ *       "cursorY": "number",
+ *       "lastSeen": "number"
+ *     },
+ *     "relations": [{ "to": "canvasDocuments" }]
+ *   },
+ *   "CANVAS_SNAPSHOTS_R2": {
+ *     "x": 1040,
+ *     "y": 520,
+ *     "public": false,
+ *     "cors": true,
+ *     "customDomain": "cdn.canvas.internal",
+ *     "folders": {
+ *       "revisions": "application/octet-stream",
+ *       "thumbnails": "image/webp"
+ *     },
+ *     "relations": [{ "to": "documentRevisions" }]
+ *   }
  * }
  */
 import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";

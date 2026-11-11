@@ -30,12 +30,14 @@
     ExternalLink,
     FileCode,
     ArrowRight,
+    Heart,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { fade } from "svelte/transition";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
   import { SAMPLE_TEMPLATES } from "#lib/mock";
+  import { APP_VERSION } from "#lib/version";
 
   let { show = $bindable(false) } = $props();
 
@@ -569,6 +571,7 @@ ${plainContent.trim()}
     { id: "gotchas", label: "Gotchas & Guardrails", icon: Cpu },
     { id: "ai", label: "AI Co-Design Prompt", icon: Sparkles },
     { id: "jsdoc-builder", label: "JSDoc Metadata Builder", icon: Braces },
+    { id: "about", label: "About & AI Disclosure", icon: Info },
   ];
 
   interface DocTopic {
@@ -1131,6 +1134,7 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
     if (catId === "identity-auth") return 3;
     if (catId === "ai") return 1;
     if (catId === "jsdoc-builder") return 1;
+    if (catId === "about") return 1;
     return docTopics.filter((t) => t.category === catId).length;
   }
 </script>
@@ -1325,443 +1329,296 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
               </div>
             </div>
           {:else if activeTab === "jsdoc-builder"}
-            <!-- JSDoc Metadata Builder GUI -->
+            <!-- Interactive JSDoc / Layout Manifest Studio -->
             <div class="flex flex-col gap-4 font-sans text-xs">
-              <div
-                class="flex items-center justify-between border-b border-base-300 pb-2 mb-1"
-              >
-                <div class="flex items-center gap-2">
-                  <Wrench class="w-4 h-4 text-primary" />
-                  <h3
-                    class="font-black text-sm uppercase tracking-wide text-base-content"
-                  >
-                    JSDoc Metadata Builder
-                  </h3>
+              <!-- Header & Pattern Tabs -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-base-300 pb-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="p-2 bg-primary/10 rounded-xl text-primary border border-primary/20">
+                    <Braces class="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 class="font-black text-sm uppercase tracking-wide text-base-content">
+                      Metadata & Manifest Builder
+                    </h3>
+                    <p class="text-[10.5px] text-base-content/60">
+                      {builderMode === "barrel"
+                        ? "Consolidated root manifest in schema/index.ts (zero Git merge conflicts)"
+                        : "Inline declaration metadata in schema.ts (single-file setups)"}
+                    </p>
+                  </div>
                 </div>
 
-                <!-- Pattern Archetype Switcher -->
-                <div
-                  class="flex items-center gap-1 p-1 bg-base-200 rounded-xl border border-base-300"
-                >
+                <!-- daisyUI tabs-box archetype switcher -->
+                <div role="tablist" class="tabs tabs-box tabs-xs shrink-0 bg-base-200 border border-base-300/80 p-0.5 rounded-xl">
                   <button
+                    role="tab"
                     type="button"
-                    class="btn btn-xs rounded-lg px-2.5 transition-all {builderMode === 'barrel' ? 'btn-primary font-bold shadow-sm' : 'btn-ghost text-base-content/70'}"
+                    class="tab h-7 px-3 text-[11px] font-bold rounded-lg transition-all gap-1.5 {builderMode === 'barrel' ? 'tab-active bg-primary text-primary-content shadow-xs' : 'text-base-content/70 hover:text-base-content'}"
                     onclick={() => (builderMode = "barrel")}
                   >
-                    <Layers class="w-3 h-3" />
-                    <span>Modular Barrel (@strata-layout)</span>
+                    <Layers class="w-3.5 h-3.5" />
+                    <span>Modular Barrel</span>
                   </button>
                   <button
+                    role="tab"
                     type="button"
-                    class="btn btn-xs rounded-lg px-2.5 transition-all {builderMode === 'single' ? 'btn-primary font-bold shadow-sm' : 'btn-ghost text-base-content/70'}"
+                    class="tab h-7 px-3 text-[11px] font-bold rounded-lg transition-all gap-1.5 {builderMode === 'single' ? 'tab-active bg-primary text-primary-content shadow-xs' : 'text-base-content/70 hover:text-base-content'}"
                     onclick={() => (builderMode = "single")}
                   >
-                    <Database class="w-3 h-3" />
-                    <span>Single-File Entity (@strata)</span>
+                    <Database class="w-3.5 h-3.5" />
+                    <span>Single-File Monolith</span>
                   </button>
                 </div>
               </div>
 
               {#if builderMode === "barrel"}
-                <p class="text-base-content/75 leading-relaxed">
-                  Generate the consolidated <code>@strata-layout</code> manifest for your barrel file (<code>schema/index.ts</code>).
-                  This stores all canvas coordinates in one central manifest, ensuring <strong>zero Git diff noise</strong> in your domain files (<code>users.ts</code>, <code>posts.ts</code>).
-                </p>
-
-                <!-- Barrel Controls -->
-                <div
-                  class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3.5"
-                >
-                  <div class="flex items-center justify-between border-b border-base-300/50 pb-1.5">
-                    <span class="font-bold text-[10px] uppercase text-primary tracking-wider">Barrel Entities & Quick Presets</span>
-                    <div class="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
-                        onclick={() => loadBarrelPreset("blog")}
-                      >
-                        Blog + Clerk
-                      </button>
-                      <button
-                        type="button"
-                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
-                        onclick={() => loadBarrelPreset("ecommerce")}
-                      >
-                        E-Commerce + WorkOS
-                      </button>
-                      <button
-                        type="button"
-                        class="text-[9px] px-2 py-0.5 rounded-md bg-base-100 hover:bg-base-300 font-bold text-primary transition-all"
-                        onclick={() => loadBarrelPreset("saas")}
-                      >
-                        Multi-Tenant SaaS
-                      </button>
+                <!-- Barrel Builder Section -->
+                <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/70 flex flex-col gap-3.5">
+                  <!-- Presets dropdown and title -->
+                  <div class="flex items-center justify-between border-b border-base-300/50 pb-2">
+                    <span class="font-bold text-[10.5px] uppercase tracking-wider text-base-content/70">
+                      Domain Entities
+                    </span>
+                    <div class="flex items-center gap-1">
+                      <span class="text-[10px] text-base-content/50 mr-1 hidden sm:inline">Template:</span>
+                      <div class="join border border-base-300 rounded-lg overflow-hidden bg-base-100">
+                        <button
+                          type="button"
+                          class="join-item btn btn-xs btn-ghost text-[10px] font-semibold hover:bg-base-200 px-2"
+                          onclick={() => loadBarrelPreset("blog")}
+                        >
+                          Blog
+                        </button>
+                        <button
+                          type="button"
+                          class="join-item btn btn-xs btn-ghost text-[10px] font-semibold hover:bg-base-200 px-2"
+                          onclick={() => loadBarrelPreset("ecommerce")}
+                        >
+                          E-Commerce
+                        </button>
+                        <button
+                          type="button"
+                          class="join-item btn btn-xs btn-ghost text-[10px] font-semibold hover:bg-base-200 px-2"
+                          onclick={() => loadBarrelPreset("saas")}
+                        >
+                          SaaS
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">Entities / Table Names</span>
-                      <span class="text-[9px] opacity-50">Comma-separated module identifiers</span>
-                    </div>
+                  <!-- Entity Input -->
+                  <fieldset class="fieldset p-0">
+                    <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">
+                      Domain Modules
+                    </legend>
                     <input
                       type="text"
                       bind:value={barrelEntities}
                       placeholder="e.g. users, posts, comments, categories"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl"
                     />
                     {#if barrelError}
-                      <span class="text-[9px] text-error font-semibold mt-0.5">{barrelError}</span>
+                      <p class="label text-[10px] text-error font-medium">{barrelError}</p>
                     {:else}
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Enter domain entity names. Each name will be assigned grid coordinates in the layout manifest.</span>
+                      <p class="label text-[10px] text-base-content/50">Comma-separated domain entity names mapped into grid coordinates.</p>
                     {/if}
-                  </label>
+                  </fieldset>
 
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span class="font-bold text-[10px] uppercase text-base-content/65">Cloudflare Worker Bindings & Links (Optional)</span>
-                      <span class="text-[9px] opacity-50">BINDING:target -&gt; tableName</span>
-                    </div>
+                  <!-- Worker Bindings Input -->
+                  <fieldset class="fieldset p-0">
+                    <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">
+                      Cloudflare Bindings & Synthetic Links (Optional)
+                    </legend>
                     <input
                       type="text"
                       bind:value={barrelWorkerBindings}
-                      placeholder="e.g. GAMES_BUCKET:r2 -> gameBuilds, SESSIONS_KV:kv -> users"
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                      placeholder="e.g. GAMES_BUCKET:r2 -> posts, SESSIONS_KV:kv -> users"
+                      class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl"
                     />
-                    <span class="text-[9px] opacity-40 font-medium mt-0.5">Tip: Configured in wrangler.jsonc; coordinates & synthetic links are stored in @strata-layout without dummy code.</span>
-                  </label>
+                    <p class="label text-[10px] text-base-content/50">Declared as <code>BINDING:type -> targetTable</code> without dummy constants in Drizzle files.</p>
+                  </fieldset>
 
-                  <!-- Virtual Identity Boundary & Export Options -->
-                  <div class="flex flex-wrap items-center gap-5 py-1 border-t border-base-300/40 pt-2.5">
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                  <!-- Checkboxes: Virtual Boundaries & Re-exports -->
+                  <div class="flex flex-wrap items-center gap-4 pt-1 border-t border-base-300/40">
+                    <label class="flex items-center gap-2 cursor-pointer text-[11px] text-base-content/80 select-none">
                       <input
                         type="checkbox"
                         bind:checked={includeReExports}
                         class="checkbox checkbox-xs checkbox-primary rounded"
                       />
-                      <span>Include Re-Exports (export * from './...')</span>
+                      <span>Re-export domain files</span>
                     </label>
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                    <label class="flex items-center gap-2 cursor-pointer text-[11px] text-base-content/80 select-none">
                       <input
                         type="checkbox"
                         bind:checked={includeClerkBoundary}
                         class="checkbox checkbox-xs checkbox-primary rounded"
                       />
-                      <span>Include Clerk (__clerk_identity__)</span>
+                      <span>Clerk IdP node</span>
                     </label>
-                    <label class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/70 select-none">
+                    <label class="flex items-center gap-2 cursor-pointer text-[11px] text-base-content/80 select-none">
                       <input
                         type="checkbox"
                         bind:checked={includeWorkosBoundary}
                         class="checkbox checkbox-xs checkbox-primary rounded"
                       />
-                      <span>Include WorkOS (__workos_identity__)</span>
+                      <span>WorkOS IdP node</span>
                     </label>
                   </div>
 
-                  <!-- Layout Grid Parameters -->
-                  <div class="grid grid-cols-4 gap-3 border-t border-base-300/40 pt-2.5">
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/60">Grid Columns</span>
-                      <input
-                        type="number"
-                        bind:value={barrelColumns}
-                        min="1"
-                        max="6"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
-                    </label>
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/60">Col Gap (px)</span>
-                      <input
-                        type="number"
-                        bind:value={barrelSpacingX}
-                        step="20"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
-                    </label>
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/60">Row Gap (px)</span>
-                      <input
-                        type="number"
-                        bind:value={barrelSpacingY}
-                        step="20"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
-                    </label>
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <span class="font-bold text-[10px] uppercase text-base-content/60">Start X (px)</span>
-                      <input
-                        type="number"
-                        bind:value={barrelStartX}
-                        step="20"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
-                    </label>
-                  </div>
+                  <!-- Collapsible Grid Spacing Controls (Clean, uncluttered) -->
+                  <details class="collapse collapse-arrow bg-base-100/60 border border-base-300/60 rounded-xl">
+                    <summary class="collapse-title text-[10.5px] font-bold uppercase tracking-wider text-base-content/65 py-2 min-h-0">
+                      Grid Layout & Coordinate Tuning
+                    </summary>
+                    <div class="collapse-content pt-2 pb-3">
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <fieldset class="fieldset p-0">
+                          <legend class="fieldset-legend text-[9.5px] uppercase font-bold text-base-content/60 pt-0 pb-1">Columns</legend>
+                          <input type="number" bind:value={barrelColumns} min="1" max="6" class="input input-xs input-bordered w-full font-mono rounded-lg" />
+                        </fieldset>
+                        <fieldset class="fieldset p-0">
+                          <legend class="fieldset-legend text-[9.5px] uppercase font-bold text-base-content/60 pt-0 pb-1">Col Gap (px)</legend>
+                          <input type="number" bind:value={barrelSpacingX} step="20" class="input input-xs input-bordered w-full font-mono rounded-lg" />
+                        </fieldset>
+                        <fieldset class="fieldset p-0">
+                          <legend class="fieldset-legend text-[9.5px] uppercase font-bold text-base-content/60 pt-0 pb-1">Row Gap (px)</legend>
+                          <input type="number" bind:value={barrelSpacingY} step="20" class="input input-xs input-bordered w-full font-mono rounded-lg" />
+                        </fieldset>
+                        <fieldset class="fieldset p-0">
+                          <legend class="fieldset-legend text-[9.5px] uppercase font-bold text-base-content/60 pt-0 pb-1">Start X (px)</legend>
+                          <input type="number" bind:value={barrelStartX} step="20" class="input input-xs input-bordered w-full font-mono rounded-lg" />
+                        </fieldset>
+                      </div>
+                    </div>
+                  </details>
                 </div>
 
               {:else}
-                <div class="flex flex-col gap-2">
-                  <p class="text-base-content/75 leading-relaxed">
-                    Use this interactive tool to build inline <code>@strata</code> comments for single-file schemas (<code>schema.ts</code>).
-                    Paste the generated block directly above your table, object, or connection declarations.
-                  </p>
-                  <div class="px-3 py-2 bg-info/10 border border-info/20 rounded-xl text-[11px] text-info flex items-center gap-2">
-                    <Info class="w-4 h-4 shrink-0" />
-                    <span>In modular barrel schemas (<code>schema/index.ts</code>), worker bindings live in <code>wrangler.jsonc</code> with layout saved in <code>@strata-layout</code>. Use the <strong>Modular Barrel</strong> tab for barrel manifests.</span>
+                <!-- Single-File Builder Section -->
+                <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/70 flex flex-col gap-3.5">
+                  <div class="flex items-center justify-between border-b border-base-300/50 pb-2">
+                    <span class="font-bold text-[10.5px] uppercase tracking-wider text-base-content/70">
+                      Target Entity Configuration
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost text-[10px] font-semibold text-primary hover:bg-base-200 rounded-lg px-2"
+                      onclick={loadSamplePreset}
+                    >
+                      Load Sample Preset
+                    </button>
                   </div>
-                </div>
 
-                <!-- Basic Fields -->
-                <div
-                  class="grid grid-cols-3 gap-3 bg-base-200/50 p-4 rounded-2xl border border-base-300/60 mt-1"
-                >
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <div class="flex items-center justify-between">
-                      <span
-                        class="font-bold text-[10px] uppercase text-base-content/60"
-                        >Storage Target</span
-                      >
-                      <button
-                        type="button"
-                        class="text-[9px] text-primary hover:underline font-bold"
-                        onclick={loadSamplePreset}
-                      >
-                        Load Sample
-                      </button>
-                    </div>
-                    <select
-                      bind:value={builderTarget}
-                      class="select select-sm select-bordered rounded-lg bg-base-100 w-full font-medium text-xs h-8 min-h-8"
-                    >
-                      <option value="d1">D1 (SQLite Table)</option>
-                      <option value="do">DO (Durable Object)</option>
-                      <option value="kv">KV (Key-Value Store)</option>
-                      <option value="r2">R2 (Storage Bucket)</option>
-                    </select>
-                  </label>
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <span
-                      class="font-bold text-[10px] uppercase text-base-content/60"
-                      >Position X (px)</span
-                    >
-                    <input
-                      type="number"
-                      bind:value={builderX}
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                  </label>
-                  <label class="flex flex-col gap-1 cursor-pointer">
-                    <span
-                      class="font-bold text-[10px] uppercase text-base-content/60"
-                      >Position Y (px)</span
-                    >
-                    <input
-                      type="number"
-                      bind:value={builderY}
-                      class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                    />
-                  </label>
-                </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <fieldset class="fieldset p-0">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Storage Target</legend>
+                      <select bind:value={builderTarget} class="select select-sm select-bordered w-full font-medium text-xs rounded-xl bg-base-100">
+                        <option value="d1">D1 (SQLite Table)</option>
+                        <option value="do">DO (Durable Object)</option>
+                        <option value="kv">KV (Key-Value Store)</option>
+                        <option value="r2">R2 (Storage Bucket)</option>
+                      </select>
+                    </fieldset>
+                    <fieldset class="fieldset p-0">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Position X (px)</legend>
+                      <input type="number" bind:value={builderX} class="input input-sm input-bordered w-full font-mono text-xs rounded-xl bg-base-100" />
+                    </fieldset>
+                    <fieldset class="fieldset p-0">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Position Y (px)</legend>
+                      <input type="number" bind:value={builderY} class="input input-sm input-bordered w-full font-mono text-xs rounded-xl bg-base-100" />
+                    </fieldset>
+                  </div>
 
-                <!-- Target Specific Parameters -->
-                <div
-                  class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3"
-                >
-                  <h4
-                    class="font-bold text-[10px] uppercase tracking-wider text-primary border-b border-base-300/50 pb-1"
-                  >
-                    Target Configurations
-                  </h4>
-
+                  <!-- Specific Target Fields -->
                   {#if builderTarget === "d1"}
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <div class="flex items-center justify-between">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >Synthetic Relations</span
-                        >
-                        <span class="text-[9px] opacity-50"
-                          >Comma-separated target node names</span
-                        >
-                      </div>
+                    <fieldset class="fieldset p-0 border-t border-base-300/40 pt-2">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Synthetic Relations</legend>
                       <input
                         type="text"
                         bind:value={builderD1Relations}
                         placeholder="e.g. USERS_KV, IMAGES_R2"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
+                        class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl"
                       />
                       {#if relationsError}
-                        <span class="text-[9px] text-error font-semibold mt-0.5"
-                          >{relationsError}</span
-                        >
+                        <p class="label text-[10px] text-error font-medium">{relationsError}</p>
                       {:else}
-                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                          >Tip: Points to targets in your diagram (e.g. KV
-                          namespaces or buckets).</span
-                        >
+                        <p class="label text-[10px] text-base-content/50">Points to non-SQL storage targets in the diagram.</p>
                       {/if}
-                    </label>
+                    </fieldset>
                   {:else if builderTarget === "do"}
-                    <div class="grid grid-cols-2 gap-3">
-                      <label class="flex flex-col gap-1 cursor-pointer">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >DO Class File Path</span
-                        >
-                        <input
-                          type="text"
-                          bind:value={builderDOPath}
-                          placeholder="e.g. ./src/do/UserDO.ts"
-                          class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                        />
-                      </label>
-                      <label class="flex flex-col gap-1 cursor-pointer">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >DO Class Name</span
-                        >
-                        <input
-                          type="text"
-                          bind:value={builderDOClass}
-                          placeholder="e.g. UserDO"
-                          class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                        />
-                      </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-base-300/40 pt-2">
+                      <fieldset class="fieldset p-0">
+                        <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">DO Class File Path</legend>
+                        <input type="text" bind:value={builderDOPath} placeholder="./src/do/UserDO.ts" class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl" />
+                      </fieldset>
+                      <fieldset class="fieldset p-0">
+                        <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">DO Class Name</legend>
+                        <input type="text" bind:value={builderDOClass} placeholder="UserDO" class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl" />
+                      </fieldset>
                     </div>
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <div class="flex items-center justify-between">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >Public Methods</span
-                        >
-                        <span class="text-[9px] opacity-50"
-                          >Comma-separated list</span
-                        >
-                      </div>
-                      <input
-                        type="text"
-                        bind:value={builderDOMethods}
-                        placeholder="e.g. login, logout, getProfile"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
-                      <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                        >Tip: Declare custom method names and signatures (e.g. <code
-                          >fetchData(id: string)</code
-                        >).</span
-                      >
-                    </label>
+                    <fieldset class="fieldset p-0">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Public RPC Methods</legend>
+                      <input type="text" bind:value={builderDOMethods} placeholder="e.g. login, logout, getProfile" class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl" />
+                      <p class="label text-[10px] text-base-content/50">Extracted or declared public method names.</p>
+                    </fieldset>
                   {:else if builderTarget === "kv"}
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <div class="flex items-center justify-between">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >KV Key Mappings</span
-                        >
-                        <span class="text-[9px] opacity-50"
-                          >Comma-separated key:type mappings</span
-                        >
-                      </div>
-                      <input
-                        type="text"
-                        bind:value={builderKVMappings}
-                        placeholder="e.g. sessionToken:string, attempts:number, meta:any"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
+                    <fieldset class="fieldset p-0 border-t border-base-300/40 pt-2">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Key-Value Mappings</legend>
+                      <input type="text" bind:value={builderKVMappings} placeholder="e.g. sessionToken:string, attempts:number" class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl" />
                       {#if kvError}
-                        <span class="text-[9px] text-error font-semibold mt-0.5"
-                          >{kvError}</span
-                        >
+                        <p class="label text-[10px] text-error font-medium">{kvError}</p>
                       {:else}
-                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                          >Tip: Enter <code>keyName:type</code> pairs (supported types:
-                          string, number, boolean, any).</span
-                        >
+                        <p class="label text-[10px] text-base-content/50">Supported types: string, number, boolean, any.</p>
                       {/if}
-                    </label>
+                    </fieldset>
                   {:else if builderTarget === "r2"}
-                    <div class="flex items-center gap-6 py-1">
-                      <label
-                        class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          bind:checked={builderR2Public}
-                          class="checkbox checkbox-xs checkbox-primary rounded"
-                        />
-                        <span>Public Access Enabled</span>
+                    <div class="flex items-center gap-5 border-t border-base-300/40 pt-2">
+                      <label class="flex items-center gap-2 cursor-pointer text-[11px] text-base-content/80 select-none">
+                        <input type="checkbox" bind:checked={builderR2Public} class="checkbox checkbox-xs checkbox-primary rounded" />
+                        <span>Public Bucket Access</span>
                       </label>
-                      <label
-                        class="flex items-center gap-2 cursor-pointer font-bold text-[10px] uppercase text-base-content/65 select-none"
-                      >
-                        <input
-                          type="checkbox"
-                          bind:checked={builderR2Cors}
-                          class="checkbox checkbox-xs checkbox-primary rounded"
-                        />
+                      <label class="flex items-center gap-2 cursor-pointer text-[11px] text-base-content/80 select-none">
+                        <input type="checkbox" bind:checked={builderR2Cors} class="checkbox checkbox-xs checkbox-primary rounded" />
                         <span>CORS Enabled</span>
                       </label>
                     </div>
-                    <label class="flex flex-col gap-1 cursor-pointer">
-                      <div class="flex items-center justify-between">
-                        <span
-                          class="font-bold text-[10px] uppercase text-base-content/65"
-                          >Folder Filters</span
-                        >
-                        <span class="text-[9px] opacity-50"
-                          >Comma-separated folderName:mime/type pairs</span
-                        >
-                      </div>
-                      <input
-                        type="text"
-                        bind:value={builderR2Folders}
-                        placeholder="e.g. avatars:image/*, data:application/json"
-                        class="input input-sm input-bordered rounded-lg bg-base-100 w-full font-mono text-xs h-8 min-h-8"
-                      />
+                    <fieldset class="fieldset p-0">
+                      <legend class="fieldset-legend text-[10px] uppercase font-bold text-base-content/70 pt-0 pb-1">Folder Structure Mappings</legend>
+                      <input type="text" bind:value={builderR2Folders} placeholder="e.g. avatars:image/*, files:application/pdf" class="input input-sm input-bordered w-full font-mono text-xs bg-base-100 rounded-xl" />
                       {#if r2Error}
-                        <span class="text-[9px] text-error font-semibold mt-0.5"
-                          >{r2Error}</span
-                        >
+                        <p class="label text-[10px] text-error font-medium">{r2Error}</p>
                       {:else}
-                        <span class="text-[9px] opacity-40 font-medium mt-0.5"
-                          >Tip: Enter <code>folderName:mime/type</code> (e.g.
-                          <code>avatars:image/*</code>).</span
-                        >
+                        <p class="label text-[10px] text-base-content/50">Declare folder names with mime-type filters.</p>
                       {/if}
-                    </label>
+                    </fieldset>
                   {/if}
                 </div>
               {/if}
 
-              <!-- Output Display -->
-              <div
-                class="bg-base-200/50 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-3 mt-1 relative group/output"
-              >
-                <div
-                  class="flex items-center justify-between border-b border-base-300/50 pb-1.5"
-                >
-                  <span
-                    class="font-bold text-[10px] uppercase tracking-wider text-success"
-                  >
-                    {builderMode === "barrel"
-                      ? "Generated Barrel Manifest (schema/index.ts)"
-                      : "Generated Entity JSDoc (schema.ts)"}
+              <!-- Code Output Box -->
+              <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/70 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between border-b border-base-300/50 pb-2">
+                  <span class="font-bold text-[10px] uppercase tracking-wider text-success flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                    <span>{builderMode === "barrel" ? "schema/index.ts Root Manifest" : "schema.ts Entity JSDoc"}</span>
                   </span>
                   <button
-                    class="btn btn-success btn-xs rounded-lg font-bold flex items-center gap-1 hover:shadow-md transition-all active:scale-95 text-success-content"
+                    class="btn btn-success btn-xs rounded-lg font-bold gap-1 text-success-content hover:shadow-xs active:scale-95 transition-all"
                     onclick={copyBuilderJSDoc}
                   >
                     {#if builderCopied}
                       <Check class="w-3 h-3" />
-                      Copied!
+                      <span>Copied</span>
                     {:else}
-                      <span>Copy Block</span>
+                      <Copy class="w-3 h-3" />
+                      <span>Copy Snippet</span>
                     {/if}
                   </button>
                 </div>
-                <pre
-                  class="bg-neutral text-neutral-content p-4 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-56 overflow-y-auto selection:bg-primary/30 select-all">{activeJSDocOutput}</pre>
+                <pre class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[10px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-52 overflow-y-auto selection:bg-primary/30 select-all">{activeJSDocOutput}</pre>
               </div>
             </div>
           {:else if activeTab === "identity-auth" && !searchQuery}
@@ -2091,6 +1948,124 @@ Generate only valid, production-ready TypeScript code inside standard markdown c
                 <pre
                   class="bg-neutral text-neutral-content p-3.5 rounded-xl text-[9px] font-mono leading-relaxed overflow-x-auto border border-white/5 max-h-48 overflow-y-auto">
 {aiPrompt}</pre>
+              </div>
+            {/if}
+
+            {#if activeTab === "about"}
+              <!-- About & AI Disclosure Tab View -->
+              <div class="flex flex-col gap-5 font-sans text-xs">
+                <!-- Header / Branding -->
+                <div class="flex items-center justify-between border-b border-base-300 pb-3">
+                  <div class="flex items-center gap-3">
+                    <div class="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/20">
+                      <FileCode class="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h3 class="font-black text-base uppercase tracking-wider text-base-content">
+                          Strata Studio
+                        </h3>
+                        <span class="badge badge-sm badge-primary font-mono text-[10px]">
+                          v{APP_VERSION}
+                        </span>
+                      </div>
+                      <p class="text-[11px] text-base-content/60 mt-0.5">
+                        Visual Architecture Canvas & ERD Studio for Drizzle ORM + Cloudflare Ecosystem
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Authorship & Studio Credit -->
+                <div class="bg-base-200/50 p-4 rounded-2xl border border-base-300/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-error/10 text-error rounded-lg">
+                      <Heart class="w-4 h-4 fill-error/20" />
+                    </div>
+                    <div>
+                      <span class="text-[10px] uppercase font-bold tracking-wider text-base-content/50 block">Crafted By</span>
+                      <span class="font-bold text-sm text-base-content">FR Studios</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-ghost border border-base-300/80 rounded-xl font-bold gap-1.5 text-xs hover:border-primary/50 transition-colors"
+                    onclick={() => PlatformService.openExternal("https://frstudios.co.ke")}
+                  >
+                    <span>Visit frstudios.co.ke</span>
+                    <ExternalLink class="w-3.5 h-3.5 opacity-70" />
+                  </button>
+                </div>
+
+                <!-- 0rwx AI Disclosure Section -->
+                <div class="bg-base-200/50 p-5 rounded-2xl border border-base-300/80 flex flex-col gap-4">
+                  <div class="flex items-center justify-between border-b border-base-300/60 pb-3">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-7 h-7 flex items-center justify-center p-1 rounded-lg bg-base-100 border border-base-300 shadow-xs">
+                        <img src="/AI-W-light.svg" alt="0rwx AI:W" class="w-5 h-5 text-base-content" />
+                      </div>
+                      <div>
+                        <h4 class="font-bold text-sm text-base-content flex items-center gap-2">
+                          <span>0rwx AI Disclosure</span>
+                          <span class="badge badge-sm badge-neutral font-mono text-[9px] uppercase tracking-wider">
+                            AI:W • Assisted / Human Reviewed
+                          </span>
+                        </h4>
+                        <span class="text-[10px] text-base-content/50 font-mono">
+                          Standardized AI transparency notation (https://0rwx.com)
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost rounded-lg font-bold gap-1 text-[11px]"
+                      onclick={() => PlatformService.openExternal("https://0rwx.com/")}
+                    >
+                      <span>Framework Spec</span>
+                      <ExternalLink class="w-3 h-3 opacity-60" />
+                    </button>
+                  </div>
+
+                  <p class="text-[11.5px] text-base-content/80 leading-relaxed">
+                    Strata was engineered using the <strong>0rwx transparency framework</strong> at level <strong>AI:W (Assisted / Human Reviewed)</strong>. Architectural co-design, implementation prototyping, and continuous refinement were conducted through collaborative pair programming with <strong>Google Antigravity</strong> and <strong>Gemini</strong> models.
+                  </p>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                    <div class="p-3 bg-base-100/70 rounded-xl border border-base-300/60 flex flex-col gap-1.5">
+                      <span class="font-bold text-base-content flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider">
+                        <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        AI Contributions (Pair Programming)
+                      </span>
+                      <ul class="space-y-1 text-base-content/70 pl-2">
+                        <li>• AST transformation scaffolds with ts-morph</li>
+                        <li>• Svelte 5 rune migration & reactive state binding</li>
+                        <li>• Interactive documentation & starter blueprint synthesis</li>
+                      </ul>
+                    </div>
+
+                    <div class="p-3 bg-base-100/70 rounded-xl border border-base-300/60 flex flex-col gap-1.5">
+                      <span class="font-bold text-base-content flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider">
+                        <span class="w-1.5 h-1.5 rounded-full bg-success"></span>
+                        Human Oversight & Engineering
+                      </span>
+                      <ul class="space-y-1 text-base-content/70 pl-2">
+                        <li>• System architecture & zero Git-conflict layout design</li>
+                        <li>• Tauri 2.0 Rust backend safety & IPC permissions</li>
+                        <li>• Complete test suite verification (230 Vitest tests)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Technical Foundations & Guardrails -->
+                <div class="bg-base-200/30 p-4 rounded-2xl border border-base-300/60 flex flex-col gap-2.5">
+                  <h4 class="font-bold text-[10px] uppercase tracking-wider text-base-content/60">
+                    Architectural Guardrails & Zero Lock-In
+                  </h4>
+                  <p class="text-[11px] text-base-content/70 leading-relaxed">
+                    Strata enforces a strict <strong>Single Source of Truth</strong> model: visual positions reside in the Git-clean <code>@strata-layout</code> manifest in your schema barrel, with zero proprietary sidecar JSON files or runtime dependencies. Your code remains 100% pure Drizzle TypeScript.
+                  </p>
+                </div>
               </div>
             {/if}
 

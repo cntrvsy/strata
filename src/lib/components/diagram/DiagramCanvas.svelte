@@ -73,12 +73,27 @@
     }
   });
 
-  // Explicit fitView trigger (e.g. from Auto-Layout)
+  // Explicit fitView trigger (e.g. from Auto-Layout or Zoom Out)
   $effect(() => {
     if (schemaState.fitViewTrigger > 0) {
       setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300, maxZoom: 1 });
-      }, 60);
+        fitView({ padding: 0.2, duration: 350, maxZoom: 1 });
+      }, 40);
+    }
+  });
+
+  // Explicit node zoom trigger (from double-clicking a node)
+  $effect(() => {
+    if (schemaState.zoomTargetTrigger > 0 && schemaState.zoomedNodeId) {
+      const targetId = schemaState.zoomedNodeId;
+      setTimeout(() => {
+        fitView({
+          nodes: [{ id: targetId }],
+          padding: 0.35,
+          duration: 350,
+          maxZoom: 1.25,
+        });
+      }, 30);
     }
   });
 
@@ -187,7 +202,9 @@
 
   function handleContextMenuAction(action: string, targetId?: string) {
     if (action === "fit_view") {
-      fitView();
+      schemaState.zoomOutToDiagram();
+    } else if (action === "zoom_node" && targetId) {
+      schemaState.toggleZoomNode(targetId);
     } else if (action === "inspect_node" && targetId) {
       schemaState.activeInspectorNodeId = targetId;
       schemaState.nodes = schemaState.nodes.map((n) => ({
@@ -254,11 +271,6 @@
       }
     } else if (action === "toggle_focus" && targetId) {
       schemaState.toggleFocusLock(targetId);
-    } else if (action === "delete_sandbox" && targetId) {
-      if (schemaState.isSandboxMode) {
-        schemaState.deleteTable(targetId);
-        toast.success(`Deleted ${targetId}`);
-      }
     }
   }
 </script>
@@ -269,6 +281,10 @@
   class="w-full h-full bg-base-200/30 relative overflow-hidden {schemaState.isArrangingLayout
     ? 'is-arranging'
     : ''}"
+  ondblclick={() => {
+    schemaState.zoomOutToDiagram();
+  }}
+  role="presentation"
 >
   <SvelteFlow
     bind:nodes={schemaState.nodes}
@@ -279,6 +295,7 @@
     onreconnect={() => {}}
     {onnodedragstop}
     {onconnect}
+    zoomOnDoubleClick={false}
     ondelete={({ nodes, edges }) => {
       if (schemaState.isSandboxMode) {
         for (const node of nodes) {

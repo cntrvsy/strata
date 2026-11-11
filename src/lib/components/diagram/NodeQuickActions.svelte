@@ -10,7 +10,6 @@
   import {
     FileCode,
     Copy,
-    Trash2,
     Check,
     Focus,
     ExternalLink,
@@ -38,6 +37,13 @@
   let copied = $state(false);
 
   function handleOpenEditor() {
+    if (schemaState.isSandboxMode) {
+      handleInspect();
+      toast.info("Sandbox Mode Active", {
+        description: `Inspecting "${nodeId}". Open a schema file on disk to jump straight to source code.`,
+      });
+      return;
+    }
     const file =
       targetFile ||
       schemaState.getTargetFilePath(nodeId) ||
@@ -88,18 +94,6 @@
       selected: n.id === nodeId,
     }));
   }
-
-  function handleDelete() {
-    if (schemaState.isSandboxMode) {
-      schemaState.deleteTable(nodeId);
-      toast.success(`Deleted ${nodeId}`);
-      return;
-    }
-    toast.info("Delete Code in Your Editor", {
-      description:
-        "To prevent accidental code loss, delete the declaration in your editor. Cirrus will update instantly.",
-    });
-  }
 </script>
 
 {#if selected}
@@ -127,13 +121,17 @@
           <ExternalLink class="w-3.5 h-3.5" />
         </button>
       {:else}
-        <!-- Jump to Code in VS Code / Cursor -->
+        <!-- Jump to Code in VS Code / Cursor or Inspect in Sandbox -->
         <button
           type="button"
           class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-          data-tip="Open in Editor (Double-click)"
+          data-tip={schemaState.isSandboxMode
+            ? "Inspect Code (E)"
+            : "Open in Editor (E)"}
           onclick={handleOpenEditor}
-          aria-label="Open in Editor (Double-click)"
+          aria-label={schemaState.isSandboxMode
+            ? "Inspect Code (E)"
+            : "Open in Editor (E)"}
         >
           <FileCode class="w-3.5 h-3.5" />
         </button>
@@ -143,9 +141,9 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/75 hover:text-base-content hover:bg-base-200/80 transition-colors tooltip tooltip-bottom"
-        data-tip={copied ? "Copied!" : "Copy Snippet"}
+        data-tip={copied ? "Copied!" : "Copy Snippet (C)"}
         onclick={handleCopySnippet}
-        aria-label="Copy Snippet"
+        aria-label="Copy Snippet (C)"
       >
         {#if copied}
           <Check class="w-3.5 h-3.5 text-success" />
@@ -170,20 +168,6 @@
       >
         <Focus class="w-3.5 h-3.5" />
       </button>
-
-      <!-- Delete Entity (Sandbox Mode Only) -->
-      {#if schemaState.isSandboxMode && nodeType !== "identity"}
-        <div class="w-px h-3 bg-base-300 mx-0.5"></div>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
-          data-tip="Delete (Sandbox)"
-          onclick={handleDelete}
-          aria-label="Delete (Sandbox)"
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
-      {/if}
     </div>
   </NodeToolbar>
 {/if}

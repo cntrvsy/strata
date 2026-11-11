@@ -20,6 +20,7 @@
     LoaderCircle,
     Lightbulb,
     Sparkles,
+    Check,
   } from "lucide-svelte";
   import { toast } from "svelte-sonner";
   import { PlatformService } from "#lib/services/platform";
@@ -28,11 +29,17 @@
   let preferredEditor = $state(
     (typeof localStorage !== "undefined" && localStorage.getItem("strata_preferred_editor")) || "auto"
   );
+  let editorSavedFeedback = $state(false);
   let isDetecting = $state(false);
 
   $effect(() => {
     if (typeof localStorage !== "undefined" && preferredEditor) {
       localStorage.setItem("strata_preferred_editor", preferredEditor);
+      editorSavedFeedback = true;
+      const t = setTimeout(() => {
+        editorSavedFeedback = false;
+      }, 1800);
+      return () => clearTimeout(t);
     }
   });
 
@@ -366,7 +373,9 @@
         <div class="p-2 bg-primary/10 rounded-field">
           <Settings class="w-5 h-5 text-primary" />
         </div>
-        <h2 class="text-base font-bold tracking-tight">Project Settings</h2>
+        <h2 class="text-base font-bold tracking-tight">
+          {schemaState.isSandboxMode ? "Preferences & Editor" : "Project Settings"}
+        </h2>
       </div>
       <button
         class="btn btn-ghost btn-sm btn-circle hover:bg-base-200"
@@ -378,15 +387,18 @@
 
     <form onsubmit={handleSave} class="p-6 flex flex-col gap-6">
       {#if schemaState.isSandboxMode}
-        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-field flex items-start gap-2.5 text-xs text-warning leading-relaxed">
-          <CircleAlert class="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <span class="font-bold block text-warning">Playground Sandbox Active</span>
-            <span class="text-warning/85 text-[11px]">Wrangler file discovery and relative JSDoc path binding operate in-memory. Open a local schema file on disk to bind to a project wrangler.toml file.</span>
+        <div class="p-4 bg-base-200/60 border border-base-300/80 rounded-field flex items-start gap-3 text-xs leading-relaxed">
+          <Info class="w-4 h-4 text-info shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1">
+            <span class="font-bold text-base-content">Playground Sandbox Active</span>
+            <span class="text-base-content/70 text-[11px]">
+              This demo runs in-memory with simulated Cloudflare bindings. Open a local schema file on disk to link a local <code>wrangler.toml</code>.
+            </span>
           </div>
         </div>
       {/if}
-      <div class="flex flex-col gap-3">
+      {#if !schemaState.isSandboxMode}
+        <div class="flex flex-col gap-3">
         <div class="flex items-center justify-between">
           <label
             for="wrangler-path-input"
@@ -594,15 +606,26 @@
           >
         </div>
       </div>
+      {/if}
 
       <!-- Preferred Code Editor -->
       <div class="flex flex-col gap-2 pt-2 border-t border-base-300/60">
-        <label
-          for="editor-preference-select"
-          class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/80 block"
-        >
-          Preferred Code Editor
-        </label>
+        <div class="flex items-center justify-between">
+          <label
+            for="editor-preference-select"
+            class="text-[10.5px] font-bold uppercase tracking-wider text-base-content/80 block"
+          >
+            Preferred Code Editor
+          </label>
+          {#if editorSavedFeedback}
+            <span
+              class="flex items-center gap-1 text-[10px] text-success font-medium animate-in fade-in duration-150"
+            >
+              <Check class="w-3 h-3" />
+              <span>Saved</span>
+            </span>
+          {/if}
+        </div>
         <select
           id="editor-preference-select"
           bind:value={preferredEditor}
@@ -615,21 +638,33 @@
           <option value="system">System Default Application</option>
         </select>
         <span class="text-[10px] text-base-content/60 leading-normal">
-          Clicking table files or double-clicking nodes will jump straight to the declaration line in this editor.
+          Clicking table files or double-clicking nodes will jump straight to the declaration line in this editor. Saved automatically.
         </span>
       </div>
 
       <div class="mt-2 flex flex-col gap-3">
-        <button
-          type="submit"
-          class="btn btn-primary rounded-field w-full shadow-sm font-bold"
-        >
-          Save Configuration
-        </button>
-        <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
-          This will update the <code>strataConfig</code> object in your
-          <code>schema.ts</code>.
-        </p>
+        {#if schemaState.isSandboxMode}
+          <button
+            type="button"
+            class="btn btn-neutral rounded-field w-full shadow-sm font-bold"
+            onclick={() => (schemaState.showProjectSettingsModal = false)}
+          >
+            Done
+          </button>
+          <p class="text-[10px] text-center opacity-50 leading-relaxed px-4">
+            Editor preferences are saved immediately. Open a local file on disk to bind a <code>wrangler.toml</code>.
+          </p>
+        {:else}
+          <button
+            type="submit"
+            class="btn btn-primary rounded-field w-full shadow-sm font-bold"
+          >
+            Save Wrangler Configuration
+          </button>
+          <p class="text-[10px] text-center opacity-40 leading-relaxed px-4">
+            This will update the <code>@strata-layout</code> manifest in your schema.
+          </p>
+        {/if}
       </div>
     </form>
   </div>

@@ -78,9 +78,16 @@ export class UpdateState {
 	constructor() {
 		// Detect if running inside Microsoft Store package
 		if (typeof window !== "undefined") {
-			PlatformService.isStore().then((store) => {
-				this.isStore = store;
-			}).catch(() => {});
+			PlatformService.isStore()
+				.then((store) => {
+					this.isStore = store;
+					if (store) {
+						this.status = 'store-managed';
+						this.updateInfo = null;
+						this.hasUnseenUpdate = false;
+					}
+				})
+				.catch(() => {});
 
 			// Listen for background update-available event from Rust backend (standalone only)
 			PlatformService.listenEvent("update-available", (event: any) => {

@@ -82,13 +82,30 @@
   );
 
   let copied = $state(false);
+  let snippetView = $state<"entity" | "full">("entity");
+  let previewSectionEl = $state<HTMLElement | null>(null);
+
+  const drizzleSnippet = $derived.by(() => {
+    if (!selectedNode) return "";
+    return schemaState.getTableDefinitionSnippet(selectedNode.id);
+  });
+
+  const activeCodePreview = $derived(
+    snippetView === "full" && schemaState.rawCode
+      ? schemaState.rawCode.trim()
+      : drizzleSnippet,
+  );
 
   async function copySnippet() {
-    if (!drizzleSnippet) return;
-    const ok = await PlatformService.writeClipboard(drizzleSnippet);
+    if (!activeCodePreview) return;
+    const ok = await PlatformService.writeClipboard(activeCodePreview);
     if (ok) {
       copied = true;
-      toast.success(`Copied "${selectedNode?.id || ""}" snippet`);
+      toast.success(
+        snippetView === "full"
+          ? "Copied full schema.ts to clipboard"
+          : `Copied "${selectedNode?.id || ""}" snippet`,
+      );
       setTimeout(() => {
         copied = false;
       }, 2000);
@@ -96,11 +113,6 @@
       toast.error("Failed to copy snippet to clipboard");
     }
   }
-
-  const drizzleSnippet = $derived.by(() => {
-    if (!selectedNode) return "";
-    return schemaState.getTableDefinitionSnippet(selectedNode.id);
-  });
 </script>
 
 {#if schemaState.activeInspectorNodeId}
@@ -156,6 +168,14 @@
               class="btn btn-ghost btn-xs btn-circle hover:bg-base-200 text-primary"
               data-testid="inspector-open-in-editor"
               onclick={() => {
+                if (schemaState.isSandboxMode) {
+                  snippetView = "full";
+                  previewSectionEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  toast.info("Showing Full Sandbox Schema", {
+                    description: "Viewing complete @strata-layout and Drizzle source below.",
+                  });
+                  return;
+                }
                 const targetFile =
                   moduleInfo?.sourceFilePath ||
                   schemaState.getTargetFilePath(selectedNode.id) ||
@@ -165,7 +185,7 @@
                   PlatformService.openInEditor(targetFile, line);
                 }
               }}
-              title="Open in Code Editor"
+              aria-label={schemaState.isSandboxMode ? "View Full Schema Code" : "Open in Code Editor"}
             >
               <ExternalLink class="w-3.5 h-3.5" />
             </button>
@@ -401,33 +421,56 @@
 
           <!-- Definition Snippet Preview -->
           {#if drizzleSnippet}
-            <div class="flex flex-col gap-2 pt-3 border-t border-base-300/60">
-              <div class="flex items-center justify-between px-1">
+            <div
+              bind:this={previewSectionEl}
+              class="flex flex-col gap-2 pt-3 border-t border-base-300/60"
+            >
+              <div class="flex items-center justify-between px-1 gap-2">
                 <span
                   class="text-[10px] font-bold uppercase opacity-75 text-base-content/75 tracking-wider flex items-center gap-1.5"
                 >
                   <Code class="w-3 h-3 text-primary" />
                   <span>Definition Preview</span>
                 </span>
-                <button
-                  class="btn btn-ghost btn-xs gap-1 font-mono text-[10px] h-5 min-h-0 px-2 rounded hover:bg-base-200 text-base-content/70 hover:text-primary transition-all"
-                  onclick={copySnippet}
-                  title="Copy definition to clipboard"
-                  data-testid="inspector-copy-snippet"
-                >
-                  {#if copied}
-                    <Check class="w-3 h-3 text-success" />
-                    <span class="text-success font-semibold">Copied!</span>
-                  {:else}
-                    <Copy class="w-3 h-3" />
-                    <span>Copy</span>
+                <div class="flex items-center gap-1.5">
+                  {#if schemaState.rawCode}
+                    <div class="join bg-base-200/80 p-0.5 rounded-field border border-base-300/60">
+                      <button
+                        type="button"
+                        class="join-item btn btn-xs h-4 min-h-0 px-1.5 text-[9px] font-mono border-none {snippetView === 'entity' ? 'btn-primary text-primary-content font-bold' : 'btn-ghost text-base-content/60'}"
+                        onclick={() => (snippetView = "entity")}
+                      >
+                        Entity
+                      </button>
+                      <button
+                        type="button"
+                        class="join-item btn btn-xs h-4 min-h-0 px-1.5 text-[9px] font-mono border-none {snippetView === 'full' ? 'btn-primary text-primary-content font-bold' : 'btn-ghost text-base-content/60'}"
+                        onclick={() => (snippetView = "full")}
+                      >
+                        Full Schema
+                      </button>
+                    </div>
                   {/if}
-                </button>
+                  <button
+                    class="btn btn-ghost btn-xs gap-1 font-mono text-[10px] h-5 min-h-0 px-2 rounded hover:bg-base-200 text-base-content/70 hover:text-primary transition-all"
+                    onclick={copySnippet}
+                    aria-label="Copy definition to clipboard"
+                    data-testid="inspector-copy-snippet"
+                  >
+                    {#if copied}
+                      <Check class="w-3 h-3 text-success" />
+                      <span class="text-success font-semibold">Copied!</span>
+                    {:else}
+                      <Copy class="w-3 h-3" />
+                      <span>Copy</span>
+                    {/if}
+                  </button>
+                </div>
               </div>
               <div
-                class="relative rounded-box bg-base-200/50 border border-base-300/80 p-3 overflow-x-auto text-[11px] font-mono leading-relaxed text-base-content/90 max-h-48 scrollbar-thin select-text"
+                class="relative rounded-box bg-base-200/50 border border-base-300/80 p-3 overflow-x-auto text-[11px] font-mono leading-relaxed text-base-content/90 {snippetView === 'full' ? 'max-h-96' : 'max-h-56'} scrollbar-thin select-text"
               >
-                <pre class="whitespace-pre"><code>{drizzleSnippet}</code></pre>
+                <pre class="whitespace-pre"><code>{activeCodePreview}</code></pre>
               </div>
             </div>
           {/if}

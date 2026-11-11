@@ -10,6 +10,7 @@
   import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import { toast } from "svelte-sonner";
   import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Cpu,
@@ -112,6 +113,12 @@
 
   function handleOpenEditor() {
     schemaState.activeInspectorNodeId = nodeId;
+    if (schemaState.isSandboxMode) {
+      toast.info("Sandbox Mode Active", {
+        description: `Inspecting "${nodeId}". Open a schema file on disk to jump straight to source code.`,
+      });
+      return;
+    }
     const targetFile =
       data.strata?.path ||
       data.moduleInfo?.sourceFilePath ||
@@ -158,7 +165,10 @@
     if (schemaState.hoveredNodeId === nodeId)
       schemaState.hoveredNodeId = null;
   }}
-  ondblclick={handleOpenEditor}
+  ondblclick={(e) => {
+    e.stopPropagation();
+    schemaState.toggleZoomNode(nodeId);
+  }}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {
       schemaState.activeInspectorNodeId = nodeId;

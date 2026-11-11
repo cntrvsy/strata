@@ -4,9 +4,38 @@
  *   "orders": { "x": 560, "y": 120 },
  *   "orderItems": { "x": 560, "y": 480 },
  *   "products": { "x": 100, "y": 480 },
- *   "DISCOUNT_RULES_KV": { "x": 1040, "y": 120, "relations": [{ "to": "orders" }] },
- *   "CartCheckoutLockDO": { "x": 1040, "y": 480, "relations": [{ "to": "products" }] },
- *   "PRODUCT_MEDIA_R2": { "x": 100, "y": 860, "relations": [{ "to": "products" }] }
+ *   "DISCOUNT_RULES_KV": {
+ *     "x": 1040,
+ *     "y": 120,
+ *     "schema": {
+ *       "code": "string",
+ *       "discountPercent": "number",
+ *       "maxRedemptions": "number",
+ *       "expiresAt": "number"
+ *     },
+ *     "relations": [{ "to": "orders" }]
+ *   },
+ *   "CartCheckoutLockDO": {
+ *     "x": 1040,
+ *     "y": 480,
+ *     "path": "./src/do/CartCheckoutLockDO.ts",
+ *     "class": "CartCheckoutLockDO",
+ *     "methods": ["reserveStock", "releaseExpiredHold", "commitOrderInventory", "getAvailableStock"],
+ *     "relations": [{ "to": "products" }]
+ *   },
+ *   "PRODUCT_MEDIA_R2": {
+ *     "x": 100,
+ *     "y": 860,
+ *     "public": true,
+ *     "cors": true,
+ *     "customDomain": "cdn.storefront.dev",
+ *     "folders": {
+ *       "thumbnails": "image/webp",
+ *       "gallery": "image/webp",
+ *       "manuals": "application/pdf"
+ *     },
+ *     "relations": [{ "to": "products" }]
+ *   }
  * }
  */
 import { sqliteTable, integer, text, uniqueIndex } from "drizzle-orm/sqlite-core";

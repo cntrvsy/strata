@@ -10,6 +10,7 @@
   import { tick } from "svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
+  import { toast } from "svelte-sonner";
   import NodeQuickActions from "./NodeQuickActions.svelte";
   import {
     Database,
@@ -191,13 +192,9 @@
     if (schemaState.hoveredNodeId === nodeId)
       schemaState.hoveredNodeId = null;
   }}
-  ondblclick={() => {
-    schemaState.activeInspectorNodeId = nodeId;
-    const targetFile = data.moduleInfo?.sourceFilePath || schemaState.getTargetFilePath(nodeId) || schemaState.filePath;
-    const line = (data as any).line;
-    if (targetFile) {
-      PlatformService.openInEditor(targetFile, line);
-    }
+  ondblclick={(e) => {
+    e.stopPropagation();
+    schemaState.toggleZoomNode(nodeId);
   }}
   onkeydown={(e) => {
     if (e.key === "Enter" || e.key === " ") {

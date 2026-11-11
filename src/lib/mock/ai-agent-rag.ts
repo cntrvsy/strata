@@ -4,9 +4,38 @@
  *   "agentSessions": { "x": 560, "y": 120 },
  *   "chatMessages": { "x": 560, "y": 480 },
  *   "documentEmbeddings": { "x": 100, "y": 480 },
- *   "PROMPT_REGISTRY_KV": { "x": 100, "y": 860, "relations": [{ "to": "agentSessions" }] },
- *   "AgentSessionDO": { "x": 1020, "y": 480, "relations": [{ "to": "chatMessages" }] },
- *   "KNOWLEDGE_BASE_R2": { "x": 1020, "y": 860, "relations": [{ "to": "documentEmbeddings" }] }
+ *   "PROMPT_REGISTRY_KV": {
+ *     "x": 100,
+ *     "y": 860,
+ *     "ttl": 86400,
+ *     "schema": {
+ *       "systemPrompt": "string",
+ *       "temperature": "number",
+ *       "topP": "number",
+ *       "toolDefinitions": "string"
+ *     },
+ *     "relations": [{ "to": "agentSessions" }]
+ *   },
+ *   "AgentSessionDO": {
+ *     "x": 1020,
+ *     "y": 480,
+ *     "path": "./src/do/AgentSessionDO.ts",
+ *     "class": "AgentSessionDO",
+ *     "methods": ["connectStream", "executeToolCall", "appendContext", "abortGeneration"],
+ *     "relations": [{ "to": "chatMessages" }]
+ *   },
+ *   "KNOWLEDGE_BASE_R2": {
+ *     "x": 1020,
+ *     "y": 860,
+ *     "public": false,
+ *     "cors": true,
+ *     "folders": {
+ *       "documents": "application/pdf",
+ *       "embeddings_cache": "application/json",
+ *       "audio_transcripts": "text/plain"
+ *     },
+ *     "relations": [{ "to": "documentEmbeddings" }]
+ *   }
  * }
  */
 import { sqliteTable, integer, text } from "drizzle-orm/sqlite-core";

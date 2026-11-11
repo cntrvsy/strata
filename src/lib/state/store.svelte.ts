@@ -997,7 +997,37 @@ export class SchemaState {
 
 	/** Signal counter to request diagram canvas fitView from external components */
 	fitViewTrigger = $state(0);
-	requestFitView() { this.fitViewTrigger++; }
+	requestFitView() {
+		this.zoomedNodeId = null;
+		this.fitViewTrigger++;
+	}
+
+	/** Node ID currently zoomed into via double-click (null when viewing full diagram) */
+	zoomedNodeId = $state<string | null>(null);
+	zoomTargetTrigger = $state(0);
+
+	/**
+	 * Toggles camera zoom into a specific node (and opens its Inspector),
+	 * or zooms back out to the full diagram if already zoomed into that node.
+	 */
+	toggleZoomNode(nodeId: string) {
+		if (this.zoomedNodeId === nodeId) {
+			this.zoomedNodeId = null;
+			this.fitViewTrigger++;
+		} else {
+			this.zoomedNodeId = nodeId;
+			this.activeInspectorNodeId = nodeId;
+			this.zoomTargetTrigger++;
+		}
+	}
+
+	/**
+	 * Zooms out to fit the entire diagram into view.
+	 */
+	zoomOutToDiagram() {
+		this.zoomedNodeId = null;
+		this.fitViewTrigger++;
+	}
 
 	/** True while auto-layout is animating node positions */
 	isArrangingLayout = $state(false);
@@ -1819,21 +1849,36 @@ export class SchemaState {
 				})
 				.join("\n");
 			return `export const ${name} = sqliteTable("${name}", {\n${cols}\n});`;
-		} else if (target === "kv") {
-			const fields = ((node.data as any)?.columns || (node.data as any)?.patterns || [])
-				.map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
+		} else if (target === "kv" || target === "r2" || target === "do") {
+			const strataMeta = {
+				x: Math.round(node.position?.x ?? (node.data as any)?.strata?.x ?? 100),
+				y: Math.round(node.position?.y ?? (node.data as any)?.strata?.y ?? 100),
+				...((node.data as any)?.strata || {})
+			};
+			delete strataMeta.target;
+			delete strataMeta.binding;
+			const manifestJson = JSON.stringify({ [name]: strataMeta }, null, 2)
+				.split("\n")
+				.map((line) => ` * ${line}`)
 				.join("\n");
-			return `export interface ${name}KV {\n${fields}\n}`;
-		} else if (target === "r2") {
-			const fields = ((node.data as any)?.columns || (node.data as any)?.folders || [])
-				.map((c: any) => `  "${c.name}": "${c.definition || "*/*"}";`)
-				.join("\n");
-			return `export interface ${name}Bucket {\n${fields}\n}`;
-		} else if (target === "do") {
-			const methods = ((node.data as any)?.columns || (node.data as any)?.methods || [])
-				.map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
-				.join("\n");
-			return `export class ${name} {\n${methods}\n}`;
+			const layoutComment = `/**\n * @strata-layout\n${manifestJson}\n */\n`;
+
+			if (target === "kv") {
+				const fields = ((node.data as any)?.columns || (node.data as any)?.patterns || [])
+					.map((c: any) => `  ${c.name}: ${c.definition || "string"};`)
+					.join("\n");
+				return `${layoutComment}export interface ${name}KV {\n${fields}\n}`;
+			} else if (target === "r2") {
+				const fields = ((node.data as any)?.columns || (node.data as any)?.folders || [])
+					.map((c: any) => `  "${c.name}": "${c.definition || "*/*"}";`)
+					.join("\n");
+				return `${layoutComment}export interface ${name}Bucket {\n${fields}\n}`;
+			} else {
+				const methods = ((node.data as any)?.columns || (node.data as any)?.methods || [])
+					.map((c: any) => `  ${c.name}: ${c.definition || "Promise<void>"};`)
+					.join("\n");
+				return `${layoutComment}export class ${name} {\n${methods}\n}`;
+			}
 		}
 
 		return "";
@@ -1968,6 +2013,8 @@ export class SchemaState {
 			if (binding) {
 				binding.extra = { ...binding.extra, ...metadata };
 			}
+			const { updateTableMetadataInSchema } = await import("../parser");
+			this.rawCode = updateTableMetadataInSchema(this.rawCode, tableName, metadata);
 			await this.parseAndApply(this.rawCode);
 			return;
 		}
@@ -1984,20 +2031,9 @@ export class SchemaState {
 	 * Deletes an RPC method from a Durable Object actor.
 	 */
 	async deleteMethod(doName: string, methodName: string) {
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === doName);
-			if (binding && binding.extra?.methods) {
-				binding.extra.methods = binding.extra.methods.filter(
-					(m: string) => m !== methodName && !m.startsWith(methodName + '(')
-				);
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
-		}
-
 		const targetNode = this.nodes.find(n => n.id === doName);
 		const strata = targetNode?.data?.strata || {};
-		const currentMethods = strata.methods || [];
+		const currentMethods = strata.methods || (targetNode?.data?.methods || []).map((m: any) => m.name) || [];
 		const updatedMethods = currentMethods.filter(
 			(m: string) => m !== methodName && !m.startsWith(methodName + '(')
 		);
@@ -2008,15 +2044,6 @@ export class SchemaState {
 	 * Deletes a key pattern from a KV Namespace.
 	 */
 	async deletePattern(kvName: string, patternName: string) {
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === kvName);
-			if (binding && binding.extra?.schema) {
-				delete binding.extra.schema[patternName];
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
-		}
-
 		const targetNode = this.nodes.find(n => n.id === kvName);
 		const strata = targetNode?.data?.strata || {};
 		const currentSchema = { ...(strata.schema || {}) };
@@ -2029,16 +2056,6 @@ export class SchemaState {
 	 */
 	async deleteFolder(r2Name: string, folderName: string) {
 		const baseKey = folderName.replace(/\/$/, '');
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === r2Name);
-			if (binding && binding.extra?.folders) {
-				delete binding.extra.folders[baseKey];
-				delete binding.extra.folders[folderName];
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
-		}
-
 		const targetNode = this.nodes.find(n => n.id === r2Name);
 		const strata = targetNode?.data?.strata || {};
 		const currentFolders = { ...(strata.folders || {}) };
@@ -2414,19 +2431,8 @@ export class SchemaState {
 			return;
 		}
 
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === doName);
-			if (binding) {
-				binding.extra = binding.extra || {};
-				binding.extra.methods = binding.extra.methods || [];
-				binding.extra.methods.push(methodName);
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
-		}
-
 		const strata = targetNode?.data?.strata || {};
-		const currentMethods = strata.methods || [];
+		const currentMethods = strata.methods || (targetNode?.data?.methods || []).map((m: any) => m.name) || [];
 		const updatedMethods = [...currentMethods, methodName];
 		await this.updateTableMetadata(doName, { methods: updatedMethods });
 	}
@@ -2445,18 +2451,6 @@ export class SchemaState {
 		}
 
 		const val = ttl !== undefined ? { type: valueType, ttl } : valueType;
-
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === kvName);
-			if (binding) {
-				binding.extra = binding.extra || {};
-				binding.extra.schema = binding.extra.schema || {};
-				binding.extra.schema[patternName] = val;
-			}
-			await this.parseAndApply(this.rawCode);
-			return;
-		}
-
 		const strata = targetNode?.data?.strata || {};
 		const currentSchema = { ...(strata.schema || {}) };
 		currentSchema[patternName] = val;
@@ -2474,17 +2468,6 @@ export class SchemaState {
 			toast.warning("Folder Prefix Already Exists", {
 				description: `R2 Bucket "${r2Name}" already has a prefix named "${cleanName}".`
 			});
-			return;
-		}
-
-		if (this.isSandboxMode || !this.filePath) {
-			const binding = this.wranglerBindings.find(b => b.name === r2Name);
-			if (binding) {
-				binding.extra = binding.extra || {};
-				binding.extra.folders = binding.extra.folders || {};
-				binding.extra.folders[folderName.replace(/\/$/, '')] = mimeType;
-			}
-			await this.parseAndApply(this.rawCode);
 			return;
 		}
 

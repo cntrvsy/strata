@@ -1,33 +1,20 @@
 /**
  * distribution.rs
  *
- * Summary: Detects application distribution channel (Microsoft Store MSIX package identity vs. standalone installer).
- * On Windows, queries GetCurrentPackageFullName from kernel32.dll.
- * On Unix (Linux/macOS), defaults to standalone.
- * Supports STRATA_FORCE_MSIX=1 environment variable for testing/development.
+ * Summary: Detects application distribution channel (Microsoft Store managed on Windows vs. standalone installer on Linux).
+ * On Windows, Strata is distributed as a Store-managed package (MSI -> MSIX) with auto-updates disabled in favor of Microsoft Store updates.
+ * On Unix (Linux), defaults to standalone with CrabNebula auto-updates enabled.
+ * Supports STRATA_FORCE_MSIX=1 / STRATA_FORCE_STANDALONE=1 environment variables for testing/development.
  */
 
 #[cfg(target_os = "windows")]
-extern "system" {
-    fn GetCurrentPackageFullName(
-        package_full_name_length: *mut u32,
-        package_full_name: *mut u16,
-    ) -> i32;
-}
-
-#[cfg(target_os = "windows")]
 pub fn is_store_package() -> bool {
-    if let Ok(val) = std::env::var("STRATA_FORCE_MSIX") {
+    if let Ok(val) = std::env::var("STRATA_FORCE_STANDALONE") {
         if val == "1" || val.eq_ignore_ascii_case("true") {
-            return true;
+            return false;
         }
     }
-
-    let mut length: u32 = 0;
-    let res = unsafe { GetCurrentPackageFullName(&mut length, std::ptr::null_mut()) };
-    // 0 = ERROR_SUCCESS, 122 = ERROR_INSUFFICIENT_BUFFER (means package identity exists)
-    // 15700 = APPMODEL_ERROR_NO_PACKAGE (unpackaged Win32/MSI)
-    res == 0 || res == 122
+    true
 }
 
 #[cfg(not(target_os = "windows"))]
