@@ -271,11 +271,6 @@
       }
     } else if (action === "toggle_focus" && targetId) {
       schemaState.toggleFocusLock(targetId);
-    } else if (action === "delete_sandbox" && targetId) {
-      if (schemaState.isSandboxMode) {
-        schemaState.deleteTable(targetId);
-        toast.success(`Deleted ${targetId}`);
-      }
     }
   }
 </script>

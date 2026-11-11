@@ -10,7 +10,6 @@
   import {
     FileCode,
     Copy,
-    Trash2,
     Check,
     Focus,
     ExternalLink,
@@ -95,18 +94,6 @@
       selected: n.id === nodeId,
     }));
   }
-
-  function handleDelete() {
-    if (schemaState.isSandboxMode) {
-      schemaState.deleteTable(nodeId);
-      toast.success(`Deleted ${nodeId}`);
-      return;
-    }
-    toast.info("Delete Code in Your Editor", {
-      description:
-        "To prevent accidental code loss, delete the declaration in your editor. Cirrus will update instantly.",
-    });
-  }
 </script>
 
 {#if selected}
@@ -181,20 +168,6 @@
       >
         <Focus class="w-3.5 h-3.5" />
       </button>
-
-      <!-- Delete Entity (Sandbox Mode Only) -->
-      {#if schemaState.isSandboxMode && nodeType !== "identity"}
-        <div class="w-px h-3 bg-base-300 mx-0.5"></div>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-square rounded-lg text-base-content/60 hover:text-error hover:bg-error/10 transition-colors tooltip tooltip-bottom"
-          data-tip="Delete (Sandbox)"
-          onclick={handleDelete}
-          aria-label="Delete (Sandbox)"
-        >
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
-      {/if}
     </div>
   </NodeToolbar>
 {/if}

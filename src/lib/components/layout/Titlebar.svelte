@@ -488,7 +488,7 @@
                 }}
               >
                 <Settings class="w-3.5 h-3.5 text-base-content/70" />
-                <span>Project Settings...</span>
+                <span>{schemaState.isSandboxMode ? "Preferences & Editor..." : "Project Settings..."}</span>
               </button>
             </li>
             <div class="h-px bg-base-300/40 my-1"></div>

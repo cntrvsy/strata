@@ -8,7 +8,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
-    Trash2,
     Focus,
     ShieldCheck,
     Sparkles,
@@ -225,19 +224,6 @@
         </span>
         <kbd class="kbd kbd-xs text-[9px] opacity-60">↵</kbd>
       </button>
-      {#if schemaState.isSandboxMode}
-        <div class="h-px bg-base-300/40 my-1"></div>
-        <button
-          class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-error/10 transition-all text-left font-semibold text-error"
-          onclick={() => {
-            onAction("delete_sandbox", targetId);
-            onClose();
-          }}
-        >
-          <Trash2 class="w-3.5 h-3.5 opacity-70" />
-          <span>Delete (Sandbox)</span>
-        </button>
-      {/if}
     {/if}
   {:else if type === "canvas"}
     <button

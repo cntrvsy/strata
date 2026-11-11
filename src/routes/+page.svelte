@@ -198,26 +198,30 @@
       const selectedEdge = schemaState.edges.find((edge) => edge.selected);
       if (selectedNode) {
         e.preventDefault();
-        if (schemaState.isSandboxMode) {
-          schemaState.deleteTable(selectedNode.id);
-        } else {
-          import("svelte-sonner").then(({ toast }) => {
+        import("svelte-sonner").then(({ toast }) => {
+          if (schemaState.isSandboxMode) {
+            toast.info("Sandbox Demo Entity", {
+              description: `To reset or switch demos, use the sandbox menu in the titlebar.`,
+            });
+          } else {
             toast.info("Delete Code in Your Editor", {
               description: `To prevent accidental code loss, delete "${selectedNode.id}" in your editor. Press E to jump directly to it.`,
             });
-          });
-        }
+          }
+        });
       } else if (selectedEdge) {
         e.preventDefault();
-        if (schemaState.isSandboxMode) {
-          schemaState.deleteRelation(selectedEdge.source, selectedEdge.target, selectedEdge.label);
-        } else {
-          import("svelte-sonner").then(({ toast }) => {
+        import("svelte-sonner").then(({ toast }) => {
+          if (schemaState.isSandboxMode) {
+            toast.info("Sandbox Demo Relationship", {
+              description: `Relationships reflect your schema code. Use the sandbox menu to reset demos.`,
+            });
+          } else {
             toast.info("Delete Relation in Your Editor", {
               description: `To prevent accidental schema corruption, delete foreign keys or relations() between "${selectedEdge.source}" and "${selectedEdge.target}" in your editor.`,
             });
-          });
-        }
+          }
+        });
       }
     }
   }

@@ -373,7 +373,9 @@
         <div class="p-2 bg-primary/10 rounded-field">
           <Settings class="w-5 h-5 text-primary" />
         </div>
-        <h2 class="text-base font-bold tracking-tight">Project Settings</h2>
+        <h2 class="text-base font-bold tracking-tight">
+          {schemaState.isSandboxMode ? "Preferences & Editor" : "Project Settings"}
+        </h2>
       </div>
       <button
         class="btn btn-ghost btn-sm btn-circle hover:bg-base-200"
@@ -385,15 +387,18 @@
 
     <form onsubmit={handleSave} class="p-6 flex flex-col gap-6">
       {#if schemaState.isSandboxMode}
-        <div class="p-3.5 bg-warning/10 border border-warning/30 rounded-field flex items-start gap-2.5 text-xs text-warning leading-relaxed">
-          <CircleAlert class="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <span class="font-bold block text-warning">Playground Sandbox Active</span>
-            <span class="text-warning/85 text-[11px]">Wrangler file discovery and relative JSDoc path binding operate in-memory. Open a local schema file on disk to bind to a project wrangler.toml file.</span>
+        <div class="p-4 bg-base-200/60 border border-base-300/80 rounded-field flex items-start gap-3 text-xs leading-relaxed">
+          <Info class="w-4 h-4 text-info shrink-0 mt-0.5" />
+          <div class="flex flex-col gap-1">
+            <span class="font-bold text-base-content">Playground Sandbox Active</span>
+            <span class="text-base-content/70 text-[11px]">
+              This demo runs in-memory with simulated Cloudflare bindings. Open a local schema file on disk to link a local <code>wrangler.toml</code>.
+            </span>
           </div>
         </div>
       {/if}
-      <div class="flex flex-col gap-3">
+      {#if !schemaState.isSandboxMode}
+        <div class="flex flex-col gap-3">
         <div class="flex items-center justify-between">
           <label
             for="wrangler-path-input"
@@ -601,6 +606,7 @@
           >
         </div>
       </div>
+      {/if}
 
       <!-- Preferred Code Editor -->
       <div class="flex flex-col gap-2 pt-2 border-t border-base-300/60">
