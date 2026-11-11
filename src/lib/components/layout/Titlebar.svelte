@@ -24,6 +24,8 @@
     CircleArrowUp,
     BadgeQuestionMark,
     Compass,
+    Info,
+    BookOpen,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { updateState } from "#lib/state/updateState.svelte";
@@ -474,21 +476,9 @@
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <ul
           tabindex="0"
-          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-52 p-1.5 shadow-2xl mt-1 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
+          class="dropdown-content menu bg-base-100 border border-base-300/80 rounded-box z-50 w-56 p-1.5 shadow-2xl mt-1 gap-0.5 animate-in fade-in slide-in-from-top-2 duration-150"
         >
           {#if schemaState.filePath || schemaState.isSandboxMode}
-            <li>
-              <button
-                class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-                onclick={() => {
-                  closeDropdown();
-                  schemaState.openHelpTopic("identity-auth");
-                }}
-              >
-                <Sparkles class="w-3.5 h-3.5 text-secondary" />
-                <span>Auth & Identity Blueprints...</span>
-              </button>
-            </li>
             <li>
               <button
                 class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
@@ -498,11 +488,61 @@
                 }}
               >
                 <Settings class="w-3.5 h-3.5 text-base-content/70" />
-                <span>Project Settings</span>
+                <span>Project Settings...</span>
               </button>
             </li>
             <div class="h-px bg-base-300/40 my-1"></div>
           {/if}
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                startStrataTour();
+              }}
+              title="Start interactive walkthrough tour"
+            >
+              <Compass class="w-3.5 h-3.5 text-primary" />
+              <span>Interactive Tour</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.openHelpTopic("all");
+              }}
+            >
+              <BookOpen class="w-3.5 h-3.5 text-base-content/70" />
+              <span>Help & Documentation</span>
+            </button>
+          </li>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.openHelpTopic("identity-auth");
+              }}
+            >
+              <Sparkles class="w-3.5 h-3.5 text-secondary" />
+              <span>Auth & Identity Blueprints...</span>
+            </button>
+          </li>
+          <div class="h-px bg-base-300/40 my-1"></div>
+          <li>
+            <button
+              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
+              onclick={() => {
+                closeDropdown();
+                schemaState.openHelpTopic("about");
+              }}
+            >
+              <Info class="w-3.5 h-3.5 text-base-content/70" />
+              <span>About & AI Disclosure</span>
+            </button>
+          </li>
           <li>
             <button
               class="flex items-center justify-between rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
@@ -519,31 +559,6 @@
                 <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"
                 ></span>
               {/if}
-            </button>
-          </li>
-          <li>
-            <button
-              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-              onclick={() => {
-                closeDropdown();
-                startStrataTour();
-              }}
-              title="Start interactive walkthrough tour"
-            >
-              <Compass class="w-3.5 h-3.5 text-primary" />
-              <span>Tour</span>
-            </button>
-          </li>
-          <li>
-            <button
-              class="flex items-center gap-2 rounded-field py-1.5 px-2.5 hover:bg-base-200/60 font-medium text-[11px] text-base-content/85"
-              onclick={() => {
-                closeDropdown();
-                schemaState.openHelpTopic("all");
-              }}
-            >
-              <BadgeQuestionMark class="w-3.5 h-3.5 text-base-content/70" />
-              <span>Help & Shortcuts</span>
             </button>
           </li>
         </ul>

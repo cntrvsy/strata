@@ -39,7 +39,7 @@ export async function startStrataTour() {
 				popover: {
 					title: "Single Source of Truth",
 					description:
-						"Strata is powered directly by your TypeScript schema codebase. Visual edits surgically patch your code via AST mutations — no hidden databases, zero lock-in.",
+						"Strata reads directly from your TypeScript schema codebase. Visual edits surgically patch your code via AST mutations — zero sidecar JSON files, zero lock-in.",
 					side: "bottom",
 					align: "start"
 				}
@@ -47,52 +47,52 @@ export async function startStrataTour() {
 			{
 				element: ".svelte-flow__pane",
 				popover: {
-					title: "Full-Stack Cloudflare Primitives",
+					title: "Interactive Architecture Canvas",
 					description:
-						"Beyond SQL tables, Strata natively models KV Namespaces, Durable Objects, and R2 Buckets directly alongside your D1 relational schema as interconnected cards.",
+						"Cloudflare D1 tables render alongside KV Namespaces, Durable Objects (with live RPC methods), and R2 Buckets. Double-click any entity to zoom into it, press <code>0</code> or double-click the background to fit view, and press <code>F</code> to isolate 1-hop subgraphs.",
 					side: "top",
 					align: "center"
 				}
 			},
 			{
-				element: ".svelte-flow__edge, .svelte-flow__handle",
-				popover: {
-					title: "Two-Tier Relationships",
-					description:
-						"Canonical table-to-table ERD lines display physical foreign keys (<code>.references()</code>) with solid lines, and logical query-builder relations (<code>relations()</code>) with dashed animated lines.",
-					side: "top",
-					align: "center"
-				}
-			},
-			{
-				element: '[data-testid="inspector"]',
+				element: '[data-testid="inspector-panel"]',
 				onHighlightStarted: async () => {
-					// Guard: Ensure Inspector HUD is mounted by selecting a node
+					// Ensure Inspector HUD is mounted by selecting a node
 					if (!schemaState.activeInspectorNodeId) {
 						const firstNode = schemaState.nodes.find((n) => (n.data as any)?.target === "d1") || schemaState.nodes[0];
 						schemaState.activeInspectorNodeId = firstNode ? firstNode.id : "users";
 						await tick();
-						await new Promise((r) => setTimeout(r, 100));
+						await new Promise((r) => setTimeout(r, 150));
 					}
 				},
 				popover: {
-					title: "Deep Entity Inspector",
+					title: "Deep Entity & Schema Inspector",
 					description:
-						"Click any entity to inspect columns, configure SQLite data types (with native timestamp and boolean support), and copy live Drizzle TypeScript snippets.",
+						"Inspect column types, foreign keys, and indexes. Toggle the Code Preview to inspect both the individual table snippet and the complete file's <code>@strata-layout</code> manifest. Press <code>E</code> anytime to jump directly to this line in your code editor.",
 					side: "left",
 					align: "start"
 				}
 			},
 			{
-				element: '[data-testid="bottombar"]',
+				element: '[data-testid="titlebar"] .navbar-end',
 				onHighlightStarted: () => {
 					// Deselect node to clear inspector
 					schemaState.activeInspectorNodeId = null;
 				},
 				popover: {
-					title: "Git-Clean Layout Guarantee",
+					title: "Canvas Tools & Export",
 					description:
-						"Drag cards freely. In modular schemas, visual coordinates live in the root layout manifest (<code>@cirrus-layout</code> or <code>@strata-layout</code>), keeping domain files (<code>users.ts</code>, <code>posts.ts</code>) 100% clean of Git merge conflicts.",
+						"Tidy complex diagrams with ELK auto-layout, switch to Compact Mode for high-density overviews, or export high-resolution 4K PNG diagrams for documentation.",
+					side: "bottom",
+					align: "end"
+				}
+			},
+			{
+				element: '[data-testid="bottombar"]',
+				popover: {
+					title: "Live Health & Git-Clean Layout",
+					description:
+						"Native OS file watchers detect disk changes in milliseconds. In modular setups, visual coordinates save directly to the root <code>@strata-layout</code> manifest, keeping domain files (<code>users.ts</code>, <code>posts.ts</code>) 100% free of Git merge conflicts.",
 					side: "top",
 					align: "start"
 				}
@@ -100,31 +100,11 @@ export async function startStrataTour() {
 			{
 				element: '[data-testid="settings-menu-button"]',
 				popover: {
-					title: "Auth Blueprints & Identity Guardrails",
+					title: "Settings, Blueprints & AI Disclosure",
 					description:
-						"Access turnkey blueprints for Better Auth, Clerk, and WorkOS directly from the menu. Copy production-ready webhook mirror tables and auth schema definitions with zero guesswork.",
+						"Access turnkey Better Auth, Clerk, and WorkOS blueprints, configure your preferred code editor, view the 0rwx AI:W transparency disclosure, and check for software updates.",
 					side: "bottom",
 					align: "end"
-				}
-			},
-			{
-				element: '[data-testid="titlebar"] .navbar-end',
-				popover: {
-					title: "Auto-Layout & 4K PNG Capture",
-					description:
-						"Tidy complex schemas with ELK auto-layout, switch to Compact Mode for high-level overviews, or export high-resolution PNGs for team docs.",
-					side: "bottom",
-					align: "end"
-				}
-			},
-			{
-				element: '[data-testid="bottombar"]',
-				popover: {
-					title: "External IDE Pairing & Schema Health",
-					description:
-						"Strata pairs side-by-side with VS Code, Cursor, and Zed. Live disk watchers keep files in sync, while the Schema Diagnostics HUD catches errors before you commit.",
-					side: "top",
-					align: "center"
 				}
 			}
 		]

@@ -19,6 +19,7 @@
     Lightbulb,
     CircleX,
     Crosshair,
+    Heart,
   } from "lucide-svelte";
   import { schemaState } from "#lib/state";
   import { PlatformService } from "#lib/services/platform";
@@ -476,11 +477,9 @@
       type="button"
       onclick={() => PlatformService.openExternal("https://frstudios.co.ke")}
       class="flex items-center gap-1 text-[9.5px] text-base-content/55 hover:text-base-content transition-colors cursor-pointer group/credit"
-      aria-label="Made with love by FR Studios (frstudios.co.ke)"
+      aria-label="Made with care by FR Studios (frstudios.co.ke)"
     >
-      <span>Made with</span>
-      <span class="inline-block group-hover/credit:scale-110 transition-transform">❤️</span>
-      <span>by</span>
+      <span>Crafted by</span>
       <span class="font-bold text-base-content/80 group-hover/credit:text-primary underline decoration-base-content/25 group-hover/credit:decoration-primary underline-offset-2 transition-colors">FR Studios</span>
     </button>
     <div class="h-3 w-px bg-base-300/80"></div>
