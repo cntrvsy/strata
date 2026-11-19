@@ -79,20 +79,28 @@ Strata natively supports two schema archetypes:
 ## AI Instructions
 
 - Always prioritize **SQLite/D1** compatibility:
-  - SQLite lacks a native Date type: always map dates using `integer("col", { mode: "timestamp" })` or `integer("col", { mode: "timestamp_ms" })`.
+  - Brownfield Safety: When modifying an existing schema, preserve existing SQL column names and types unless explicitly asked to migrate them.
+  - SQLite lacks a native Date type: for new tables, map dates using `integer("col", { mode: "timestamp" })` or `integer("col", { mode: "timestamp_ms" })`.
   - Booleans must map to `integer("col", { mode: "boolean" })`.
+  - Indexes: Use modern array syntax `(table) => [index("idx_name").on(table.col)]` rather than deprecated object returns.
+- Manifest Key Naming:
+  - SQL table keys in `@strata-layout` MUST match the exact TypeScript export identifier (e.g. `users`, `userAdditionalInfo`), NOT the snake_case table name (`user_additional_info`).
+  - Worker storage keys (KV, DO, R2) must match their exact `wrangler.jsonc` binding name.
 - Respect Storage Targets:
   - D1 SQL tables: `"target": "d1"` (default)
-  - Durable Objects: `"target": "do"`
-  - KV Namespaces: `"target": "kv"`
-  - R2 Buckets: `"target": "r2"`
-- Relationships:
+  - Durable Objects: `"target": "do"` (supports `"path"`, `"class"`, `"methods"`)
+  - KV Namespaces: `"target": "kv"` (supports `"schema"`)
+  - R2 Buckets: `"target": "r2"` (supports `"public"`, `"cors"`, `"folders"`)
+- Layout Spacing:
+  - Space nodes with >=420px horizontal gap and >=350-450px vertical gap to prevent card collisions.
+- Relationships & Circular Imports:
   - Physical Foreign Keys: Solid lines via `.references(() => table.id)`.
-  - Logical Drizzle Relations: Dashed lines via `relations(...)` builder.
-  - Synthetic Links: Non-SQL links via JSDoc metadata.
+  - Logical Drizzle Relations: Dashed lines via `relations(...)` builder. Avoid circular cross-file imports by placing bidirectional relations in a dedicated `relations.ts`.
+  - Synthetic Links: Non-SQL links via JSDoc metadata `"relations": [{ "to": "targetName" }]`.
 - Identity & Modern Auth Boundaries:
   - Detect Better Auth clusters (`user`, `session`, `account`, `verification`).
   - Detect Cloud IdP boundaries (`clerkUserId`, `workosOrgId`) and support local webhook mirror table scaffolding.
-- Zero Lock-In:
+- Zero Lock-In & Anti-Patterns:
+  - NEVER declare empty dummy constants in Drizzle files (`export const MY_KV = {};`).
   - Never introduce proprietary runtime dependencies or sidecar files. Output standard, production-ready Drizzle TypeScript.
 
